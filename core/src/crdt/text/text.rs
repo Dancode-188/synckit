@@ -243,7 +243,7 @@ impl Text {
                         } else {
                             // Different left origin
                             // Check if current item originated between our left and right
-                            if let Some(r) = right {
+                            if right.is_some() {
                                 // If current's left comes after our left, we go before it
                                 if let Some(current_left) = current_item.left {
                                     if current_left > left_id {
