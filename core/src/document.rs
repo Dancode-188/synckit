@@ -51,6 +51,9 @@ impl Document {
     }
 
     /// Set a field value (creates new timestamp)
+    /// 
+    /// This method uses LWW merge logic, so if there's already a value
+    /// with a newer timestamp, it won't be overwritten.
     pub fn set_field(
         &mut self,
         field_path: FieldPath,
@@ -59,11 +62,10 @@ impl Document {
         client_id: ClientID,
     ) {
         let timestamp = Timestamp::new(clock, client_id);
+        let new_field = Field { value, timestamp };
         
-        self.fields.insert(
-            field_path,
-            Field { value, timestamp },
-        );
+        // Use merge_field to respect LWW semantics
+        self.merge_field(field_path, new_field);
     }
 
     /// Get a field value
@@ -75,6 +77,11 @@ impl Document {
     ///
     /// This is the core LWW merge algorithm verified by TLA+.
     /// Returns true if the local field was updated.
+    ///
+    /// Comparison order:
+    /// 1. Higher timestamp wins
+    /// 2. If timestamps equal, higher client_id wins
+    /// 3. If both equal (duplicate), use value comparison for determinism
     pub fn merge_field(
         &mut self,
         field_path: FieldPath,
@@ -83,13 +90,32 @@ impl Document {
         match self.fields.get(&field_path) {
             Some(local_field) => {
                 // Compare timestamps for LWW
-                if remote_field.timestamp.is_newer_than(&local_field.timestamp) {
-                    // Remote wins
-                    self.fields.insert(field_path, remote_field);
-                    true
-                } else {
-                    // Local wins (or equal, local wins by default)
-                    false
+                match remote_field.timestamp.compare_lww(&local_field.timestamp) {
+                    std::cmp::Ordering::Greater => {
+                        // Remote wins (newer timestamp or higher client_id)
+                        self.fields.insert(field_path, remote_field);
+                        true
+                    }
+                    std::cmp::Ordering::Less => {
+                        // Local wins (newer timestamp or higher client_id)
+                        false
+                    }
+                    std::cmp::Ordering::Equal => {
+                        // Exact same timestamp - use value comparison for determinism
+                        // This handles the edge case where same client writes same timestamp
+                        // with different values (which shouldn't happen in practice, but
+                        // we handle it for total ordering)
+                        let local_json = serde_json::to_string(&local_field.value).unwrap();
+                        let remote_json = serde_json::to_string(&remote_field.value).unwrap();
+                        
+                        if remote_json > local_json {
+                            self.fields.insert(field_path, remote_field);
+                            true
+                        } else {
+                            // Keep local (or keep existing if values are also equal)
+                            false
+                        }
+                    }
                 }
             }
             None => {

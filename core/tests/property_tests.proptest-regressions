@@ -1,0 +1,9 @@
+# Seeds for failure cases proptest has generated in the past. It is
+# automatically read and these particular cases re-run before any
+# novel cases are generated.
+#
+# It is recommended to check this file in to source control so that
+# everyone who runs the test benefits from these saved cases.
+cc 48a7ebda03c1d47a1a9dc55b44b50cbfa564256288f1a1665e604baf7881577a # shrinks to field = "a", value1 = Null, value2 = Bool(false), timestamp = 1, client1 = "client2", client2 = "client0"
+cc 762b01306a78e7fa14ef3b0057bbbea054a5035af3cd017158a40029840944f9 # shrinks to ops = [Operation { field: "s", value: Null, timestamp: 1, client_id: "client0" }, Operation { field: "s", value: Bool(false), timestamp: 1, client_id: "client0" }]
+cc fc96ea61871cce510e699296220d184a0411999690315c9917076e0775590bf2 # shrinks to field = "a", value1 = Number(0), value2 = Null, timestamp = 1, client1 = "client7", client2 = "client7"
