@@ -34,6 +34,9 @@ pub enum SyncError {
 
     #[error("Invalid operation: {0}")]
     InvalidOperation(String),
+
+    #[error("Protocol error: {0}")]
+    Protocol(String),
 }
 
 impl SyncError {
@@ -57,6 +60,7 @@ impl SyncError {
             SyncError::NetworkError(_) => "NETWORK_ERROR",
             SyncError::ConflictError(_) => "CONFLICT_ERROR",
             SyncError::InvalidOperation(_) => "INVALID_OPERATION",
+            SyncError::Protocol(_) => "PROTOCOL_ERROR",
         }
     }
 }

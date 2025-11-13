@@ -12,8 +12,13 @@
 //! ```rust
 //! use synckit_core::{Document, ClientID, VectorClock};
 //!
-//! let mut doc = Document::new("doc-123");
-//! doc.set_field("title", "Hello World");
+//! let mut doc = Document::new("doc-123".to_string());
+//! doc.set_field(
+//!     "title".to_string(),
+//!     serde_json::json!("Hello World"),
+//!     1,
+//!     "client-1".to_string()
+//! );
 //! ```
 
 pub mod document;

@@ -29,6 +29,13 @@ impl VectorClock {
             clocks: HashMap::new(),
         }
     }
+    
+    /// Create a VectorClock from a Timestamp
+    pub fn from_timestamp(timestamp: &crate::sync::Timestamp) -> Self {
+        let mut clock = Self::new();
+        clock.clocks.insert(timestamp.client_id.clone(), timestamp.clock);
+        clock
+    }
 
     /// Increment the clock for a specific client
     pub fn tick(&mut self, client_id: &ClientID) {
@@ -39,6 +46,16 @@ impl VectorClock {
     /// Get the clock value for a specific client
     pub fn get(&self, client_id: &ClientID) -> u64 {
         *self.clocks.get(client_id).unwrap_or(&0)
+    }
+    
+    /// Update the clock for a specific client to a specific value
+    pub fn update(&mut self, client_id: &ClientID, value: u64) {
+        self.clocks.insert(client_id.clone(), value);
+    }
+    
+    /// Get all client clocks
+    pub fn clocks(&self) -> &HashMap<ClientID, u64> {
+        &self.clocks
     }
 
     /// Merge with another vector clock (take max of each entry)

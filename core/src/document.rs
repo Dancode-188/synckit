@@ -171,6 +171,26 @@ impl Document {
     pub fn field_count(&self) -> usize {
         self.fields.len()
     }
+    
+    /// Get document ID
+    pub fn id(&self) -> &DocumentID {
+        &self.id
+    }
+    
+    /// Get document version (vector clock)
+    pub fn version(&self) -> &VectorClock {
+        &self.version
+    }
+    
+    /// Get all fields with metadata
+    pub fn fields(&self) -> &HashMap<FieldPath, Field> {
+        &self.fields
+    }
+    
+    /// Delete a field
+    pub fn delete_field(&mut self, field_path: &FieldPath) {
+        self.fields.remove(field_path);
+    }
 }
 
 #[cfg(test)]
