@@ -4,6 +4,7 @@ import { logger } from 'hono/logger';
 import { cors } from 'hono/cors';
 import { config } from './config';
 import { SyncWebSocketServer } from './websocket/server';
+import { auth } from './routes/auth';
 
 /**
  * SyncKit TypeScript Reference Server
@@ -19,6 +20,9 @@ app.use('*', cors({
   origin: '*', // TODO: Configure in production
   credentials: true,
 }));
+
+// Mount routes
+app.route('/auth', auth);
 
 // Health check endpoint
 app.get('/health', (c) => {
@@ -42,7 +46,7 @@ app.get('/', (c) => {
     endpoints: {
       health: '/health',
       ws: '/ws',
-      auth: '/auth (coming in Sub-Phase 7.3)',
+      auth: '/auth',
       sync: '/sync (coming in Sub-Phase 7.4)',
     },
   });
@@ -61,6 +65,7 @@ const wsServer = new SyncWebSocketServer(server);
 console.log(`🚀 SyncKit Server running on ${config.host}:${config.port}`);
 console.log(`📊 Health check: http://${config.host}:${config.port}/health`);
 console.log(`🔌 WebSocket: ws://${config.host}:${config.port}/ws`);
+console.log(`🔐 Auth: http://${config.host}:${config.port}/auth`);
 console.log(`🔒 Environment: ${config.nodeEnv}`);
 
 // Graceful shutdown

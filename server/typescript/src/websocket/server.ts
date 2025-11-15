@@ -3,8 +3,10 @@ import { WebSocketServer, WebSocket } from 'ws';
 import type { Server } from 'http';
 import { Connection, ConnectionState } from './connection';
 import { ConnectionRegistry } from './registry';
-import { Message, MessageType, createMessageId } from './protocol';
+import { Message, MessageType, createMessageId, AuthMessage, AuthSuccessMessage, AuthErrorMessage } from './protocol';
 import { config } from '../config';
+import { verifyToken } from '../auth/jwt';
+import { canReadDocument, canWriteDocument } from '../auth/rbac';
 
 /**
  * WebSocket Server
@@ -88,7 +90,7 @@ export class SyncWebSocketServer {
         break;
       
       case MessageType.AUTH:
-        this.handleAuth(connection, message);
+        this.handleAuth(connection, message as AuthMessage);
         break;
       
       case MessageType.SYNC_REQUEST:
@@ -128,17 +130,83 @@ export class SyncWebSocketServer {
   }
 
   /**
-   * Handle AUTH message (stub - will implement in Sub-Phase 7.3)
+   * Handle AUTH message - verify JWT and authenticate connection
    */
-  private handleAuth(connection: Connection, message: any) {
-    // TODO: Implement in Sub-Phase 7.3
-    console.log('AUTH message received - not yet implemented');
+  private handleAuth(connection: Connection, message: AuthMessage) {
+    const { token, apiKey } = message;
+    
+    // JWT token authentication
+    if (token) {
+      const payload = verifyToken(token);
+      
+      if (!payload) {
+        const errorMsg: AuthErrorMessage = {
+          type: MessageType.AUTH_ERROR,
+          id: createMessageId(),
+          timestamp: Date.now(),
+          error: 'Invalid or expired token',
+        };
+        connection.send(errorMsg);
+        connection.close(1008, 'Authentication failed');
+        return;
+      }
+      
+      // Authentication successful
+      connection.state = ConnectionState.AUTHENTICATED;
+      connection.userId = payload.userId;
+      
+      // Link user to connection
+      this.registry.linkUser(connection.id, payload.userId);
+      
+      // Store permissions on connection (for later authorization checks)
+      (connection as any).permissions = payload.permissions;
+      
+      const successMsg: AuthSuccessMessage = {
+        type: MessageType.AUTH_SUCCESS,
+        id: createMessageId(),
+        timestamp: Date.now(),
+        userId: payload.userId,
+        permissions: payload.permissions,
+      };
+      
+      connection.send(successMsg);
+      console.log(`User authenticated: ${payload.userId}`);
+      return;
+    }
+    
+    // API Key authentication (future implementation)
+    if (apiKey) {
+      // TODO: Implement API key validation
+      const errorMsg: AuthErrorMessage = {
+        type: MessageType.AUTH_ERROR,
+        id: createMessageId(),
+        timestamp: Date.now(),
+        error: 'API key authentication not yet implemented',
+      };
+      connection.send(errorMsg);
+      return;
+    }
+    
+    // No valid auth method provided
+    const errorMsg: AuthErrorMessage = {
+      type: MessageType.AUTH_ERROR,
+      id: createMessageId(),
+      timestamp: Date.now(),
+      error: 'No authentication credentials provided',
+    };
+    connection.send(errorMsg);
   }
 
   /**
    * Handle SYNC_REQUEST (stub - will implement in Sub-Phase 7.4)
    */
   private handleSyncRequest(connection: Connection, message: any) {
+    // Check authentication
+    if (connection.state !== ConnectionState.AUTHENTICATED) {
+      connection.sendError('Authentication required');
+      return;
+    }
+    
     // TODO: Implement in Sub-Phase 7.4
     console.log('SYNC_REQUEST received - not yet implemented');
   }
@@ -147,6 +215,12 @@ export class SyncWebSocketServer {
    * Handle DELTA (stub - will implement in Sub-Phase 7.4)
    */
   private handleDelta(connection: Connection, message: any) {
+    // Check authentication
+    if (connection.state !== ConnectionState.AUTHENTICATED) {
+      connection.sendError('Authentication required');
+      return;
+    }
+    
     // TODO: Implement in Sub-Phase 7.4
     console.log('DELTA received - not yet implemented');
   }
