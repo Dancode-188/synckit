@@ -64,58 +64,58 @@ app.get('/', (c) => {
 });
 
 // =============================================================================
-// INITIALIZE STORAGE LAYER
+// INITIALIZE STORAGE LAYER (OPTIONAL)
 // =============================================================================
 
-// Initialize PostgreSQL
-const storage = new PostgresAdapter({
-  connectionString: config.databaseUrl,
-  poolMin: config.databasePoolMin,
-  poolMax: config.databasePoolMax,
-  connectionTimeout: 5000,
-});
-
-// Initialize Redis pub/sub
-const pubsub = new RedisPubSub(
-  config.redisUrl,
-  config.redisChannelPrefix
-);
-
-// Connect to storage
+let storage: PostgresAdapter | undefined;
+let pubsub: RedisPubSub | undefined;
 let storageConnected = false;
 let redisConnected = false;
 
-try {
-  console.log('🔌 Connecting to PostgreSQL...');
-  await storage.connect();
-  storageConnected = true;
-  console.log('✅ PostgreSQL connected');
-} catch (error) {
-  console.warn('⚠️  PostgreSQL connection failed (this is OK for development)');
-  console.warn('   Server will run in memory-only mode');
-  console.warn(`   Reason: ${error instanceof Error ? error.message : String(error)}`);
-  console.warn('   To enable persistence: Setup PostgreSQL and run "bun run db:migrate"');
+// Only initialize PostgreSQL if not using default localhost URL
+if (config.databaseUrl && !config.databaseUrl.includes('localhost')) {
+  storage = new PostgresAdapter({
+    connectionString: config.databaseUrl,
+    poolMin: config.databasePoolMin,
+    poolMax: config.databasePoolMax,
+    connectionTimeout: 5000,
+  });
+  
+  try {
+    console.log('🔌 Connecting to PostgreSQL...');
+    await storage.connect();
+    storageConnected = true;
+    console.log('✅ PostgreSQL connected');
+  } catch (error) {
+    console.warn('⚠️  PostgreSQL connection failed');
+    console.warn(`   Reason: ${error instanceof Error ? error.message : String(error)}`);
+    storage = undefined;
+  }
+} else {
+  console.log('ℹ️  Running in memory-only mode (PostgreSQL not configured)');
+  console.log('   All sync features work, data persists until restart');
 }
 
-try {
-  console.log('🔌 Connecting to Redis...');
-  // Add timeout for Redis connection
-  const redisTimeout = new Promise((_, reject) => 
-    setTimeout(() => reject(new Error('Redis connection timeout')), 3000)
+// Only initialize Redis if not using default localhost URL
+if (config.redisUrl && !config.redisUrl.includes('localhost')) {
+  pubsub = new RedisPubSub(
+    config.redisUrl,
+    config.redisChannelPrefix
   );
-  await Promise.race([pubsub.connect(), redisTimeout]);
-  redisConnected = true;
-  console.log('✅ Redis connected');
-} catch (error) {
-  console.warn('⚠️  Redis connection failed (this is OK for single-server mode)');
-  console.warn('   Server will continue without Redis pub/sub');
-  console.warn(`   Reason: ${error instanceof Error ? error.message : String(error)}`);
-  // Disconnect to clean up any partial connections
+  
   try {
-    await pubsub.disconnect();
-  } catch (e) {
-    // Ignore disconnect errors
+    console.log('🔌 Connecting to Redis...');
+    await pubsub.connect();
+    redisConnected = true;
+    console.log('✅ Redis connected');
+  } catch (error) {
+    console.warn('⚠️  Redis connection failed');
+    console.warn(`   Reason: ${error instanceof Error ? error.message : String(error)}`);
+    pubsub = undefined;
   }
+} else {
+  console.log('ℹ️  Running in single-instance mode (Redis not configured)');
+  console.log('   Multi-server coordination disabled');
 }
 
 // =============================================================================
