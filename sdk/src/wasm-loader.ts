@@ -72,13 +72,45 @@ export async function initWASM(): Promise<WASMModule> {
     try {
       // Dynamic import of WASM module from the default variant directory
       const wasm = await import('../wasm/default/synckit_core.js')
-      
+
       // Initialize WASM module
-      await wasm.default()
-      
+      // In Node.js, we need to load the WASM file manually since fetch doesn't support file:// URLs
+      const isNode = typeof process !== 'undefined' && process.versions?.node && typeof window === 'undefined'
+
+      if (isNode) {
+        // Node.js: Load WASM file using fs and pass as buffer
+        const { readFile } = await import('fs/promises')
+        const { fileURLToPath } = await import('url')
+        const { dirname, resolve } = await import('path')
+
+        // Resolve WASM path - try multiple strategies
+        let wasmPath: string
+
+        // Strategy 1: Use import.meta.url if available (ESM)
+        if (typeof import.meta !== 'undefined' && import.meta.url) {
+          const currentDir = dirname(fileURLToPath(import.meta.url))
+          wasmPath = resolve(currentDir, '../wasm/default/synckit_core_bg.wasm')
+        }
+        // Strategy 2: Use global.__dirname if available (tsup CJS shim)
+        else if (typeof globalThis.__dirname !== 'undefined') {
+          wasmPath = resolve(globalThis.__dirname, '../wasm/default/synckit_core_bg.wasm')
+        }
+        // Strategy 3: Resolve from cwd (local development/testing)
+        else {
+          wasmPath = resolve(process.cwd(), 'wasm/default/synckit_core_bg.wasm')
+        }
+
+        // Read WASM file and initialize
+        const wasmBytes = await readFile(wasmPath)
+        await wasm.default(wasmBytes)
+      } else {
+        // Browser: Use default initialization (will use fetch)
+        await wasm.default()
+      }
+
       // Install panic hook for better error messages
       wasm.init_panic_hook()
-      
+
       return wasm as WASMModule
     } catch (error) {
       initPromise = null // Reset so retry is possible
