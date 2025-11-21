@@ -45,7 +45,7 @@ protoc-bin-vendored = { version = "3.0", optional = true }
 
 [dev-dependencies]
 # Testing
-criterion = "0.5"        # Benchmarking
+criterion = "0.7"        # Benchmarking
 proptest = "1.0"         # Property-based testing
 
 [features]
