@@ -1,5 +1,6 @@
-use criterion::{black_box, criterion_group, criterion_main, BenchmarkId, Criterion};
+use criterion::{criterion_group, criterion_main, BenchmarkId, Criterion};
 use serde_json::json;
+use std::hint::black_box;
 use synckit_core::document::Document;
 use synckit_core::sync::{apply_delta, compute_delta, merge_deltas};
 
