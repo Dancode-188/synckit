@@ -1,0 +1,65 @@
+name: Feature Request
+description: Suggest a new feature or enhancement
+title: "[Feature]: "
+labels: ["enhancement"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for suggesting a feature! Please describe your idea below.
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem or motivation
+      description: What problem does this feature solve?
+      placeholder: I'm always frustrated when...
+    validations:
+      required: true
+
+  - type: textarea
+    id: solution
+    attributes:
+      label: Proposed solution
+      description: How would you like this to work?
+      placeholder: I'd like to be able to...
+    validations:
+      required: true
+
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered
+      description: Have you considered any alternative solutions?
+      placeholder: I've tried... but...
+
+  - type: dropdown
+    id: feature-area
+    attributes:
+      label: Feature area
+      description: Which part of SyncKit does this relate to?
+      options:
+        - Core SDK
+        - React adapter
+        - Storage
+        - Server
+        - Documentation
+        - Examples
+        - Other
+    validations:
+      required: true
+
+  - type: checkboxes
+    id: contribution
+    attributes:
+      label: Contribution
+      description: Would you be willing to contribute this feature?
+      options:
+        - label: I'd be willing to submit a PR for this feature
+          required: false
+
+  - type: textarea
+    id: additional
+    attributes:
+      label: Additional context
+      description: Any other context, code examples, or screenshots

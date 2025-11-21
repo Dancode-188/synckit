@@ -1,0 +1,98 @@
+name: Bug Report
+description: Report a bug or unexpected behavior
+title: "[Bug]: "
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for taking the time to report a bug! Please fill out the form below.
+
+  - type: textarea
+    id: description
+    attributes:
+      label: Describe the bug
+      description: A clear description of what the bug is
+      placeholder: When I do X, Y happens instead of Z
+    validations:
+      required: true
+
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: Steps to reproduce
+      description: Minimal steps to reproduce the behavior
+      placeholder: |
+        1. Initialize SyncKit with...
+        2. Create a document...
+        3. See error...
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behavior
+      description: What you expected to happen
+      placeholder: The document should sync without errors
+    validations:
+      required: true
+
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual behavior
+      description: What actually happened (include error messages)
+      placeholder: 'Error: "Failed to sync..."'
+    validations:
+      required: true
+
+  - type: input
+    id: version
+    attributes:
+      label: SyncKit version
+      description: Which version are you using?
+      placeholder: "0.1.0"
+    validations:
+      required: true
+
+  - type: dropdown
+    id: environment
+    attributes:
+      label: Environment
+      description: Where are you experiencing this issue?
+      multiple: true
+      options:
+        - Browser (Chrome)
+        - Browser (Firefox)
+        - Browser (Safari)
+        - Browser (Edge)
+        - Node.js
+        - React Native
+        - Other
+    validations:
+      required: true
+
+  - type: input
+    id: os
+    attributes:
+      label: Operating System
+      description: Your operating system
+      placeholder: "Windows 11, macOS 14, Ubuntu 22.04"
+
+  - type: textarea
+    id: code
+    attributes:
+      label: Code example
+      description: Minimal code to reproduce (if applicable)
+      render: typescript
+      placeholder: |
+        const sync = new SyncKit()
+        const doc = sync.document('test')
+        await doc.update({ foo: 'bar' }) // Error here
+
+  - type: textarea
+    id: additional
+    attributes:
+      label: Additional context
+      description: Any other context, screenshots, or logs
