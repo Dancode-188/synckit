@@ -1,6 +1,6 @@
 {
   "name": "@synckit/sdk",
-  "version": "0.1.0-alpha.1",
+  "version": "0.1.0",
   "description": "TypeScript SDK for SyncKit - Production-grade local-first sync (51KB WASM + TypeScript)",
   "main": "./dist/index.js",
   "module": "./dist/index.mjs",
@@ -17,9 +17,9 @@
       "require": "./dist/index-lite.js"
     },
     "./react": {
-      "types": "./dist/react.d.ts",
-      "import": "./dist/react.mjs",
-      "require": "./dist/react.js"
+      "types": "./dist/adapters/react.d.ts",
+      "import": "./dist/adapters/react.mjs",
+      "require": "./dist/adapters/react.js"
     }
   },
   "scripts": {
