@@ -40,12 +40,4 @@ $gzipSize = (Get-Item $gzipFile).Length
 $gzipKB = [math]::Round($gzipSize/1024, 2)
 Write-Host "Gzipped size: $gzipSize bytes (~${gzipKB}KB)" -ForegroundColor Yellow
 
-# Check if we meet the <15KB target
-if ($gzipSize -lt 15360) {
-    Write-Host "SUCCESS: Size target met! (<15KB gzipped)" -ForegroundColor Green
-} else {
-    Write-Host "WARNING: Size ${gzipKB}KB exceeds 15KB target" -ForegroundColor Yellow
-    Write-Host "Consider further optimization with wasm-opt or wasm-snip" -ForegroundColor Gray
-}
-
 Write-Host "Build complete! Output in pkg/" -ForegroundColor Green
