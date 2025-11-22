@@ -10,7 +10,7 @@
 [![TypeScript](https://img.shields.io/badge/TypeScript-5.0+-blue)](https://www.typescriptlang.org/)
 [![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](CONTRIBUTING.md)
 
-[Getting Started](docs/guides/getting-started.md) • [Documentation](docs/README.md) • [Examples](examples/) • [Discord](#) • [Roadmap](ROADMAP.md)
+[Getting Started](docs/guides/getting-started.md) • [Documentation](docs/README.md) • [Examples](examples/) • [Discussions](https://github.com/Dancode-188/synckit/discussions) • [Roadmap](ROADMAP.md)
 
 </div>
 
@@ -419,7 +419,7 @@ Copyright (c) 2025 Daniel Bitengo
 - **[GitHub](https://github.com/Dancode-188/synckit)** - Source code
 - **[Issues](https://github.com/Dancode-188/synckit/issues)** - Bug reports and features
 - **[Roadmap](ROADMAP.md)** - Development timeline
-- **[Discord](#)** - Community chat *(coming soon)*
+- **[Discussions](https://github.com/Dancode-188/synckit/discussions)** - Community discussions
 - **[Twitter](#)** - Updates and news *(coming soon)*
 
 ---
