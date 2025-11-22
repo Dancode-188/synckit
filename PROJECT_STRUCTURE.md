@@ -200,19 +200,15 @@ examples/
 │   │   ├── types.ts
 │   │   └── components/
 │   └── package.json
-├── project-management/         # Production-grade example with shadcn/ui (skeleton)
-│   ├── src/
-│   │   ├── App.tsx
-│   │   ├── store.ts
-│   │   ├── types.ts
-│   │   ├── components/         # shadcn/ui components
-│   │   ├── hooks/              # Custom hooks
-│   │   └── lib/                # Utilities
-│   └── package.json
-└── real-world/                 # Future full-featured application
-    └── src/
-        ├── features/
-        └── sync/
+└── project-management/         # Production-grade example with shadcn/ui (skeleton)
+    ├── src/
+    │   ├── App.tsx
+    │   ├── store.ts
+    │   ├── types.ts
+    │   ├── components/         # shadcn/ui components
+    │   ├── hooks/              # Custom hooks
+    │   └── lib/                # Utilities
+    └── package.json
 ```
 
 **Key Responsibilities:**
