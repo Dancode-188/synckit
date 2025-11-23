@@ -121,11 +121,11 @@ const channel = supabase
 | Feature | Supabase | SyncKit | Winner |
 |---------|----------|---------|--------|
 | **Offline Support** | ❌ None (GitHub #357) | ✅ Native offline-first | 🏆 SyncKit |
-| **Real-Time Sync** | ✅ Postgres-backed | ✅ WebSocket-based | 🤝 Tie |
+| **Real-Time Sync** | ✅ Postgres-backed | ⚠️ Coming soon (v0.1.0 local-only) | 🏆 Supabase |
 | **Database** | ✅ Postgres (managed) | ⚠️ Bring your own | 🏆 Supabase |
 | **Auth** | ✅ Built-in | ⚠️ JWT-based | 🏆 Supabase |
 | **Row-Level Security** | ✅ Postgres RLS | ⚠️ Server-side validation | 🏆 Supabase |
-| **Bundle Size** | ~45KB | **~53KB** (~48KB lite) | 🤝 Similar |
+| **Bundle Size** | ~45KB | **~49KB** (~44KB lite) | 🤝 Similar |
 | **Pricing** | $0-$25/mo | Self-hosted | 🏆 SyncKit |
 | **Mobile-Ready** | ⚠️ No offline | ✅ Full offline | 🏆 SyncKit |
 | **Ecosystem** | ✅ Full-stack (Storage, Edge, etc.) | ⚠️ Sync only | 🏆 Supabase |
@@ -336,12 +336,12 @@ function TodoComponent({ id }: { id: string }) {
 
 **After (SyncKit):**
 ```typescript
-import { useSyncDocument } from '@synckit/sdk'
+import { useSyncDocument } from '@synckit/sdk/react'
 
 function TodoComponent({ id }: { id: string }) {
   const [todo, { update }] = useSyncDocument<Todo>(id)
 
-  if (!todo) return <div>Loading...</div>
+  if (!todo || !todo.text) return <div>Loading...</div>
 
   return <div>{todo.text}</div>
 }
@@ -379,9 +379,12 @@ supabase
 ```typescript
 // Client A sends message
 const room = sync.document<Room>('room-1')
+await room.init()
+
+const currentData = room.get()
 await room.update({
   messages: [
-    ...room.messages,
+    ...(currentData.messages || []),
     { text: 'Hello!', author: 'Alice', timestamp: Date.now() }
   ]
 })
@@ -419,11 +422,13 @@ await channel
 **After (SyncKit):**
 ```typescript
 const room = sync.document<Room>('room-1')
+await room.init()
 
 // Update presence
+const currentData = room.get()
 await room.update({
   presence: {
-    ...room.presence,
+    ...(currentData.presence || {}),
     [userId]: {
       user: 'Alice',
       online_at: Date.now(),
@@ -434,16 +439,17 @@ await room.update({
 
 // Subscribe to presence changes
 room.subscribe((data) => {
-  const onlineUsers = Object.values(data.presence).filter(p => p.active)
+  const onlineUsers = Object.values(data.presence || {}).filter(p => p.active)
   console.log('Online users:', onlineUsers)
 })
 
 // Heartbeat to stay "online"
-setInterval(() => {
-  room.update({
+setInterval(async () => {
+  const data = room.get()
+  await room.update({
     presence: {
-      ...room.presence,
-      [userId]: { ...room.presence[userId], online_at: Date.now() }
+      ...(data.presence || {}),
+      [userId]: { ...(data.presence?.[userId] || {}), online_at: Date.now() }
     }
   })
 }, 30000)  // Every 30 seconds
@@ -469,10 +475,12 @@ const { data: { user } } = await supabase.auth.getUser()
 
 // Use SyncKit for offline-first data
 const sync = new SyncKit({
-  serverUrl: 'ws://localhost:8080',  // Optional - for remote sync
-  // Note: Built-in auth integration coming in future version
-  // For now, handle authentication at the server level
+  storage: 'indexeddb',
+  name: 'my-app'
+  // serverUrl: 'ws://localhost:8080',  // ⚠️ NOT FUNCTIONAL in v0.1.0
+  // Note: Network sync and auth integration coming in future version
 })
+await sync.init()
 
 // Use Supabase Storage for files
 const { data, error } = await supabase.storage
@@ -521,56 +529,53 @@ describe('Supabase + SyncKit hybrid', () => {
     // Initialize both
     const supabase = createClient(SUPABASE_URL, SUPABASE_KEY)
     const sync = new SyncKit({ storage: 'memory' })
+    await sync.init()
 
     const todo = sync.document<Todo>('todo-1')
-
-    // Initialize and set data
     await todo.init()
+
+    // Set initial data
     await todo.update({
       id: 'todo-1',
       text: 'Buy milk',
       completed: false
     })
 
-    // Simulate offline
-    await sync.disconnect()
+    // ⚠️ Note: In v0.1.0, SyncKit is local-only (no network sync)
+    // This test demonstrates local offline capability
 
-    // Update should still work (offline)
+    // Update works immediately (local-first)
     await todo.update({ completed: true })
 
     const data = todo.get()
     expect(data.completed).toBe(true)
 
-    // Reconnect and sync
-    await sync.reconnect()
-    await waitForSync(sync)
-
-    // Data should now be on server
-    const { data: serverData } = await supabase
+    // Future: When network sync is implemented, you would sync to server here
+    // For now, manually sync to Supabase if needed:
+    await supabase
       .from('todos')
-      .select('*')
+      .update({ completed: true })
       .eq('id', 'todo-1')
-      .single()
-
-    expect(serverData.completed).toBe(true)
   })
 
-  test('should handle auth token refresh', async () => {
+  test('Supabase handles auth token refresh automatically', async () => {
     const supabase = createClient(SUPABASE_URL, SUPABASE_KEY)
 
+    // ⚠️ Note: SyncKit v0.1.0 doesn't handle auth
+    // Use Supabase auth, which automatically refreshes tokens
+
     const sync = new SyncKit({
-      serverUrl: 'ws://localhost:8080',  // Optional - for remote sync
-      // Note: Auth integration coming in future version
+      storage: 'indexeddb',
+      name: 'my-app'
+      // Network sync coming in future version
     })
+    await sync.init()
 
-    // Simulate token expiration (1 hour)
-    await new Promise(r => setTimeout(r, 3600000))
-
-    // Auth should automatically refresh
-    // (Supabase handles this internally)
-
-    // Operations should still work
-    await sync.document('test').update({ value: 'test' })
+    // Supabase handles token refresh internally
+    // SyncKit operations work independently (local-first)
+    const doc = sync.document('test')
+    await doc.init()
+    await doc.update({ value: 'test' })
   })
 })
 ```
@@ -589,23 +594,30 @@ const supabase = createClient(SUPABASE_URL, SUPABASE_KEY)
 
 // Add SyncKit
 const sync = new SyncKit({
-  serverUrl: 'ws://localhost:8080',  // Optional - for remote sync
-  // Note: Auth integration coming in future version
+  storage: 'indexeddb',
+  name: 'my-app'
+  // serverUrl: 'ws://localhost:8080',  // ⚠️ NOT FUNCTIONAL in v0.1.0
 })
+await sync.init()
 
 // Dual-write: Write to both Supabase and SyncKit
 async function updateTodo(id: string, updates: Partial<Todo>) {
+  const doc = sync.document<Todo>(id)
+  await doc.init()
+
   await Promise.all([
     supabase.from('todos').update(updates).eq('id', id),
-    sync.document<Todo>(id).update(updates)
+    doc.update(updates)
   ])
 }
 ```
 
 **Validation:**
-- ✅ SyncKit server running
+- ✅ SyncKit initialized (local storage working)
 - ✅ Dual-write working
 - ✅ No user-facing changes
+
+**Note:** In v0.1.0, SyncKit is local-only. Network sync coming in future version.
 
 ### Phase 2: Migrate Reads to SyncKit (Week 2)
 
@@ -666,7 +678,8 @@ const [todo, { update }] = useSyncDocument<Todo>(id)
 2. **Hybrid is best:** Keep Supabase Auth/Storage, add SyncKit for offline
 3. **Mobile-ready:** SyncKit makes Supabase viable for mobile apps
 4. **Minimal changes:** Add offline without rewriting existing code
-5. **Bundle size:** 2.5x smaller with SyncKit vs Supabase Realtime
+5. **Bundle size:** Similar sizes (~49KB SyncKit vs ~45KB Supabase)
+6. **v0.1.0 note:** SyncKit is currently local-only; network sync coming in future version
 
 **Migration Decision Matrix:**
 
