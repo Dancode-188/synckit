@@ -95,15 +95,15 @@ const awareness = provider.awareness
 
 **Size comparison (gzipped):**
 - Yjs: **~19KB** (pure JavaScript)
-- SyncKit Lite: **~48KB** (WASM + JS)
-- SyncKit Default: **~53KB** (WASM + JS)
+- SyncKit Lite: **~44KB** (WASM + JS)
+- SyncKit Default: **~49KB** (WASM + JS)
 - Automerge: **~60-78KB** (WASM + JS)
 
 **Impact:**
 - Bundle size similar to SyncKit
 - Different trade-offs: Automerge = rich CRDTs, SyncKit = structured data sync
 
-**SyncKit solution:** ~53KB total, competitive size, simpler API for most use cases.
+**SyncKit solution:** ~49KB total, competitive size, simpler API for most use cases.
 
 #### 2. Alpha/Beta Status
 
@@ -156,7 +156,7 @@ doc = change(doc, doc => {
 
 | Feature | Yjs | SyncKit | Winner |
 |---------|-----|---------|--------|
-| **Bundle Size (gzipped)** | **~19KB** | ~53KB (~48KB lite) | 🏆 Yjs (2.8x smaller) |
+| **Bundle Size (gzipped)** | **~19KB** | ~49KB (~44KB lite) | 🏆 Yjs (2.6x smaller) |
 | **Learning Curve** | ⚠️ Steep (CRDT internals) | ✅ Simple (document API) | 🏆 SyncKit |
 | **Setup Complexity** | ⚠️ Manual providers | ✅ Zero config | 🏆 SyncKit |
 | **TypeScript Support** | ⚠️ Issues (#460, #425) | ✅ Native TS | 🏆 SyncKit |
@@ -183,7 +183,7 @@ doc = change(doc, doc => {
 
 | Feature | Automerge | SyncKit | Winner |
 |---------|-----------|---------|--------|
-| **Bundle Size (gzipped)** | ~60-78KB | ~53KB (~48KB lite) | 🏆 SyncKit (slightly smaller) |
+| **Bundle Size (gzipped)** | ~60-78KB | ~49KB (~44KB lite) | 🏆 SyncKit (slightly smaller) |
 | **Stability** | ⚠️ Alpha/Beta | ✅ Production-ready | 🏆 SyncKit |
 | **Performance** | ⚠️ Slower for text ops | ✅ <1ms LWW operations | 🏆 SyncKit (for structured data) |
 | **Memory Usage** | ⚠️ Higher for large docs | ✅ Optimized for LWW | 🏆 SyncKit (for structured data) |
@@ -301,7 +301,9 @@ todo.subscribe((data) => {
 await todo.update({ completed: true })
 ```
 
-### Yjs Y.Text → SyncKit Text CRDT
+### Yjs Y.Text → SyncKit Text CRDT ⚠️ (Coming in Future Version)
+
+**Note:** Text CRDT is not yet implemented in v0.1.0. This feature is planned for a future release.
 
 **Yjs:**
 ```typescript
@@ -315,8 +317,9 @@ ytext.insert(0, 'Hello ')
 ytext.insert(6, 'World')
 ```
 
-**SyncKit:**
+**SyncKit (planned future version):**
 ```typescript
+// ⚠️ NOT YET FUNCTIONAL in v0.1.0
 const text = sync.text('content')
 
 text.subscribe((content) => {
@@ -325,6 +328,18 @@ text.subscribe((content) => {
 
 await text.insert(0, 'Hello ')
 await text.insert(6, 'World')
+```
+
+**Current v0.1.0 workaround:** Store text content as a document field:
+```typescript
+const doc = sync.document<{ content: string }>('text-doc')
+await doc.init()
+
+doc.subscribe((data) => {
+  console.log('Text changed:', data.content)
+})
+
+await doc.update({ content: 'Hello World' })
 ```
 
 ### Automerge change() → SyncKit update()
@@ -346,10 +361,12 @@ doc = change(doc, 'Add todo', doc => {
 **SyncKit:**
 ```typescript
 const todoList = sync.document<TodoList>('todos')
+await todoList.init()
 
+const currentData = todoList.get()
 await todoList.update({
   todos: [
-    ...todoList.todos,
+    ...(currentData.todos || []),
     {
       id: 'todo-1',
       text: 'Buy milk',
@@ -401,11 +418,15 @@ ymap.set('todo-1', { text: 'Buy milk', completed: false })
 ```typescript
 // Create and configure (all built-in)
 const sync = new SyncKit({
-  serverUrl: 'ws://localhost:8080'
+  serverUrl: 'ws://localhost:8080',  // ⚠️ NOT YET FUNCTIONAL in v0.1.0
+  storage: 'indexeddb',
+  name: 'my-app'
 })
+await sync.init()
 
 // Get document
 const todo = sync.document<Todo>('todo-1')
+await todo.init()
 
 // Subscribe
 todo.subscribe((data) => {
@@ -415,6 +436,8 @@ todo.subscribe((data) => {
 // Update
 await todo.update({ completed: true })
 ```
+
+**Note:** In v0.1.0, SyncKit works offline-only. The `serverUrl` option is accepted but not used. Network sync is planned for a future release.
 
 **Benefits:**
 - ✅ 80% less code
@@ -450,11 +473,13 @@ doc = merge(doc, remoteDoc)
 ```typescript
 // Initialize
 const todoList = sync.document<TodoList>('todos')
+await todoList.init()
 
 // Update (mutable API)
+const currentData = todoList.get()
 await todoList.update({
   todos: {
-    ...todoList.todos,
+    ...(currentData.todos || {}),
     'todo-1': {
       text: 'Buy milk',
       completed: false
@@ -475,7 +500,9 @@ console.log(data.todos['todo-1'].text)
 - ✅ Automatic merge
 - ✅ Simpler state management
 
-### Pattern 3: Text Editing (Yjs)
+### Pattern 3: Text Editing (Yjs) ⚠️ (Coming in Future Version)
+
+**Note:** Text CRDT is not yet implemented in v0.1.0. This pattern shows planned future functionality.
 
 **Before (Yjs):**
 ```typescript
@@ -507,8 +534,9 @@ const binding = new MonacoBinding(
 )
 ```
 
-**After (SyncKit):**
+**After (SyncKit - planned future version):**
 ```typescript
+// ⚠️ NOT YET FUNCTIONAL in v0.1.0
 const text = sync.text('content')
 
 // Insert text
@@ -528,17 +556,37 @@ editor.onDidChangeContent(() => {
 })
 ```
 
+**Current v0.1.0 workaround:** Store text as a document field with Last-Write-Wins:
+```typescript
+const doc = sync.document<{ content: string }>('text-doc')
+await doc.init()
+
+// Subscribe to changes
+doc.subscribe((data) => {
+  if (data.content) {
+    editor.setValue(data.content)
+  }
+})
+
+// Editor binding
+editor.onDidChangeContent(() => {
+  doc.update({ content: editor.getValue() })
+})
+```
+
 **Trade-offs:**
-- ⚠️ SyncKit text CRDT is simpler (fewer features)
-- ✅ Easier integration
+- ⚠️ Text CRDT not in v0.1.0 (planned for future release)
+- ⚠️ Current workaround uses LWW (last write wins) for entire text field
+- ✅ Simpler API when Text CRDT is released
 - ✅ No binding library needed
-- ⚠️ No Monaco/CodeMirror bindings (yet)
 
 ---
 
 ## Performance Optimization
 
 ### From Yjs to SyncKit
+
+**Note:** The performance comparisons below refer to planned network sync features not yet available in v0.1.0.
 
 **Yjs performance bottlenecks:**
 ```typescript
@@ -547,20 +595,22 @@ editor.onDidChangeContent(() => {
 // 100 clients = 10,000 sync messages!
 ```
 
-**SyncKit solution:**
+**SyncKit planned solution (future version):**
 ```typescript
-// ✅ Server-side delta computation
+// ✅ Server-side delta computation (planned)
 // Server merges updates and broadcasts once
 // 100 clients = 100 sync messages
 ```
 
-**Benchmark results:**
+**Planned benchmark results (when network sync is implemented):**
 
-| Clients | Yjs Sync Time | SyncKit Sync Time | Improvement |
-|---------|---------------|-------------------|-------------|
+| Clients | Yjs Sync Time | SyncKit Sync Time (planned) | Improvement |
+|---------|---------------|---------------------------|-------------|
 | 10 | 50ms | 10ms | 5x faster |
 | 100 | 500ms | 15ms | 33x faster |
 | 1000 | 5000ms | 25ms | 200x faster |
+
+**v0.1.0 performance:** In the current version, SyncKit focuses on local-first operations with <1ms update latency for document operations.
 
 ### From Automerge to SyncKit
 
@@ -598,14 +648,15 @@ describe('Yjs → SyncKit migration parity', () => {
     const ymap = ydoc.getMap('todo')
 
     // SyncKit setup
-    const sync = new SyncKit({ storage: 'memory' })
+    const sync = new SyncKit({ storage: 'memory', name: 'test' })
+    await sync.init()
     const todo = sync.document<Todo>('todo-1')
+    await todo.init()
 
     // Apply same operations to both
     ymap.set('text', 'Buy milk')
     ymap.set('completed', false)
 
-    await todo.init()
     await todo.update({
       id: 'todo-1',
       text: 'Buy milk',
@@ -644,18 +695,22 @@ test('both should handle conflicts gracefully', async () => {
   expect(ymap1.get('text')).toBe(ymap2.get('text'))
 
   // SyncKit conflict (LWW resolution)
-  const sync1 = new SyncKit({ storage: 'memory' })
-  const sync2 = new SyncKit({ storage: 'memory' })
+  const sync1 = new SyncKit({ storage: 'memory', name: 'client1' })
+  const sync2 = new SyncKit({ storage: 'memory', name: 'client2' })
+  await sync1.init()
+  await sync2.init()
 
   const todo1 = sync1.document<Todo>('todo-1')
   const todo2 = sync2.document<Todo>('todo-1')
+  await todo1.init()
+  await todo2.init()
 
   await todo1.update({ text: 'Version 1' })
   await new Promise(r => setTimeout(r, 10))  // Ensure different timestamp
   await todo2.update({ text: 'Version 2' })
 
-  // Sync
-  await syncDocuments(todo1, todo2)
+  // Manually merge documents
+  await todo1.merge(todo2)
 
   const state1 = todo1.get()
   const state2 = todo2.get()
@@ -689,7 +744,7 @@ test('both should handle conflicts gracefully', async () => {
 
 | Metric | Yjs → SyncKit | Automerge → SyncKit |
 |--------|---------------|---------------------|
-| **Bundle size** | +179% (~19KB → ~53KB) | Similar (~60-78KB → ~53KB) |
+| **Bundle size** | +158% (~19KB → ~49KB) | Smaller (~60-78KB → ~49KB) |
 | **Setup complexity** | -80% (no providers) | -70% (simpler API) |
 | **Learning curve** | Much easier | Much easier |
 | **TypeScript support** | Better | Similar |
