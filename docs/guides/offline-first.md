@@ -58,7 +58,8 @@ await fetch('/api/todos')        // Fails without network
 
 // ✅ Offline-First (SyncKit style)
 const todos = sync.document<TodoList>('my-todos')
-todos.subscribe(data => setTodos(data))  // Always works, syncs when online
+await todos.init()
+todos.subscribe(data => setTodos(data))  // Always works from local storage
 ```
 
 **Key Insight:** In offline-first apps, network connectivity is an **optimization**, not a requirement.
@@ -145,24 +146,32 @@ User Action → Local Write (instant) → Background Sync → Server
 
 ### How SyncKit Handles Offline
 
-**When Online:**
+**⚠️ v0.1.0 Note:** Network sync and cross-tab features described below are planned for future versions. Currently in v0.1.0, SyncKit works offline-only with IndexedDB persistence.
+
+**When Online (planned future version):**
 ```typescript
 await todo.update({ completed: true })
 // 1. Write to IndexedDB (~2ms)
-// 2. Send to server via WebSocket (~50ms)
-// 3. Broadcast to other tabs via BroadcastChannel (~1ms)
+// 2. Send to server via WebSocket (~50ms) - NOT IN v0.1.0
+// 3. Broadcast to other tabs via BroadcastChannel (~1ms) - NOT IN v0.1.0
 ```
 
-**When Offline:**
+**When Offline (planned future version):**
 ```typescript
 await todo.update({ completed: true })
 // 1. Write to IndexedDB (~2ms)
-// 2. Queue for sync (automatic)
-// 3. Broadcast to other tabs via BroadcastChannel (~1ms)
-// 4. Retry sync when connection returns (automatic)
+// 2. Queue for sync (automatic) - NOT IN v0.1.0
+// 3. Broadcast to other tabs via BroadcastChannel (~1ms) - NOT IN v0.1.0
+// 4. Retry sync when connection returns (automatic) - NOT IN v0.1.0
 ```
 
-**User experience is identical!**
+**Current v0.1.0 behavior:**
+```typescript
+await todo.update({ completed: true })
+// 1. Write to IndexedDB (~2ms)
+// 2. Data persists across browser restarts
+// 3. Cross-tab sync and network sync coming in future version
+```
 
 ---
 
@@ -185,7 +194,9 @@ IndexedDB is a **full NoSQL database** in your browser, not just a key-value sto
 localStorage.setItem('todo', JSON.stringify(todo))
 
 // ✅ IndexedDB (unlimited, async, any type)
-await sync.document('todo-1').set(todo)
+const doc = sync.document('todo-1')
+await doc.init()
+await doc.update(todo)
 ```
 
 ### SyncKit's IndexedDB Integration
@@ -239,6 +250,7 @@ if (navigator.storage && navigator.storage.persist) {
 ```typescript
 async function toggleTodo(id: string) {
   const todo = sync.document<Todo>(id)
+  await todo.init()
   const current = todo.get()
 
   // ✅ Three-step optimistic update pattern
@@ -301,11 +313,14 @@ Sync strategies and network features are planned for future release.
 
 **Sync strategies** determine **when** to sync data with the server.
 
-#### Strategy A: Eager Sync (Default)
+#### Strategy A: Eager Sync (Default) - Planned Feature
+
+**⚠️ NOT YET IMPLEMENTED IN v0.1.0**
 
 Sync immediately when online:
 
 ```typescript
+// ⚠️ NOT FUNCTIONAL in v0.1.0
 const sync = new SyncKit({
   serverUrl: 'ws://localhost:8080',
   syncStrategy: 'eager'  // Default
@@ -320,11 +335,14 @@ await todo.update({ completed: true })  // Syncs immediately
 - Multiple users editing same data
 - Changes must propagate quickly
 
-#### Strategy B: Lazy Sync
+#### Strategy B: Lazy Sync - Planned Feature
+
+**⚠️ NOT YET IMPLEMENTED IN v0.1.0**
 
 Sync periodically or on-demand:
 
 ```typescript
+// ⚠️ NOT FUNCTIONAL in v0.1.0
 const sync = new SyncKit({
   serverUrl: 'ws://localhost:8080',
   syncStrategy: 'lazy',
@@ -337,7 +355,7 @@ await todo2.update({ text: 'New text' })  // Batched
 // ... 30 seconds later: all changes sync together
 
 // Or trigger sync manually
-await sync.syncNow()
+await sync.syncNow()  // Method doesn't exist in v0.1.0
 ```
 
 **Use when:**
@@ -345,11 +363,14 @@ await sync.syncNow()
 - Batch operations
 - Single-user apps
 
-#### Strategy C: Manual Sync
+#### Strategy C: Manual Sync - Planned Feature
+
+**⚠️ NOT YET IMPLEMENTED IN v0.1.0**
 
 Full control over when to sync:
 
 ```typescript
+// ⚠️ NOT FUNCTIONAL in v0.1.0
 const sync = new SyncKit({
   serverUrl: 'ws://localhost:8080',
   syncStrategy: 'manual'
@@ -360,7 +381,7 @@ await todo1.update({ completed: true })
 await todo2.update({ completed: true })
 
 // Sync when ready
-await sync.syncNow()  // Syncs all pending changes
+await sync.syncNow()  // Method doesn't exist in v0.1.0
 ```
 
 **Use when:**
@@ -368,16 +389,19 @@ await sync.syncNow()  // Syncs all pending changes
 - Precise control needed
 - Testing/debugging
 
-### Pattern 4: Connection Status Handling
+### Pattern 4: Connection Status Handling - Planned Feature
 
-Show users the connection state:
+**⚠️ NOT YET IMPLEMENTED IN v0.1.0**
+
+Show users the connection state (coming in future version):
 
 ```typescript
+// ⚠️ NOT FUNCTIONAL in v0.1.0 - APIs don't exist yet
 function ConnectionStatus() {
-  const [status, setStatus] = useState(sync.status)
+  const [status, setStatus] = useState(sync.status)  // Property doesn't exist
 
   useEffect(() => {
-    const unsubscribe = sync.onStatusChange(setStatus)
+    const unsubscribe = sync.onStatusChange(setStatus)  // Method doesn't exist
     return unsubscribe
   }, [])
 
@@ -387,6 +411,32 @@ function ConnectionStatus() {
       {status === 'connecting' && '🟡 Connecting...'}
       {status === 'disconnected' && '🔴 Offline'}
       {status === 'reconnecting' && '🟡 Reconnecting...'}
+    </div>
+  )
+}
+```
+
+**Current v0.1.0 workaround:** Use browser's online/offline events:
+```typescript
+function ConnectionStatus() {
+  const [isOnline, setIsOnline] = useState(navigator.onLine)
+
+  useEffect(() => {
+    const handleOnline = () => setIsOnline(true)
+    const handleOffline = () => setIsOnline(false)
+
+    window.addEventListener('online', handleOnline)
+    window.addEventListener('offline', handleOffline)
+
+    return () => {
+      window.removeEventListener('online', handleOnline)
+      window.removeEventListener('offline', handleOffline)
+    }
+  }, [])
+
+  return (
+    <div className={`status ${isOnline ? 'online' : 'offline'}`}>
+      {isOnline ? '🟢 Online' : '🔴 Offline'}
     </div>
   )
 }
@@ -463,6 +513,7 @@ interface Task {
 }
 
 const task = sync.document<Task>('task-123')
+await task.init()
 
 // Track who edited last
 await task.update({
@@ -500,6 +551,7 @@ interface TodoV2 {
 // Migration helper
 async function migrateTodo(id: string) {
   const todo = sync.document<TodoV1>(id)
+  await todo.init()
   const data = todo.get()
 
   // Check if migration needed
@@ -514,14 +566,16 @@ async function migrateTodo(id: string) {
 
 ### Pattern 7: Storage Management
 
-Manage storage proactively:
+**⚠️ Query API NOT YET IMPLEMENTED IN v0.1.0**
+
+Manage storage proactively (planned for future version):
 
 ```typescript
-// Clear old documents
+// ⚠️ NOT FUNCTIONAL in v0.1.0 - Query API doesn't exist
 async function cleanupOldDocs() {
   const cutoff = Date.now() - (30 * 24 * 60 * 60 * 1000)  // 30 days
 
-  // Query old todos (using future query API)
+  // Query old todos (using future query API - NOT IN v0.1.0)
   const oldTodos = await sync.query<Todo>()
     .where('createdAt', '<', cutoff)
     .where('completed', '==', true)
@@ -529,14 +583,26 @@ async function cleanupOldDocs() {
 
   // Delete in batch
   await Promise.all(
-    oldTodos.map(todo => sync.document(todo.id).delete())
+    oldTodos.map(todo => sync.deleteDocument(todo.id))  // Correct delete API
   )
 
   console.log(`Deleted ${oldTodos.length} old todos`)
 }
+```
 
-// Run cleanup on app startup
-cleanupOldDocs()
+**Current v0.1.0 workaround:** Track document IDs manually and delete by ID:
+```typescript
+async function cleanupOldDocs(todoIds: string[]) {
+  // Delete documents by ID
+  await Promise.all(
+    todoIds.map(id => sync.deleteDocument(id))
+  )
+
+  console.log(`Deleted ${todoIds.length} todos`)
+}
+
+// Or clear all documents
+await sync.clearAll()
 ```
 
 ---
@@ -568,6 +634,7 @@ setLoading(false)
 
 // ✅ Show data immediately from local database
 const todos = sync.document<TodoList>('my-todos')
+await todos.init()
 todos.subscribe(data => {
   setTodos(data)
   setLoading(false)
@@ -624,29 +691,41 @@ if (!window.indexedDB) {
 
 ### Issue: "Changes not syncing to server"
 
-**Cause:** Network blocked, wrong URL, or authentication failed
+**⚠️ v0.1.0 Note:** Network sync is not yet implemented. This issue applies to future versions.
 
-**Debug:**
+**Cause (future version):** Network blocked, wrong URL, or authentication failed
+
+**Debug (planned future version):**
 ```typescript
+// ⚠️ NOT FUNCTIONAL in v0.1.0 - These APIs don't exist
 // Check connection status
-console.log('Status:', sync.status)
+console.log('Status:', sync.status)  // Property doesn't exist
 
 // Check queue size
-console.log('Pending changes:', sync.queueSize)
+console.log('Pending changes:', sync.queueSize)  // Property doesn't exist
 
 // Listen for errors
-sync.onError((error) => {
+sync.onError((error) => {  // Method doesn't exist
   console.error('Sync error:', error)
 })
 ```
+
+**Current v0.1.0:** SyncKit works offline-only. All operations write to IndexedDB and persist locally.
 
 ### Issue: "App feels slow offline"
 
 **Cause:** Waiting for network timeouts
 
-**Solution:** Check connection status before operations:
+**Solution (v0.1.0):** Use offline-first operations (always instant):
 ```typescript
-if (sync.status === 'connected') {
+// ✅ v0.1.0: All operations are local and instant
+await todo.update({ completed: true })  // Instant IndexedDB write
+```
+
+**Future version solution:** Check connection status before operations:
+```typescript
+// ⚠️ NOT FUNCTIONAL in v0.1.0
+if (sync.status === 'connected') {  // Property doesn't exist
   // Only do network operations when connected
 }
 
