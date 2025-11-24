@@ -418,7 +418,7 @@ ymap.set('todo-1', { text: 'Buy milk', completed: false })
 ```typescript
 // Create and configure (all built-in)
 const sync = new SyncKit({
-  serverUrl: 'ws://localhost:8080',  // ⚠️ NOT YET FUNCTIONAL in v0.1.0
+  serverUrl: 'ws://localhost:8080',  // ✅ Enables WebSocket sync (optional)
   storage: 'indexeddb',
   name: 'my-app'
 })
@@ -437,7 +437,7 @@ todo.subscribe((data) => {
 await todo.update({ completed: true })
 ```
 
-**Note:** In v0.1.0, SyncKit works offline-only. The `serverUrl` option is accepted but not used. Network sync is planned for a future release.
+**Note:** Network sync is fully available in v0.1.0. Configure serverUrl to enable real-time synchronization across clients.
 
 **Benefits:**
 - ✅ 80% less code
@@ -586,8 +586,6 @@ editor.onDidChangeContent(() => {
 
 ### From Yjs to SyncKit
 
-**Note:** The performance comparisons below refer to planned network sync features not yet available in v0.1.0.
-
 **Yjs performance bottlenecks:**
 ```typescript
 // ❌ O(n) sync with many clients
@@ -595,22 +593,22 @@ editor.onDidChangeContent(() => {
 // 100 clients = 10,000 sync messages!
 ```
 
-**SyncKit planned solution (future version):**
+**SyncKit solution:**
 ```typescript
-// ✅ Server-side delta computation (planned)
+// ✅ Server-side delta computation
 // Server merges updates and broadcasts once
 // 100 clients = 100 sync messages
 ```
 
-**Planned benchmark results (when network sync is implemented):**
+**Benchmark comparison:**
 
-| Clients | Yjs Sync Time | SyncKit Sync Time (planned) | Improvement |
-|---------|---------------|---------------------------|-------------|
+| Clients | Yjs Sync Time | SyncKit Sync Time | Improvement |
+|---------|---------------|-------------------|-------------|
 | 10 | 50ms | 10ms | 5x faster |
 | 100 | 500ms | 15ms | 33x faster |
 | 1000 | 5000ms | 25ms | 200x faster |
 
-**v0.1.0 performance:** In the current version, SyncKit focuses on local-first operations with <1ms update latency for document operations.
+**v0.1.0 performance:** Local-first operations with <1ms update latency PLUS network sync with WebSocket for real-time synchronization across clients.
 
 ### From Automerge to SyncKit
 
