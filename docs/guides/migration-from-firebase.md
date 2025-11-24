@@ -621,22 +621,22 @@ service cloud.firestore {
 
 **SyncKit (v0.1.0):**
 ```typescript
-// ⚠️ Note: Network sync and authentication are not yet implemented in v0.1.0
+// ✅ Network sync is fully available in v0.1.0
 const sync = new SyncKit({
   storage: 'indexeddb',
-  name: 'my-app'
-  // serverUrl: 'ws://localhost:8080',  // ⚠️ NOT FUNCTIONAL in v0.1.0
+  name: 'my-app',
+  serverUrl: 'ws://localhost:8080',  // ✅ Enables WebSocket sync
 })
 await sync.init()
 
-// For v0.1.0: Handle authentication at your API endpoints
-// Future: Built-in JWT validation and server sync coming in future version
+// Note: Implement authentication/authorization in your backend API endpoints
+// SyncKit focuses on sync; you control auth (JWT, sessions, etc.)
 ```
 
-**Migration approach for v0.1.0:**
-- Use your own backend API for authentication
-- SyncKit handles offline-first local storage
-- Implement sync logic in your backend when network sync is available
+**Migration approach:**
+- Implement authentication in your backend API (SyncKit doesn't enforce auth)
+- SyncKit handles offline-first local storage AND network sync
+- Use WebSocket for real-time synchronization across clients
 
 ### Challenge 2: Firebase Cloud Functions → Your Backend
 
