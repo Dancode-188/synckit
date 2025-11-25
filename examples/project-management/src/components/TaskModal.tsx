@@ -90,9 +90,26 @@ export default function TaskModal({ sync }: TaskModalProps) {
       updateTask(taskData.id, taskData)
     } else {
       addTask(taskData)
+      // Save task ID to localStorage for persistence
+      saveTaskIdToStorage(taskData.id)
     }
 
     closeTaskModal()
+  }
+
+  // Helper function to save task ID to localStorage
+  const saveTaskIdToStorage = (taskId: string) => {
+    try {
+      const stored = localStorage.getItem('synckit-task-ids')
+      const taskIds: string[] = stored ? JSON.parse(stored) : []
+
+      if (!taskIds.includes(taskId)) {
+        taskIds.push(taskId)
+        localStorage.setItem('synckit-task-ids', JSON.stringify(taskIds))
+      }
+    } catch (error) {
+      console.error('Failed to save task ID to localStorage:', error)
+    }
   }
 
   const handleDelete = async () => {
@@ -102,7 +119,23 @@ export default function TaskModal({ sync }: TaskModalProps) {
       // Delete from SyncKit
       await sync.deleteDocument(existingTask.id)
       deleteTask(existingTask.id)
+      // Remove task ID from localStorage
+      removeTaskIdFromStorage(existingTask.id)
       closeTaskModal()
+    }
+  }
+
+  // Helper function to remove task ID from localStorage
+  const removeTaskIdFromStorage = (taskId: string) => {
+    try {
+      const stored = localStorage.getItem('synckit-task-ids')
+      if (stored) {
+        const taskIds: string[] = JSON.parse(stored)
+        const filtered = taskIds.filter(id => id !== taskId)
+        localStorage.setItem('synckit-task-ids', JSON.stringify(filtered))
+      }
+    } catch (error) {
+      console.error('Failed to remove task ID from localStorage:', error)
     }
   }
 

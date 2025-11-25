@@ -19,14 +19,81 @@ function App() {
   const { sidebarOpen, taskModalOpen } = useStore()
   const [syncReady, setSyncReady] = useState(false)
 
-  // Initialize SyncKit
+  // Initialize SyncKit and load tasks from storage
   useEffect(() => {
-    sync.init().then(() => {
-      setSyncReady(true)
-    }).catch((error) => {
-      console.error('Failed to initialize SyncKit:', error)
-      setSyncReady(true) // Still render the app in offline-only mode
-    })
+    const initializeApp = async () => {
+      try {
+        await sync.init()
+
+        // Load all tasks from IndexedDB
+        await loadTasksFromStorage()
+
+        setSyncReady(true)
+      } catch (error) {
+        console.error('Failed to initialize SyncKit:', error)
+        setSyncReady(true) // Still render the app in offline-only mode
+      }
+    }
+
+    // Function to load all persisted tasks from IndexedDB
+    const loadTasksFromStorage = async () => {
+      // Get list of known task IDs from localStorage
+      const taskIds = getKnownTaskIds()
+
+      const loadedTasks: any[] = []
+
+      for (const taskId of taskIds) {
+        try {
+          const doc = sync.document(taskId)
+          await doc.init()
+          const taskData = doc.get()
+
+          // Only add if it has valid data
+          if (taskData && Object.keys(taskData).length > 0) {
+            loadedTasks.push(taskData)
+          }
+        } catch (error) {
+          console.warn(`Failed to load task ${taskId}:`, error)
+        }
+      }
+
+      // Merge loaded tasks with hardcoded tasks
+      // This ensures hardcoded tasks are always present, but uses saved versions if available
+      const currentTasks = useStore.getState().tasks
+      const mergedTasks = currentTasks.map(task => {
+        const loaded = loadedTasks.find((t: any) => t.id === task.id)
+        return loaded || task
+      })
+
+      // Add any new user-created tasks that weren't in the hardcoded list
+      loadedTasks.forEach(task => {
+        if (!mergedTasks.find(t => t.id === task.id)) {
+          mergedTasks.push(task)
+        }
+      })
+
+      useStore.setState({ tasks: mergedTasks })
+    }
+
+    // Get list of all known task IDs from localStorage
+    const getKnownTaskIds = (): string[] => {
+      const stored = localStorage.getItem('synckit-task-ids')
+      if (stored) {
+        try {
+          return JSON.parse(stored)
+        } catch {
+          return getDefaultTaskIds()
+        }
+      }
+      return getDefaultTaskIds()
+    }
+
+    // Get default task IDs (the hardcoded ones)
+    const getDefaultTaskIds = (): string[] => {
+      return ['task-1', 'task-2', 'task-3', 'task-4', 'task-5', 'task-6']
+    }
+
+    initializeApp()
   }, [])
 
   if (!syncReady) {
