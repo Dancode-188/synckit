@@ -52,7 +52,7 @@ describe('Performance Benchmarks', () => {
 
   describe('Document Operations', () => {
     it('should perform 1000 document set operations efficiently', async () => {
-      const doc = synckit.document<{ counter: number }>('perf-doc')
+      const doc = await synckit.document<{ counter: number }>('perf-doc')
 
       const duration = await measure('1000 document sets', async () => {
         for (let i = 0; i < 1000; i++) {
@@ -65,12 +65,12 @@ describe('Performance Benchmarks', () => {
     })
 
     it('should perform 10000 document get operations efficiently', async () => {
-      const doc = synckit.document<{ value: string }>('perf-doc')
+      const doc = await synckit.document<{ value: string }>('perf-doc')
       await doc.set('value', 'test')
 
       const duration = measure('10000 document gets', () => {
         for (let i = 0; i < 10000; i++) {
-          doc.get('value')
+          doc.getField('value')
         }
       })
 
@@ -79,7 +79,7 @@ describe('Performance Benchmarks', () => {
     })
 
     it('should handle bulk updates efficiently', async () => {
-      const doc = synckit.document<{ items: number[] }>('bulk-doc')
+      const doc = await synckit.document<{ items: number[] }>('bulk-doc')
 
       const duration = await measure('Bulk update 100 items', async () => {
         const items = Array.from({ length: 100 }, (_, i) => i)
@@ -255,12 +255,12 @@ describe('Performance Benchmarks', () => {
 
   describe('Memory Efficiency', () => {
     it('should not leak memory with repeated operations', async () => {
-      const doc = synckit.document<{ counter: number }>('memory-test')
+      const doc = await synckit.document<{ counter: number }>('memory-test')
 
       // Perform many operations
       for (let i = 0; i < 1000; i++) {
         await doc.set('counter', i)
-        doc.get('counter')
+        doc.getField('counter')
       }
 
       // Force garbage collection if available
@@ -270,11 +270,11 @@ describe('Performance Benchmarks', () => {
 
       // Document should still be functional
       await doc.set('counter', 9999)
-      expect(doc.get('counter')).toBe(9999)
+      expect(doc.getField('counter')).toBe(9999)
     })
 
     it('should efficiently handle large documents', async () => {
-      const doc = synckit.document<{ data: Record<string, number> }>('large-doc')
+      const doc = await synckit.document<{ data: Record<string, number> }>('large-doc')
 
       // Create large nested object
       const largeData: Record<string, number> = {}
@@ -288,7 +288,7 @@ describe('Performance Benchmarks', () => {
 
       // Should handle large documents efficiently
       expect(duration).toBeLessThan(500)
-      expect(Object.keys(doc.get('data') || {}).length).toBe(1000)
+      expect(Object.keys(doc.getField('data') || {}).length).toBe(1000)
     })
   })
 })
