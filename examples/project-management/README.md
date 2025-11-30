@@ -166,7 +166,7 @@ useEffect(() => {
     // Load each task from IndexedDB
     const loadedTasks = []
     for (const taskId of taskIds) {
-      const doc = sync.document(taskId)
+      const doc = await sync.document(taskId)
       await doc.init()  // Loads from IndexedDB and subscribes to updates
       loadedTasks.push(doc.get())
     }
