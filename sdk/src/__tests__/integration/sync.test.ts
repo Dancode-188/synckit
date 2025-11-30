@@ -26,7 +26,7 @@ if (typeof CloseEvent === 'undefined') {
 class MockWebSocket {
   static instances: MockWebSocket[] = []
 
-  readyState: number = WebSocket.CONNECTING
+  readyState = WebSocket.CONNECTING
   binaryType: BinaryType = 'arraybuffer'
   onopen: ((event: Event) => void) | null = null
   onclose: ((event: CloseEvent) => void) | null = null
@@ -106,7 +106,7 @@ class MockWebSocket {
     const payload = JSON.parse(payloadJson)
 
     return {
-      type: this.getTypeName(typeCode) as WebSocketMessage['type'],
+      type: this.getTypeName(typeCode),
       payload,
       timestamp,
     }
@@ -116,8 +116,6 @@ class MockWebSocket {
     const map: Record<string, number> = {
       auth: 0x01,
       auth_success: 0x02,
-      subscribe: 0x10,
-      sync_response: 0x13,
       delta: 0x20,
       ack: 0x21,
       ping: 0x30,
@@ -131,8 +129,6 @@ class MockWebSocket {
     const map: Record<number, string> = {
       0x01: 'auth',
       0x02: 'auth_success',
-      0x10: 'subscribe',
-      0x13: 'sync_response',
       0x20: 'delta',
       0x21: 'ack',
       0x30: 'ping',
@@ -180,24 +176,6 @@ describe('Network Synchronization Integration', () => {
       })
     })
 
-    // Auto-respond to subscribe with sync_response
-    mockWs.onMessageType('subscribe', (payload) => {
-      mockWs.simulateMessage({
-        type: 'sync_response',
-        payload: { documentId: payload.documentId },
-        timestamp: Date.now(),
-      })
-    })
-
-    // Auto-respond to delta with ACK (default behavior)
-    mockWs.onMessageType('delta', (payload) => {
-      mockWs.simulateMessage({
-        type: 'ack',
-        payload: { messageId: payload.messageId },
-        timestamp: Date.now(),
-      })
-    })
-
     // Auto-respond to ping
     mockWs.onMessageType('ping', () => {
       mockWs.simulateMessage({
@@ -219,16 +197,16 @@ describe('Network Synchronization Integration', () => {
 
       mockWs.onMessageType('delta', (payload) => {
         receivedDeltas.push(payload)
-        // Acknowledge the delta using messageId
+        // Acknowledge the delta
         mockWs.simulateMessage({
           type: 'ack',
-          payload: { messageId: payload.messageId },
+          payload: { operationId: payload.operation.timestamp },
           timestamp: Date.now(),
         })
       })
 
       // Create and modify document
-      const doc = await synckit.document<{ name: string; count: number }>('test-doc')
+      const doc = synckit.document<{ name: string; count: number }>('test-doc')
       await doc.set('name', 'Alice')
       await doc.set('count', 42)
 
@@ -237,26 +215,28 @@ describe('Network Synchronization Integration', () => {
 
       // Verify deltas were sent
       expect(receivedDeltas.length).toBeGreaterThanOrEqual(2)
-      const nameOp = receivedDeltas.find((d) => d.field === 'name')
-      const countOp = receivedDeltas.find((d) => d.field === 'count')
-      expect(nameOp.value).toBe('Alice')
-      expect(countOp.value).toBe(42)
+      const nameOp = receivedDeltas.find((d) => d.operation.field === 'name')
+      const countOp = receivedDeltas.find((d) => d.operation.field === 'count')
+      expect(nameOp.operation.value).toBe('Alice')
+      expect(countOp.operation.value).toBe(42)
     })
 
     it('should receive and apply remote changes', async () => {
-      const doc = await synckit.document<{ name: string }>('test-doc')
+      const doc = synckit.document<{ name: string }>('test-doc')
 
       // Simulate remote change from server
       mockWs.simulateMessage({
         type: 'delta',
         payload: {
-          type: 'set',
-          documentId: 'test-doc',
-          field: 'name',
-          value: 'Bob',
-          clock: { 'remote-client': 1 },
-          clientId: 'remote-client',
-          timestamp: Date.now(),
+          operation: {
+            type: 'set',
+            documentId: 'test-doc',
+            field: 'name',
+            value: 'Bob',
+            clock: { 'remote-client': 1 },
+            clientId: 'remote-client',
+            timestamp: Date.now(),
+          },
         },
         timestamp: Date.now(),
       })
@@ -265,11 +245,11 @@ describe('Network Synchronization Integration', () => {
       await new Promise((resolve) => setTimeout(resolve, 50))
 
       // Verify remote change was applied
-      expect(doc.getField('name')).toBe('Bob')
+      expect(doc.get('name')).toBe('Bob')
     })
 
     it('should resolve conflicts using vector clocks', async () => {
-      const doc = await synckit.document<{ name: string }>('test-doc')
+      const doc = synckit.document<{ name: string }>('test-doc')
 
       // Local change
       await doc.set('name', 'Alice')
@@ -278,13 +258,15 @@ describe('Network Synchronization Integration', () => {
       mockWs.simulateMessage({
         type: 'delta',
         payload: {
-          type: 'set',
-          documentId: 'test-doc',
-          field: 'name',
-          value: 'Bob',
-          clock: { 'remote-client': 1 },
-          clientId: 'remote-client',
-          timestamp: Date.now() - 1000, // Earlier timestamp
+          operation: {
+            type: 'set',
+            documentId: 'test-doc',
+            field: 'name',
+            value: 'Bob',
+            clock: { 'remote-client': 1 },
+            clientId: 'remote-client',
+            timestamp: Date.now() - 1000, // Earlier timestamp
+          },
         },
         timestamp: Date.now(),
       })
@@ -293,27 +275,27 @@ describe('Network Synchronization Integration', () => {
       await new Promise((resolve) => setTimeout(resolve, 50))
 
       // Local change should win (higher vector clock + later timestamp)
-      expect(doc.getField('name')).toBe('Alice')
+      expect(doc.get('name')).toBe('Alice')
     })
 
     it('should handle multiple concurrent clients', async () => {
-      const doc1 = await synckit.document<{ count: number }>('shared-doc')
+      const doc1 = synckit.document<{ count: number }>('shared-doc')
       await doc1.set('count', 1)
 
       // Simulate operations from multiple remote clients
-      // Each remote operation has increasing clock values (2, 3, 4, 5)
-      // to ensure they beat the local operation (clock=1) in LWW resolution
       for (let i = 2; i <= 5; i++) {
         mockWs.simulateMessage({
           type: 'delta',
           payload: {
-            type: 'set',
-            documentId: 'shared-doc',
-            field: 'count',
-            value: i,
-            clock: { [`client-${i}`]: i },
-            clientId: `client-${i}`,
-            timestamp: Date.now() + i,
+            operation: {
+              type: 'set',
+              documentId: 'shared-doc',
+              field: 'count',
+              value: i,
+              clock: { [`client-${i}`]: 1 },
+              clientId: `client-${i}`,
+              timestamp: Date.now() + i,
+            },
           },
           timestamp: Date.now(),
         })
@@ -322,14 +304,14 @@ describe('Network Synchronization Integration', () => {
       // Wait for all operations to process
       await new Promise((resolve) => setTimeout(resolve, 100))
 
-      // Last operation (client-5 with highest clock value) should win
-      expect(doc1.getField('count')).toBe(5)
+      // Last operation (client-5 with highest timestamp) should win
+      expect(doc1.get('count')).toBe(5)
     })
   })
 
   describe('Offline Queue', () => {
     it('should queue operations when offline', async () => {
-      const doc = await synckit.document<{ name: string }>('test-doc')
+      const doc = synckit.document<{ name: string }>('test-doc')
 
       // Go offline by closing WebSocket
       mockWs.close()

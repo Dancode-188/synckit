@@ -993,7 +993,7 @@ test('should handle 50 concurrent clients', async () => {
       page.evaluate(async (index) => {
         // Assuming synckit is exposed globally or via window
         const synckit = (window as any).synckit
-        const doc = await synckit.document(`todo-${index}`)
+        const doc = synckit.document(`todo-${index}`)
         await doc.init()
         await doc.update({
           id: `todo-${index}`,

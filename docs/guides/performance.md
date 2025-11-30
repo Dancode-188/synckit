@@ -404,7 +404,8 @@ async function cleanupOldDocuments() {
   const docIds = await synckit.listDocuments()
 
   for (const id of docIds) {
-    const doc = await synckit.document(id)
+    const doc = synckit.document(id)
+    await doc.init()
     const data = doc.get()
 
     if (data.createdAt < cutoff && data.deleted) {
@@ -642,13 +643,15 @@ self.onmessage = async (event) => {
 
   switch (type) {
     case 'update':
-      const doc = await synckit.document(id)
+      const doc = synckit.document(id)
+      await doc.init()
       await doc.update(data)
       self.postMessage({ type: 'update-complete', id })
       break
 
     case 'get':
-      const getDoc = await synckit.document(id)
+      const getDoc = synckit.document(id)
+      await getDoc.init()
       const result = getDoc.get()
       self.postMessage({ type: 'get-result', id, data: result })
       break
@@ -820,7 +823,8 @@ const todoList = ref({})
 
 onMounted(async () => {
   await synckit.init()
-  const doc = await synckit.document('todo-list')
+  const doc = synckit.document('todo-list')
+  await doc.init()
 
   const unsubscribe = doc.subscribe((data) => {
     todoList.value = data

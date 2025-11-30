@@ -573,7 +573,7 @@ describe('Supabase + SyncKit hybrid', () => {
 
     // Supabase handles token refresh internally
     // SyncKit operations work independently (local-first)
-    const doc = await sync.document('test')
+    const doc = sync.document('test')
     await doc.init()
     await doc.update({ value: 'test' })
   })

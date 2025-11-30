@@ -45,7 +45,8 @@ function App() {
 
       for (const taskId of taskIds) {
         try {
-          const doc = await sync.document(taskId)
+          const doc = sync.document(taskId)
+          await doc.init()
           const taskData = doc.get()
 
           // Only add if it has valid data
@@ -107,7 +108,8 @@ function App() {
       // Notify about new task IDs so components can subscribe
       for (const taskId of addedTaskIds) {
         try {
-          const doc = await sync.document<Task>(taskId)
+          const doc = sync.document<Task>(taskId)
+          await doc.init()
 
           // Check if data already exists locally
           const existingData = doc.get()

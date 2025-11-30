@@ -61,19 +61,25 @@ export function useSyncDocument<T extends Record<string, unknown>>(
   set: <K extends keyof T>(field: K, value: T[K]) => Promise<void>
   update: (updates: Partial<T>) => Promise<void>
   delete: <K extends keyof T>(field: K) => Promise<void>
-}, SyncDocument<T> | null] {
+}, SyncDocument<T>] {
   const synckit = useSyncKit()
   const [data, setData] = useState<T>({} as T)
   const docRef = useRef<SyncDocument<T> | null>(null)
   const [initialized, setInitialized] = useState(false)
 
-  // Initialize document asynchronously
+  // Get or create document
+  if (!docRef.current) {
+    docRef.current = synckit.document<T>(id)
+  }
+
+  const doc = docRef.current
+
+  // Initialize document
   useEffect(() => {
     let cancelled = false
 
-    synckit.document<T>(id).then((doc) => {
+    doc.init().then(() => {
       if (!cancelled) {
-        docRef.current = doc
         setInitialized(true)
       }
     }).catch((error) => {
@@ -83,13 +89,11 @@ export function useSyncDocument<T extends Record<string, unknown>>(
     return () => {
       cancelled = true
     }
-  }, [synckit, id])
-
-  const doc = docRef.current
+  }, [doc])
 
   // Subscribe to changes (only after initialization)
   useEffect(() => {
-    if (!initialized || !doc) return
+    if (!initialized) return
 
     const unsubscribe = doc.subscribe((newData) => {
       setData(newData)
@@ -100,26 +104,17 @@ export function useSyncDocument<T extends Record<string, unknown>>(
   
   // Memoized setters
   const set = useCallback(
-    <K extends keyof T>(field: K, value: T[K]) => {
-      if (!doc) return Promise.reject(new Error('Document not initialized'))
-      return doc.set(field, value)
-    },
+    <K extends keyof T>(field: K, value: T[K]) => doc.set(field, value),
     [doc]
   )
   
   const update = useCallback(
-    (updates: Partial<T>) => {
-      if (!doc) return Promise.reject(new Error('Document not initialized'))
-      return doc.update(updates)
-    },
+    (updates: Partial<T>) => doc.update(updates),
     [doc]
   )
   
   const deleteField = useCallback(
-    <K extends keyof T>(field: K) => {
-      if (!doc) return Promise.reject(new Error('Document not initialized'))
-      return doc.delete(field)
-    },
+    <K extends keyof T>(field: K) => doc.delete(field),
     [doc]
   )
   
@@ -254,8 +249,8 @@ export interface UseSyncDocumentResult<T extends Record<string, unknown>> {
     update: (updates: Partial<T>) => Promise<void>
     delete: <K extends keyof T>(field: K) => Promise<void>
   }
-  /** Document instance (null if not yet initialized) */
-  document: SyncDocument<T> | null
+  /** Document instance */
+  document: SyncDocument<T>
   /** Sync state (null if network layer not initialized) */
   syncState: DocumentSyncState | null
 }

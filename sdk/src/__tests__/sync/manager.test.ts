@@ -6,9 +6,10 @@ import { describe, it, expect, beforeEach, vi } from 'vitest'
 import {
   SyncManager,
   type SyncableDocument,
+  type DocumentSyncState,
 } from '../../sync/manager'
-import type { MessageType } from '../../websocket/client'
-import type { Operation, VectorClock } from '../../sync/queue'
+import type { WebSocketClient, MessageType } from '../../websocket/client'
+import type { OfflineQueue, Operation, VectorClock } from '../../sync/queue'
 import type { StorageAdapter } from '../../types'
 
 // Mock Storage
@@ -51,7 +52,7 @@ class MockWebSocketClient {
     }
   }
 
-  send(_message: any): void {
+  send(message: any): void {
     // Mock implementation
   }
 
@@ -89,14 +90,14 @@ class MockWebSocketClient {
 // Mock Offline Queue
 class MockOfflineQueue {
   async init(): Promise<void> {}
-  async enqueue(_operation: Operation): Promise<void> {}
-  async replay(_sender: (op: Operation) => Promise<void>): Promise<number> {
+  async enqueue(operation: Operation): Promise<void> {}
+  async replay(sender: (op: Operation) => Promise<void>): Promise<number> {
     return 0
   }
   getStats() {
     return { size: 0, replaying: 0, failed: 0, oldestOperation: null }
   }
-  onChange(_callback: any): () => void {
+  onChange(callback: any): () => void {
     return () => {}
   }
 }
@@ -122,7 +123,7 @@ class MockDocument implements SyncableDocument {
     this.clock = { ...clock }
   }
 
-  applyRemoteOperation(_operation: Operation): void {
+  applyRemoteOperation(operation: Operation): void {
     // Mock implementation
   }
 }
@@ -266,10 +267,8 @@ describe('SyncManager', () => {
       setTimeout(() => {
         // Extract messageId from the send call
         const sendCall = sendSpy.mock.calls[0]
-        const messageId = sendCall?.[0]?.payload?.messageId
-        if (messageId) {
-          websocket.trigger('ack', { messageId })
-        }
+        const messageId = sendCall[0].payload.messageId
+        websocket.trigger('ack', { messageId })
       }, 10)
 
       await pushPromise
