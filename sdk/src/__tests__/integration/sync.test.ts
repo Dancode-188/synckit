@@ -7,7 +7,7 @@
 import { beforeEach, afterEach, describe, expect, it } from 'vitest'
 import { SyncKit } from '../../synckit'
 import { MemoryStorage } from '../../storage'
-import type { WebSocketMessage } from '../../websocket/client'
+import type { WebSocketMessage, MessageType } from '../../websocket/client'
 
 // Mock CloseEvent if not available
 if (typeof CloseEvent === 'undefined') {
@@ -25,8 +25,7 @@ if (typeof CloseEvent === 'undefined') {
 // Mock WebSocket for testing
 class MockWebSocket {
   static instances: MockWebSocket[] = []
-
-  readyState = WebSocket.CONNECTING
+  readyState: number = WebSocket.CONNECTING
   binaryType: BinaryType = 'arraybuffer'
   onopen: ((event: Event) => void) | null = null
   onclose: ((event: CloseEvent) => void) | null = null
@@ -75,8 +74,7 @@ class MockWebSocket {
       this.onmessage(new MessageEvent('message', { data: encoded }))
     }
   }
-
-  onMessageType(type: string, handler: (payload: any) => void): void {
+  onMessageType(type: MessageType, handler: (payload: any) => void): void {
     this.messageHandlers.set(type, handler)
   }
 
@@ -112,10 +110,15 @@ class MockWebSocket {
     }
   }
 
-  private getTypeCode(type: string): number {
-    const map: Record<string, number> = {
+  private getTypeCode(type: MessageType): number {
+    const map: Record<MessageType, number> = {
       auth: 0x01,
       auth_success: 0x02,
+      auth_error: 0x03,
+      subscribe: 0x10,
+      unsubscribe: 0x11,
+      sync_request: 0x12,
+      sync_response: 0x13,
       delta: 0x20,
       ack: 0x21,
       ping: 0x30,
@@ -125,17 +128,22 @@ class MockWebSocket {
     return map[type] || 0xff
   }
 
-  private getTypeName(code: number): string {
-    const map: Record<number, string> = {
+  private getTypeName(code: number): MessageType {
+    const map: Record<number, MessageType> = {
       0x01: 'auth',
       0x02: 'auth_success',
+      0x03: 'auth_error',
+      0x10: 'subscribe',
+      0x11: 'unsubscribe',
+      0x12: 'sync_request',
+      0x13: 'sync_response',
       0x20: 'delta',
       0x21: 'ack',
       0x30: 'ping',
       0x31: 'pong',
       0xff: 'error',
     }
-    return map[code] || 'error'
+    return (map[code] as MessageType) || 'error'
   }
 }
 
@@ -184,9 +192,41 @@ describe('Network Synchronization Integration', () => {
         timestamp: Date.now(),
       })
     })
+
+    // Auto-respond to document subscription requests with an empty state
+    mockWs.onMessageType('subscribe', (payload) => {
+      setTimeout(() => {
+        mockWs.simulateMessage({
+          type: 'sync_response',
+          payload: {
+            documentId: payload.documentId,
+            state: {},
+            clock: {},
+          },
+          timestamp: Date.now(),
+        })
+      }, 0)
+    })
+
+    // Auto-acknowledge delta operations to unblock pushOperation
+    mockWs.onMessageType('delta', (payload) => {
+      // Use setTimeout to allow waitForAck to register before ack is processed
+      setTimeout(() => {
+        mockWs.simulateMessage({
+          type: 'ack',
+          payload: { messageId: payload.messageId },
+          timestamp: Date.now(),
+        })
+      }, 0)
+    })
   })
 
   afterEach(() => {
+    // Close any open mock WebSocket connections to prevent message leakage
+    for (const ws of MockWebSocket.instances) {
+      ws.close()
+    }
+    MockWebSocket.instances = []
     synckit.dispose()
     global.WebSocket = originalWebSocket
   })
@@ -197,16 +237,19 @@ describe('Network Synchronization Integration', () => {
 
       mockWs.onMessageType('delta', (payload) => {
         receivedDeltas.push(payload)
-        // Acknowledge the delta
-        mockWs.simulateMessage({
-          type: 'ack',
-          payload: { operationId: payload.operation.timestamp },
-          timestamp: Date.now(),
-        })
+        // Acknowledge the delta (async to allow waitForAck to register)
+        setTimeout(() => {
+          mockWs.simulateMessage({
+            type: 'ack',
+            payload: { messageId: payload.messageId },
+            timestamp: Date.now(),
+          })
+        }, 0)
       })
 
       // Create and modify document
       const doc = synckit.document<{ name: string; count: number }>('test-doc')
+      await doc.init()
       await doc.set('name', 'Alice')
       await doc.set('count', 42)
 
@@ -215,28 +258,27 @@ describe('Network Synchronization Integration', () => {
 
       // Verify deltas were sent
       expect(receivedDeltas.length).toBeGreaterThanOrEqual(2)
-      const nameOp = receivedDeltas.find((d) => d.operation.field === 'name')
-      const countOp = receivedDeltas.find((d) => d.operation.field === 'count')
-      expect(nameOp.operation.value).toBe('Alice')
-      expect(countOp.operation.value).toBe(42)
+      const nameOp = receivedDeltas.find((d) => d.field === 'name')
+      const countOp = receivedDeltas.find((d) => d.field === 'count')
+      expect(nameOp.value).toBe('Alice')
+      expect(countOp.value).toBe(42)
     })
 
     it('should receive and apply remote changes', async () => {
       const doc = synckit.document<{ name: string }>('test-doc')
+      await doc.init()
 
       // Simulate remote change from server
       mockWs.simulateMessage({
         type: 'delta',
         payload: {
-          operation: {
-            type: 'set',
-            documentId: 'test-doc',
-            field: 'name',
-            value: 'Bob',
-            clock: { 'remote-client': 1 },
-            clientId: 'remote-client',
-            timestamp: Date.now(),
-          },
+          type: 'set',
+          documentId: 'test-doc',
+          field: 'name',
+          value: 'Bob',
+          clock: { 'remote-client': 1 },
+          clientId: 'remote-client',
+          timestamp: Date.now(),
         },
         timestamp: Date.now(),
       })
@@ -245,11 +287,12 @@ describe('Network Synchronization Integration', () => {
       await new Promise((resolve) => setTimeout(resolve, 50))
 
       // Verify remote change was applied
-      expect(doc.get('name')).toBe('Bob')
+      expect(doc.getField('name')).toBe('Bob')
     })
 
     it('should resolve conflicts using vector clocks', async () => {
       const doc = synckit.document<{ name: string }>('test-doc')
+      await doc.init()
 
       // Local change
       await doc.set('name', 'Alice')
@@ -258,15 +301,13 @@ describe('Network Synchronization Integration', () => {
       mockWs.simulateMessage({
         type: 'delta',
         payload: {
-          operation: {
-            type: 'set',
-            documentId: 'test-doc',
-            field: 'name',
-            value: 'Bob',
-            clock: { 'remote-client': 1 },
-            clientId: 'remote-client',
-            timestamp: Date.now() - 1000, // Earlier timestamp
-          },
+          type: 'set',
+          documentId: 'test-doc',
+          field: 'name',
+          value: 'Bob',
+          clock: { 'remote-client': 1 },
+          clientId: 'remote-client',
+          timestamp: Date.now() - 1000, // Earlier timestamp
         },
         timestamp: Date.now(),
       })
@@ -275,27 +316,28 @@ describe('Network Synchronization Integration', () => {
       await new Promise((resolve) => setTimeout(resolve, 50))
 
       // Local change should win (higher vector clock + later timestamp)
-      expect(doc.get('name')).toBe('Alice')
+      expect(doc.getField('name')).toBe('Alice')
     })
 
     it('should handle multiple concurrent clients', async () => {
       const doc1 = synckit.document<{ count: number }>('shared-doc')
+      await doc1.init()
       await doc1.set('count', 1)
 
       // Simulate operations from multiple remote clients
+      // Each subsequent client has a higher clock value to ensure LWW ordering
       for (let i = 2; i <= 5; i++) {
         mockWs.simulateMessage({
           type: 'delta',
           payload: {
-            operation: {
-              type: 'set',
-              documentId: 'shared-doc',
-              field: 'count',
-              value: i,
-              clock: { [`client-${i}`]: 1 },
-              clientId: `client-${i}`,
-              timestamp: Date.now() + i,
-            },
+            type: 'set',
+            documentId: 'shared-doc',
+            field: 'count',
+            value: i,
+            // Use higher clock values to win against local (test-client: 1)
+            clock: { [`client-${i}`]: i },
+            clientId: `client-${i}`,
+            timestamp: Date.now() + i,
           },
           timestamp: Date.now(),
         })
@@ -304,14 +346,15 @@ describe('Network Synchronization Integration', () => {
       // Wait for all operations to process
       await new Promise((resolve) => setTimeout(resolve, 100))
 
-      // Last operation (client-5 with highest timestamp) should win
-      expect(doc1.get('count')).toBe(5)
+      // Last operation (client-5 with highest clock value) should win
+      expect(doc1.getField('count')).toBe(5)
     })
   })
 
   describe('Offline Queue', () => {
     it('should queue operations when offline', async () => {
       const doc = synckit.document<{ name: string }>('test-doc')
+      await doc.init()
 
       // Go offline by closing WebSocket
       mockWs.close()
