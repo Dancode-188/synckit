@@ -14,7 +14,7 @@ We welcome contributions from the community! To be added to this list:
 
 Contributors are listed in alphabetical order:
 
-<!-- Contributors will be listed here -->
+- Matthew Corven (matthewcorven) <matthewcorven@gmail.com>
 
 ---
 
