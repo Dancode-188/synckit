@@ -2,7 +2,7 @@
  * WebSocket Client Unit Tests
  */
 
-import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
+import { describe, it, expect, afterEach, vi } from 'vitest'
 import {
   WebSocketClient,
   WebSocketError,
@@ -37,13 +37,13 @@ class MockWebSocket {
     }, 10)
   }
 
-  send(data: any): void {
+  send(_data: any): void {
     if (this.readyState !== MockWebSocket.OPEN) {
       throw new Error('WebSocket is not open')
     }
     // Echo back (for testing)
     if (this.onmessage) {
-      this.onmessage({ data })
+      this.onmessage({ data: _data })
     }
   }
 
@@ -190,7 +190,7 @@ describe('WebSocketClient', () => {
         timestamp: Date.now(),
       }
 
-      let receivedMessage: WebSocketMessage | null = null
+      let receivedMessage: any = null
       client.on('delta', (payload) => {
         receivedMessage = { type: 'delta', payload, timestamp: Date.now() }
       })
@@ -201,8 +201,8 @@ describe('WebSocketClient', () => {
       await new Promise((resolve) => setTimeout(resolve, 50))
 
       expect(receivedMessage).not.toBeNull()
-      expect(receivedMessage?.type).toBe('delta')
-      expect(receivedMessage?.payload).toEqual(originalMessage.payload)
+      expect((receivedMessage as any)?.type).toBe('delta')
+      expect((receivedMessage as any)?.payload).toEqual(originalMessage.payload)
     })
 
     it('handles all message types', () => {
@@ -480,7 +480,7 @@ describe('WebSocketClient', () => {
           }, 10)
         }
 
-        send(data: any): void {
+        send(_data: any): void {
           throw new Error('Not connected')
         }
 
@@ -591,7 +591,7 @@ describe('WebSocketClient', () => {
           }, 10)
         }
 
-        send(data: any): void {
+        send(_data: any): void {
           throw new Error('Not connected')
         }
 
@@ -636,7 +636,7 @@ describe('WebSocketClient', () => {
           }, 10)
         }
 
-        send(data: any): void {
+        send(_data: any): void {
           throw new Error('Not connected')
         }
 
