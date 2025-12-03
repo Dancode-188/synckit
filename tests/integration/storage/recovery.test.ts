@@ -7,6 +7,7 @@
 import { describe, it, expect, beforeAll, afterAll } from 'bun:test';
 import { setupTestServer, teardownTestServer, restartTestServer } from '../helpers/test-server';
 import { TestClient } from '../helpers/test-client';
+import { BinaryAdapter } from '../helpers/binary-adapter';
 import { sleep } from '../config';
 
 describe('Storage - Recovery', () => {
@@ -27,7 +28,7 @@ describe('Storage - Recovery', () => {
       console.log('Creating document before restart...');
       
       // Create client and document
-      const client1 = new TestClient();
+      const client1 = new TestClient({ adapter: new BinaryAdapter() });
       await client1.init();
       await client1.connect();
       clients.push(client1);
@@ -42,7 +43,7 @@ describe('Storage - Recovery', () => {
       await sleep(2000);
       
       // Reconnect client
-      const client2 = new TestClient();
+      const client2 = new TestClient({ adapter: new BinaryAdapter() });
       await client2.init();
       await client2.connect();
       clients.push(client2);
@@ -65,7 +66,7 @@ describe('Storage - Recovery', () => {
     try {
       console.log('Building vector clock history...');
       
-      const client1 = new TestClient();
+      const client1 = new TestClient({ adapter: new BinaryAdapter() });
       await client1.init();
       await client1.connect();
       clients.push(client1);
@@ -82,7 +83,7 @@ describe('Storage - Recovery', () => {
       await sleep(2000);
       
       // Reconnect and add more
-      const client2 = new TestClient();
+      const client2 = new TestClient({ adapter: new BinaryAdapter() });
       await client2.init();
       await client2.connect();
       clients.push(client2);
@@ -106,7 +107,7 @@ describe('Storage - Recovery', () => {
     const clients: TestClient[] = [];
     
     try {
-      const client = new TestClient();
+      const client = new TestClient({ adapter: new BinaryAdapter() });
       await client.init();
       await client.connect();
       clients.push(client);
@@ -121,7 +122,7 @@ describe('Storage - Recovery', () => {
       await sleep(2000);
       
       // Reconnect
-      const client2 = new TestClient();
+      const client2 = new TestClient({ adapter: new BinaryAdapter() });
       await client2.init();
       await client2.connect();
       clients.push(client2);
@@ -146,7 +147,7 @@ describe('Storage - Recovery', () => {
     try {
       console.log('Creating 20 documents...');
       
-      const client1 = new TestClient();
+      const client1 = new TestClient({ adapter: new BinaryAdapter() });
       await client1.init();
       await client1.connect();
       clients.push(client1);
@@ -164,7 +165,7 @@ describe('Storage - Recovery', () => {
       await sleep(2000);
       
       // Reconnect
-      const client2 = new TestClient();
+      const client2 = new TestClient({ adapter: new BinaryAdapter() });
       await client2.init();
       await client2.connect();
       clients.push(client2);
@@ -194,7 +195,7 @@ describe('Storage - Recovery', () => {
     try {
       console.log('Creating consistent state...');
       
-      const client1 = new TestClient();
+      const client1 = new TestClient({ adapter: new BinaryAdapter() });
       await client1.init();
       await client1.connect();
       clients.push(client1);
@@ -211,7 +212,7 @@ describe('Storage - Recovery', () => {
       await sleep(2000);
       
       // Reconnect
-      const client2 = new TestClient();
+      const client2 = new TestClient({ adapter: new BinaryAdapter() });
       await client2.init();
       await client2.connect();
       clients.push(client2);
@@ -233,7 +234,7 @@ describe('Storage - Recovery', () => {
     const clients: TestClient[] = [];
     
     try {
-      const client1 = new TestClient();
+      const client1 = new TestClient({ adapter: new BinaryAdapter() });
       await client1.init();
       await client1.connect();
       clients.push(client1);
@@ -248,7 +249,7 @@ describe('Storage - Recovery', () => {
       await sleep(2000);
       
       // New client connects
-      const client2 = new TestClient();
+      const client2 = new TestClient({ adapter: new BinaryAdapter() });
       await client2.init();
       await client2.connect();
       clients.push(client2);
@@ -268,7 +269,7 @@ describe('Storage - Recovery', () => {
     const clients: TestClient[] = [];
     
     try {
-      const client1 = new TestClient();
+      const client1 = new TestClient({ adapter: new BinaryAdapter() });
       await client1.init();
       await client1.connect();
       clients.push(client1);
@@ -291,7 +292,7 @@ describe('Storage - Recovery', () => {
       await sleep(2000);
       
       // Reconnect
-      const client2 = new TestClient();
+      const client2 = new TestClient({ adapter: new BinaryAdapter() });
       await client2.init();
       await client2.connect();
       clients.push(client2);
@@ -314,7 +315,7 @@ describe('Storage - Recovery', () => {
     const clients: TestClient[] = [];
     
     try {
-      const client1 = new TestClient();
+      const client1 = new TestClient({ adapter: new BinaryAdapter() });
       await client1.init();
       await client1.connect();
       clients.push(client1);
@@ -331,7 +332,7 @@ describe('Storage - Recovery', () => {
       }
       
       // Final reconnect
-      const client2 = new TestClient();
+      const client2 = new TestClient({ adapter: new BinaryAdapter() });
       await client2.init();
       await client2.connect();
       clients.push(client2);
@@ -351,7 +352,7 @@ describe('Storage - Recovery', () => {
     const clients: TestClient[] = [];
     
     try {
-      const client1 = new TestClient();
+      const client1 = new TestClient({ adapter: new BinaryAdapter() });
       await client1.init();
       await client1.connect();
       clients.push(client1);
@@ -370,7 +371,7 @@ describe('Storage - Recovery', () => {
       await sleep(2000);
       
       // Reconnect
-      const client2 = new TestClient();
+      const client2 = new TestClient({ adapter: new BinaryAdapter() });
       await client2.init();
       await client2.connect();
       clients.push(client2);
@@ -397,7 +398,7 @@ describe('Storage - Recovery', () => {
       
       // Create 5 clients
       for (let i = 0; i < 5; i++) {
-        const client = new TestClient();
+        const client = new TestClient({ adapter: new BinaryAdapter() });
         await client.init();
         await client.connect();
         clients.push(client);
@@ -415,7 +416,7 @@ describe('Storage - Recovery', () => {
       // All clients reconnect
       const newClients: TestClient[] = [];
       for (let i = 0; i < 5; i++) {
-        const client = new TestClient();
+        const client = new TestClient({ adapter: new BinaryAdapter() });
         await client.init();
         await client.connect();
         newClients.push(client);

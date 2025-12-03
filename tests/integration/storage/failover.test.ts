@@ -7,6 +7,7 @@
 import { describe, it, expect, beforeAll, afterAll } from 'bun:test';
 import { setupTestServer, teardownTestServer, restartTestServer } from '../helpers/test-server';
 import { TestClient } from '../helpers/test-client';
+import { BinaryAdapter } from '../helpers/binary-adapter';
 import { sleep, generateTestId } from '../config';
 
 describe('Storage - Failover', () => {
@@ -25,7 +26,7 @@ describe('Storage - Failover', () => {
     try {
       console.log('Testing server crash during write...');
 
-      const client = new TestClient();
+      const client = new TestClient({ adapter: new BinaryAdapter() });
       await client.init();
       await client.connect();
       clients.push(client);
@@ -40,7 +41,7 @@ describe('Storage - Failover', () => {
       await sleep(2000);
 
       // Client reconnects
-      const client2 = new TestClient();
+      const client2 = new TestClient({ adapter: new BinaryAdapter() });
       await client2.init();
       await client2.connect();
       clients.push(client2);
@@ -65,7 +66,7 @@ describe('Storage - Failover', () => {
     try {
       console.log('Testing operation during database issues...');
       
-      const client = new TestClient();
+      const client = new TestClient({ adapter: new BinaryAdapter() });
       await client.init();
       await client.connect();
       clients.push(client);
@@ -95,7 +96,7 @@ describe('Storage - Failover', () => {
       
       // Create 5 clients
       for (let i = 0; i < 5; i++) {
-        const client = new TestClient();
+        const client = new TestClient({ adapter: new BinaryAdapter() });
         await client.init();
         await client.connect();
         clients.push(client);
@@ -118,7 +119,7 @@ describe('Storage - Failover', () => {
       // All clients reconnect
       const newClients: TestClient[] = [];
       for (let i = 0; i < 5; i++) {
-        const client = new TestClient();
+        const client = new TestClient({ adapter: new BinaryAdapter() });
         await client.init();
         await client.connect();
         newClients.push(client);
@@ -141,7 +142,7 @@ describe('Storage - Failover', () => {
     const clients: TestClient[] = [];
     
     try {
-      const client = new TestClient();
+      const client = new TestClient({ adapter: new BinaryAdapter() });
       await client.init();
       await client.connect();
       clients.push(client);
@@ -173,7 +174,7 @@ describe('Storage - Failover', () => {
     const clients: TestClient[] = [];
     
     try {
-      const client1 = new TestClient();
+      const client1 = new TestClient({ adapter: new BinaryAdapter() });
       await client1.init();
       await client1.connect();
       clients.push(client1);
@@ -193,7 +194,7 @@ describe('Storage - Failover', () => {
       await sleep(2000);
       
       // Reconnect
-      const client2 = new TestClient();
+      const client2 = new TestClient({ adapter: new BinaryAdapter() });
       await client2.init();
       await client2.connect();
       clients.push(client2);
@@ -218,7 +219,7 @@ describe('Storage - Failover', () => {
     const clients: TestClient[] = [];
     
     try {
-      const client1 = new TestClient();
+      const client1 = new TestClient({ adapter: new BinaryAdapter() });
       await client1.init();
       await client1.connect();
       clients.push(client1);
@@ -235,7 +236,7 @@ describe('Storage - Failover', () => {
       }
       
       // System should still be operational
-      const client2 = new TestClient();
+      const client2 = new TestClient({ adapter: new BinaryAdapter() });
       await client2.init();
       await client2.connect();
       clients.push(client2);
@@ -257,7 +258,7 @@ describe('Storage - Failover', () => {
     const clients: TestClient[] = [];
     
     try {
-      const client1 = new TestClient();
+      const client1 = new TestClient({ adapter: new BinaryAdapter() });
       await client1.init();
       await client1.connect();
       clients.push(client1);
@@ -276,7 +277,7 @@ describe('Storage - Failover', () => {
       await sleep(2000);
       
       // Reconnect
-      const client2 = new TestClient();
+      const client2 = new TestClient({ adapter: new BinaryAdapter() });
       await client2.init();
       await client2.connect();
       clients.push(client2);
@@ -305,7 +306,7 @@ describe('Storage - Failover', () => {
       
       // Create 3 clients
       for (let i = 0; i < 3; i++) {
-        const client = new TestClient();
+        const client = new TestClient({ adapter: new BinaryAdapter() });
         await client.init();
         await client.connect();
         clients.push(client);
@@ -335,7 +336,7 @@ describe('Storage - Failover', () => {
       await sleep(2000);
       
       // Reconnect one client
-      const client = new TestClient();
+      const client = new TestClient({ adapter: new BinaryAdapter() });
       await client.init();
       await client.connect();
       clients.push(client);
@@ -362,7 +363,7 @@ describe('Storage - Failover', () => {
     const clients: TestClient[] = [];
     
     try {
-      const client = new TestClient();
+      const client = new TestClient({ adapter: new BinaryAdapter() });
       await client.init();
       await client.connect();
       clients.push(client);
@@ -395,7 +396,7 @@ describe('Storage - Failover', () => {
     const clients: TestClient[] = [];
     
     try {
-      const client1 = new TestClient();
+      const client1 = new TestClient({ adapter: new BinaryAdapter() });
       await client1.init();
       await client1.connect();
       clients.push(client1);
@@ -410,7 +411,7 @@ describe('Storage - Failover', () => {
       await sleep(2000);
       
       // Reconnect
-      const client2 = new TestClient();
+      const client2 = new TestClient({ adapter: new BinaryAdapter() });
       await client2.init();
       await client2.connect();
       clients.push(client2);

@@ -7,6 +7,7 @@
 import { describe, it, expect, beforeAll, afterAll } from 'bun:test';
 import { setupTestServer, teardownTestServer, restartTestServer } from '../helpers/test-server';
 import { TestClient } from '../helpers/test-client';
+import { BinaryAdapter } from '../helpers/binary-adapter';
 import { sleep } from '../config';
 
 describe('Storage - Migrations', () => {
@@ -26,7 +27,7 @@ describe('Storage - Migrations', () => {
     try {
       console.log('Testing schema version upgrade...');
       
-      const client = new TestClient();
+      const client = new TestClient({ adapter: new BinaryAdapter() });
       await client.init();
       await client.connect();
       clients.push(client);
@@ -41,7 +42,7 @@ describe('Storage - Migrations', () => {
       await sleep(2000);
       
       // Reconnect with "new schema"
-      const client2 = new TestClient();
+      const client2 = new TestClient({ adapter: new BinaryAdapter() });
       await client2.init();
       await client2.connect();
       clients.push(client2);
@@ -70,7 +71,7 @@ describe('Storage - Migrations', () => {
     try {
       console.log('Testing field type migration...');
       
-      const client1 = new TestClient();
+      const client1 = new TestClient({ adapter: new BinaryAdapter() });
       await client1.init();
       await client1.connect();
       clients.push(client1);
@@ -101,7 +102,7 @@ describe('Storage - Migrations', () => {
     try {
       console.log('Testing field rename migration...');
       
-      const client = new TestClient();
+      const client = new TestClient({ adapter: new BinaryAdapter() });
       await client.init();
       await client.connect();
       clients.push(client);
@@ -137,7 +138,7 @@ describe('Storage - Migrations', () => {
     try {
       console.log('Testing data transformation migration...');
       
-      const client = new TestClient();
+      const client = new TestClient({ adapter: new BinaryAdapter() });
       await client.init();
       await client.connect();
       clients.push(client);
@@ -170,7 +171,7 @@ describe('Storage - Migrations', () => {
     try {
       console.log('Testing backward compatibility...');
       
-      const client1 = new TestClient();
+      const client1 = new TestClient({ adapter: new BinaryAdapter() });
       await client1.init();
       await client1.connect();
       clients.push(client1);
@@ -181,7 +182,7 @@ describe('Storage - Migrations', () => {
       await sleep(1000);
       
       // Simulate old client reconnecting (still works with legacy fields)
-      const client2 = new TestClient();
+      const client2 = new TestClient({ adapter: new BinaryAdapter() });
       await client2.init();
       await client2.connect();
       clients.push(client2);
@@ -210,7 +211,7 @@ describe('Storage - Migrations', () => {
     try {
       console.log('Testing forward compatibility...');
       
-      const client1 = new TestClient();
+      const client1 = new TestClient({ adapter: new BinaryAdapter() });
       await client1.init();
       await client1.connect();
       clients.push(client1);
@@ -240,7 +241,7 @@ describe('Storage - Migrations', () => {
     try {
       console.log('Testing batch migration...');
       
-      const client = new TestClient();
+      const client = new TestClient({ adapter: new BinaryAdapter() });
       await client.init();
       await client.connect();
       clients.push(client);
@@ -286,7 +287,7 @@ describe('Storage - Migrations', () => {
     try {
       console.log('Testing migration rollback...');
       
-      const client = new TestClient();
+      const client = new TestClient({ adapter: new BinaryAdapter() });
       await client.init();
       await client.connect();
       clients.push(client);
@@ -328,7 +329,7 @@ describe('Storage - Migrations', () => {
     try {
       console.log('Testing nested data migration...');
       
-      const client = new TestClient();
+      const client = new TestClient({ adapter: new BinaryAdapter() });
       await client.init();
       await client.connect();
       clients.push(client);
@@ -375,7 +376,7 @@ describe('Storage - Migrations', () => {
     try {
       console.log('Testing data integrity during migration...');
       
-      const client = new TestClient();
+      const client = new TestClient({ adapter: new BinaryAdapter() });
       await client.init();
       await client.connect();
       clients.push(client);
@@ -416,7 +417,7 @@ describe('Storage - Migrations', () => {
     try {
       console.log('Testing incremental migrations...');
       
-      const client = new TestClient();
+      const client = new TestClient({ adapter: new BinaryAdapter() });
       await client.init();
       await client.connect();
       clients.push(client);
@@ -457,12 +458,12 @@ describe('Storage - Migrations', () => {
       console.log('Testing migration conflicts...');
       
       // Create 2 clients
-      const client1 = new TestClient();
+      const client1 = new TestClient({ adapter: new BinaryAdapter() });
       await client1.init();
       await client1.connect();
       clients.push(client1);
       
-      const client2 = new TestClient();
+      const client2 = new TestClient({ adapter: new BinaryAdapter() });
       await client2.init();
       await client2.connect();
       clients.push(client2);
@@ -496,7 +497,7 @@ describe('Storage - Migrations', () => {
     try {
       console.log('Testing migration validation...');
       
-      const client = new TestClient();
+      const client = new TestClient({ adapter: new BinaryAdapter() });
       await client.init();
       await client.connect();
       clients.push(client);

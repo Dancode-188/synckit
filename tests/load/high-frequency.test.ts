@@ -7,6 +7,7 @@
 import { describe, it, expect, beforeAll, afterAll } from 'bun:test';
 import { setupTestServer, teardownTestServer } from '../integration/helpers/test-server';
 import { TestClient } from '../integration/helpers/test-client';
+import { BinaryAdapter } from '../integration/helpers/binary-adapter';
 import { sleep } from '../integration/config';
 
 describe('Load - High-Frequency Updates', () => {
@@ -28,7 +29,7 @@ describe('Load - High-Frequency Updates', () => {
     try {
       // Create 2 clients
       for (let i = 0; i < 2; i++) {
-        const client = new TestClient();
+        const client = new TestClient({ adapter: new BinaryAdapter() });
         await client.init();
         await client.connect();
         clients.push(client);
@@ -78,7 +79,7 @@ describe('Load - High-Frequency Updates', () => {
     try {
       // Create 2 clients
       for (let i = 0; i < 2; i++) {
-        const client = new TestClient();
+        const client = new TestClient({ adapter: new BinaryAdapter() });
         await client.init();
         await client.connect();
         clients.push(client);
@@ -112,7 +113,7 @@ describe('Load - High-Frequency Updates', () => {
     try {
       // Create 5 clients
       for (let i = 0; i < 5; i++) {
-        const client = new TestClient();
+        const client = new TestClient({ adapter: new BinaryAdapter() });
         await client.init();
         await client.connect();
         clients.push(client);
@@ -161,7 +162,7 @@ describe('Load - High-Frequency Updates', () => {
     try {
       // Create 2 clients
       for (let i = 0; i < 2; i++) {
-        const client = new TestClient();
+        const client = new TestClient({ adapter: new BinaryAdapter() });
         await client.init();
         await client.connect();
         clients.push(client);
@@ -207,7 +208,7 @@ describe('Load - High-Frequency Updates', () => {
     try {
       // Create 2 clients
       for (let i = 0; i < 2; i++) {
-        const client = new TestClient();
+        const client = new TestClient({ adapter: new BinaryAdapter() });
         await client.init();
         await client.connect();
         clients.push(client);
@@ -260,7 +261,7 @@ describe('Load - High-Frequency Updates', () => {
     try {
       // Create 2 clients
       for (let i = 0; i < 2; i++) {
-        const client = new TestClient();
+        const client = new TestClient({ adapter: new BinaryAdapter() });
         await client.init();
         await client.connect();
         clients.push(client);
@@ -304,7 +305,7 @@ describe('Load - High-Frequency Updates', () => {
     try {
       // Create 2 clients
       for (let i = 0; i < 2; i++) {
-        const client = new TestClient();
+        const client = new TestClient({ adapter: new BinaryAdapter() });
         await client.init();
         await client.connect();
         clients.push(client);
@@ -349,7 +350,7 @@ describe('Load - High-Frequency Updates', () => {
     try {
       // Create 2 clients
       for (let i = 0; i < 2; i++) {
-        const client = new TestClient();
+        const client = new TestClient({ adapter: new BinaryAdapter() });
         await client.init();
         await client.connect();
         clients.push(client);
@@ -396,7 +397,7 @@ describe('Load - High-Frequency Updates', () => {
     try {
       // Create 3 clients
       for (let i = 0; i < 3; i++) {
-        const client = new TestClient();
+        const client = new TestClient({ adapter: new BinaryAdapter() });
         await client.init();
         await client.connect();
         clients.push(client);
@@ -436,7 +437,7 @@ describe('Load - High-Frequency Updates', () => {
     try {
       // Create 3 clients
       for (let i = 0; i < 3; i++) {
-        const client = new TestClient();
+        const client = new TestClient({ adapter: new BinaryAdapter() });
         await client.init();
         await client.connect();
         clients.push(client);
@@ -481,7 +482,7 @@ describe('Load - High-Frequency Updates', () => {
     try {
       // Create 2 clients
       for (let i = 0; i < 2; i++) {
-        const client = new TestClient();
+        const client = new TestClient({ adapter: new BinaryAdapter() });
         await client.init();
         await client.connect();
         clients.push(client);
@@ -534,7 +535,7 @@ describe('Load - High-Frequency Updates', () => {
     try {
       // Create 2 clients
       for (let i = 0; i < 2; i++) {
-        const client = new TestClient();
+        const client = new TestClient({ adapter: new BinaryAdapter() });
         await client.init();
         await client.connect();
         clients.push(client);

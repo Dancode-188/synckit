@@ -7,6 +7,7 @@
 import { describe, it, expect, beforeAll, afterAll } from 'bun:test';
 import { setupTestServer, teardownTestServer } from '../integration/helpers/test-server';
 import { TestClient } from '../integration/helpers/test-client';
+import { BinaryAdapter } from '../integration/helpers/binary-adapter';
 import { sleep } from '../integration/config';
 
 describe('Load - Concurrent Clients', () => {
@@ -28,7 +29,7 @@ describe('Load - Concurrent Clients', () => {
     try {
       // Create 10 clients
       for (let i = 0; i < 10; i++) {
-        const client = new TestClient();
+        const client = new TestClient({ adapter: new BinaryAdapter() });
         await client.init();
         clients.push(client);
       }
@@ -76,7 +77,7 @@ describe('Load - Concurrent Clients', () => {
       // Create 100 clients
       console.log('Creating 100 clients...');
       for (let i = 0; i < 100; i++) {
-        const client = new TestClient();
+        const client = new TestClient({ adapter: new BinaryAdapter() });
         await client.init();
         clients.push(client);
       }
@@ -134,7 +135,7 @@ describe('Load - Concurrent Clients', () => {
       const startCreate = Date.now();
       
       for (let i = 0; i < 1000; i++) {
-        const client = new TestClient();
+        const client = new TestClient({ adapter: new BinaryAdapter() });
         await client.init();
         clients.push(client);
         
@@ -218,7 +219,7 @@ describe('Load - Concurrent Clients', () => {
     try {
       // Measure time to connect each client
       for (let i = 0; i < 50; i++) {
-        const client = new TestClient();
+        const client = new TestClient({ adapter: new BinaryAdapter() });
         await client.init();
         clients.push(client);
         
@@ -253,7 +254,7 @@ describe('Load - Concurrent Clients', () => {
     try {
       // Create 50 clients
       for (let i = 0; i < 50; i++) {
-        const client = new TestClient();
+        const client = new TestClient({ adapter: new BinaryAdapter() });
         await client.init();
         await client.connect();
         clients.push(client);
@@ -288,7 +289,7 @@ describe('Load - Concurrent Clients', () => {
     try {
       // Start with 10 clients
       for (let i = 0; i < 10; i++) {
-        const client = new TestClient();
+        const client = new TestClient({ adapter: new BinaryAdapter() });
         await client.init();
         await client.connect();
         clients.push(client);
@@ -300,7 +301,7 @@ describe('Load - Concurrent Clients', () => {
       
       // Add 40 more clients while session is active
       for (let i = 0; i < 40; i++) {
-        const client = new TestClient();
+        const client = new TestClient({ adapter: new BinaryAdapter() });
         await client.init();
         await client.connect();
         clients.push(client);
@@ -333,7 +334,7 @@ describe('Load - Concurrent Clients', () => {
     try {
       // Create 30 clients
       for (let i = 0; i < 30; i++) {
-        const client = new TestClient();
+        const client = new TestClient({ adapter: new BinaryAdapter() });
         await client.init();
         await client.connect();
         clients.push(client);
@@ -377,7 +378,7 @@ describe('Load - Concurrent Clients', () => {
     try {
       // Create 100 clients (mostly idle)
       for (let i = 0; i < 100; i++) {
-        const client = new TestClient();
+        const client = new TestClient({ adapter: new BinaryAdapter() });
         await client.init();
         await client.connect();
         clients.push(client);
@@ -415,7 +416,7 @@ describe('Load - Concurrent Clients', () => {
     try {
       // Gradually add clients
       for (let i = 0; i < 50; i++) {
-        const client = new TestClient();
+        const client = new TestClient({ adapter: new BinaryAdapter() });
         await client.init();
         await client.connect();
         clients.push(client);
@@ -450,7 +451,7 @@ describe('Load - Concurrent Clients', () => {
     try {
       // Create base clients
       for (let i = 0; i < 20; i++) {
-        const client = new TestClient();
+        const client = new TestClient({ adapter: new BinaryAdapter() });
         await client.init();
         await client.connect();
         clients.push(client);
@@ -464,7 +465,7 @@ describe('Load - Concurrent Clients', () => {
         
         // Add 5 new clients
         for (let i = 0; i < 5; i++) {
-          const client = new TestClient();
+          const client = new TestClient({ adapter: new BinaryAdapter() });
           await client.init();
           await client.connect();
           clients.push(client);
@@ -499,7 +500,7 @@ describe('Load - Concurrent Clients', () => {
     try {
       // Create 50 clients
       for (let i = 0; i < 50; i++) {
-        const client = new TestClient();
+        const client = new TestClient({ adapter: new BinaryAdapter() });
         await client.init();
         await client.connect();
         clients.push(client);
@@ -540,7 +541,7 @@ describe('Load - Concurrent Clients', () => {
     try {
       // Create 30 clients
       for (let i = 0; i < 30; i++) {
-        const client = new TestClient();
+        const client = new TestClient({ adapter: new BinaryAdapter() });
         await client.init();
         await client.connect();
         clients.push(client);

@@ -370,15 +370,16 @@ export async function createChaosClients(
   config: NetworkSimConfig
 ): Promise<ChaosNetworkSimulator[]> {
   const { TestClient } = await import('../integration/helpers/test-client');
+  const { BinaryAdapter } = await import('../integration/helpers/binary-adapter');
   const clients: ChaosNetworkSimulator[] = [];
-  
+
   for (let i = 0; i < count; i++) {
-    const client = new TestClient();
+    const client = new TestClient({ adapter: new BinaryAdapter() });
     await client.init();
     const chaosClient = new ChaosNetworkSimulator(client, config);
     clients.push(chaosClient);
   }
-  
+
   return clients;
 }
 

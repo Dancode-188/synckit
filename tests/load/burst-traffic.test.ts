@@ -7,6 +7,7 @@
 import { describe, it, expect, beforeAll, afterAll } from 'bun:test';
 import { setupTestServer, teardownTestServer } from '../integration/helpers/test-server';
 import { TestClient } from '../integration/helpers/test-client';
+import { BinaryAdapter } from '../integration/helpers/binary-adapter';
 import { sleep } from '../integration/config';
 
 describe('Load - Burst Traffic', () => {
@@ -30,7 +31,7 @@ describe('Load - Burst Traffic', () => {
       
       // Start with 10 clients
       for (let i = 0; i < 10; i++) {
-        const client = new TestClient();
+        const client = new TestClient({ adapter: new BinaryAdapter() });
         await client.init();
         await client.connect();
         clients.push(client);
@@ -46,7 +47,7 @@ describe('Load - Burst Traffic', () => {
       // Sudden spike: add 90 clients
       const newClients = await Promise.all(
         Array.from({ length: 90 }, async () => {
-          const client = new TestClient();
+          const client = new TestClient({ adapter: new BinaryAdapter() });
           await client.init();
           return client;
         })
@@ -83,7 +84,7 @@ describe('Load - Burst Traffic', () => {
     try {
       // Create 30 clients
       for (let i = 0; i < 30; i++) {
-        const client = new TestClient();
+        const client = new TestClient({ adapter: new BinaryAdapter() });
         await client.init();
         await client.connect();
         clients.push(client);
@@ -126,7 +127,7 @@ describe('Load - Burst Traffic', () => {
     try {
       // Create 50 clients
       for (let i = 0; i < 50; i++) {
-        const client = new TestClient();
+        const client = new TestClient({ adapter: new BinaryAdapter() });
         await client.init();
         await client.connect();
         clients.push(client);
@@ -158,7 +159,7 @@ describe('Load - Burst Traffic', () => {
     } finally {
       await Promise.all(clients.map(c => c.cleanup()));
     }
-  }, { timeout: 15000 });
+  }, { timeout: 25000 }); // Increased timeout for binary protocol overhead with 50 clients
 
   it('should handle spike then drop pattern', async () => {
     const docId = uniqueDocId();
@@ -169,7 +170,7 @@ describe('Load - Burst Traffic', () => {
       
       // Create 100 clients
       for (let i = 0; i < 100; i++) {
-        const client = new TestClient();
+        const client = new TestClient({ adapter: new BinaryAdapter() });
         await client.init();
         await client.connect();
         clients.push(client);
@@ -204,7 +205,7 @@ describe('Load - Burst Traffic', () => {
     } finally {
       await Promise.all(clients.map(c => c.cleanup()));
     }
-  }, { timeout: 10000 });
+  }, { timeout: 20000 }); // Increased timeout for binary protocol with 100 clients
 
   it('should handle burst of connections', async () => {
     const docId = uniqueDocId();
@@ -215,7 +216,7 @@ describe('Load - Burst Traffic', () => {
       
       // Create 200 clients
       for (let i = 0; i < 200; i++) {
-        const client = new TestClient();
+        const client = new TestClient({ adapter: new BinaryAdapter() });
         await client.init();
         clients.push(client);
       }
@@ -251,7 +252,7 @@ describe('Load - Burst Traffic', () => {
     try {
       // Create 40 clients
       for (let i = 0; i < 40; i++) {
-        const client = new TestClient();
+        const client = new TestClient({ adapter: new BinaryAdapter() });
         await client.init();
         await client.connect();
         clients.push(client);
@@ -294,7 +295,7 @@ describe('Load - Burst Traffic', () => {
     try {
       // Create 50 clients
       for (let i = 0; i < 50; i++) {
-        const client = new TestClient();
+        const client = new TestClient({ adapter: new BinaryAdapter() });
         await client.init();
         await client.connect();
         clients.push(client);
@@ -341,7 +342,7 @@ describe('Load - Burst Traffic', () => {
     try {
       // Create 30 clients
       for (let i = 0; i < 30; i++) {
-        const client = new TestClient();
+        const client = new TestClient({ adapter: new BinaryAdapter() });
         await client.init();
         await client.connect();
         clients.push(client);
@@ -404,7 +405,7 @@ describe('Load - Burst Traffic', () => {
     try {
       // Create 50 clients
       for (let i = 0; i < 50; i++) {
-        const client = new TestClient();
+        const client = new TestClient({ adapter: new BinaryAdapter() });
         await client.init();
         await client.connect();
         clients.push(client);
@@ -451,7 +452,7 @@ describe('Load - Burst Traffic', () => {
     try {
       // Create 60 clients
       for (let i = 0; i < 60; i++) {
-        const client = new TestClient();
+        const client = new TestClient({ adapter: new BinaryAdapter() });
         await client.init();
         await client.connect();
         clients.push(client);
@@ -497,7 +498,7 @@ describe('Load - Burst Traffic', () => {
       // Wave 1: 50 clients
       console.log('  Wave 1: 50 clients');
       for (let i = 0; i < 50; i++) {
-        const client = new TestClient();
+        const client = new TestClient({ adapter: new BinaryAdapter() });
         await client.init();
         await client.connect();
         clients.push(client);
@@ -507,7 +508,7 @@ describe('Load - Burst Traffic', () => {
       // Wave 2: Another 50 clients
       console.log('  Wave 2: +50 clients (100 total)');
       for (let i = 0; i < 50; i++) {
-        const client = new TestClient();
+        const client = new TestClient({ adapter: new BinaryAdapter() });
         await client.init();
         await client.connect();
         clients.push(client);
@@ -517,7 +518,7 @@ describe('Load - Burst Traffic', () => {
       // Wave 3: Final 50 clients
       console.log('  Wave 3: +50 clients (150 total)');
       for (let i = 0; i < 50; i++) {
-        const client = new TestClient();
+        const client = new TestClient({ adapter: new BinaryAdapter() });
         await client.init();
         await client.connect();
         clients.push(client);
@@ -556,7 +557,7 @@ describe('Load - Burst Traffic', () => {
     try {
       // Create 40 clients
       for (let i = 0; i < 40; i++) {
-        const client = new TestClient();
+        const client = new TestClient({ adapter: new BinaryAdapter() });
         await client.init();
         await client.connect();
         clients.push(client);

@@ -21,11 +21,10 @@ auth.post('/login', async (c) => {
   if (!email || !password) {
     return c.json({ error: 'Email and password required' }, 400);
   }
-  
+
   // Demo auth - accept any email/password
   // In production: validate against database
-  console.log(`Login attempt: ${email}`);
-  
+
   // Generate user ID (in production: from database)
   const userId = `user-${Date.now()}`;
   

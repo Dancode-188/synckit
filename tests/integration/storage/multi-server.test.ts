@@ -7,6 +7,7 @@
 import { describe, it, expect, beforeAll, afterAll } from 'bun:test';
 import { setupTestServer, teardownTestServer } from '../helpers/test-server';
 import { TestClient } from '../helpers/test-client';
+import { BinaryAdapter } from '../helpers/binary-adapter';
 import { sleep } from '../config';
 
 describe('Storage - Multi-Server Coordination', () => {
@@ -27,12 +28,12 @@ describe('Storage - Multi-Server Coordination', () => {
       console.log('Testing Redis pub/sub coordination...');
       
       // Create two clients (simulating different servers)
-      const client1 = new TestClient();
+      const client1 = new TestClient({ adapter: new BinaryAdapter() });
       await client1.init();
       await client1.connect();
       clients.push(client1);
       
-      const client2 = new TestClient();
+      const client2 = new TestClient({ adapter: new BinaryAdapter() });
       await client2.init();
       await client2.connect();
       clients.push(client2);
@@ -60,7 +61,7 @@ describe('Storage - Multi-Server Coordination', () => {
       
       // Create 4 clients (simulating 4 servers)
       for (let i = 0; i < 4; i++) {
-        const client = new TestClient();
+        const client = new TestClient({ adapter: new BinaryAdapter() });
         await client.init();
         await client.connect();
         clients.push(client);
@@ -97,7 +98,7 @@ describe('Storage - Multi-Server Coordination', () => {
     const clients: TestClient[] = [];
     
     try {
-      const client = new TestClient();
+      const client = new TestClient({ adapter: new BinaryAdapter() });
       await client.init();
       await client.connect();
       clients.push(client);
@@ -133,7 +134,7 @@ describe('Storage - Multi-Server Coordination', () => {
       
       // Create 3 clients
       for (let i = 0; i < 3; i++) {
-        const client = new TestClient();
+        const client = new TestClient({ adapter: new BinaryAdapter() });
         await client.init();
         await client.connect();
         clients.push(client);
@@ -175,7 +176,7 @@ describe('Storage - Multi-Server Coordination', () => {
       
       // Create 5 clients
       for (let i = 0; i < 5; i++) {
-        const client = new TestClient();
+        const client = new TestClient({ adapter: new BinaryAdapter() });
         await client.init();
         await client.connect();
         clients.push(client);
@@ -223,7 +224,7 @@ describe('Storage - Multi-Server Coordination', () => {
       
       // Create 3 clients
       for (let i = 0; i < 3; i++) {
-        const client = new TestClient();
+        const client = new TestClient({ adapter: new BinaryAdapter() });
         await client.init();
         await client.connect();
         clients.push(client);
@@ -261,7 +262,7 @@ describe('Storage - Multi-Server Coordination', () => {
       
       // Initial 2 clients
       for (let i = 0; i < 2; i++) {
-        const client = new TestClient();
+        const client = new TestClient({ adapter: new BinaryAdapter() });
         await client.init();
         await client.connect();
         clients.push(client);
@@ -275,7 +276,7 @@ describe('Storage - Multi-Server Coordination', () => {
       
       // Add 3 more clients
       for (let i = 0; i < 3; i++) {
-        const client = new TestClient();
+        const client = new TestClient({ adapter: new BinaryAdapter() });
         await client.init();
         await client.connect();
         clients.push(client);
@@ -309,7 +310,7 @@ describe('Storage - Multi-Server Coordination', () => {
       
       // Create 5 clients
       for (let i = 0; i < 5; i++) {
-        const client = new TestClient();
+        const client = new TestClient({ adapter: new BinaryAdapter() });
         await client.init();
         await client.connect();
         clients.push(client);
@@ -358,7 +359,7 @@ describe('Storage - Multi-Server Coordination', () => {
       
       // Create 4 clients
       for (let i = 0; i < 4; i++) {
-        const client = new TestClient();
+        const client = new TestClient({ adapter: new BinaryAdapter() });
         await client.init();
         await client.connect();
         clients.push(client);
@@ -401,7 +402,7 @@ describe('Storage - Multi-Server Coordination', () => {
       
       // Create 3 clients
       for (let i = 0; i < 3; i++) {
-        const client = new TestClient();
+        const client = new TestClient({ adapter: new BinaryAdapter() });
         await client.init();
         await client.connect();
         clients.push(client);

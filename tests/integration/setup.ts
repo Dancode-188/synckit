@@ -7,6 +7,7 @@
 import { beforeAll, afterAll, beforeEach, afterEach } from 'bun:test';
 import { setupTestServer, teardownTestServer, restartTestServer, TestServer } from './helpers/test-server';
 import { TestClient, cleanupTestClients } from './helpers/test-client';
+import { BinaryAdapter } from './helpers/binary-adapter';
 import { clearMemoryStorage } from './helpers/memory-storage';
 import { TEST_CONFIG } from './config';
 
@@ -118,14 +119,21 @@ export function registerClient(client: TestClient): TestClient {
  * Create and register test client (auto-connects by default)
  */
 export async function createClient(config?: any): Promise<TestClient> {
-  const client = new TestClient(config);
+  // Use BinaryAdapter by default (production protocol)
+  // Tests can override by passing adapter in config
+  const clientConfig = {
+    adapter: new BinaryAdapter(),
+    ...config,
+  };
+
+  const client = new TestClient(clientConfig);
   await client.init();
-  
+
   // Auto-connect unless explicitly disabled
   if (config?.autoConnect !== false) {
     await client.connect(config?.token);
   }
-  
+
   return registerClient(client);
 }
 

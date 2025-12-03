@@ -1,6 +1,6 @@
 {
   "name": "@synckit-js/sdk",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "TypeScript SDK for SyncKit - Production-grade local-first sync (59KB gzipped)",
   "main": "./dist/index.js",
   "module": "./dist/index.mjs",

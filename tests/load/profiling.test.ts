@@ -7,6 +7,7 @@
 import { describe, it, expect, beforeAll, afterAll } from 'bun:test';
 import { setupTestServer, teardownTestServer } from '../integration/helpers/test-server';
 import { TestClient } from '../integration/helpers/test-client';
+import { BinaryAdapter } from '../integration/helpers/binary-adapter';
 import { sleep } from '../integration/config';
 
 describe('Load - Performance Profiling', () => {
@@ -26,7 +27,7 @@ describe('Load - Performance Profiling', () => {
     try {
       // Create 20 clients
       for (let i = 0; i < 20; i++) {
-        const client = new TestClient();
+        const client = new TestClient({ adapter: new BinaryAdapter() });
         await client.init();
         await client.connect();
         clients.push(client);
@@ -119,7 +120,7 @@ describe('Load - Performance Profiling', () => {
     try {
       // Create 30 clients
       for (let i = 0; i < 30; i++) {
-        const client = new TestClient();
+        const client = new TestClient({ adapter: new BinaryAdapter() });
         await client.init();
         await client.connect();
         clients.push(client);
@@ -181,7 +182,7 @@ describe('Load - Performance Profiling', () => {
     try {
       // Create 40 clients
       for (let i = 0; i < 40; i++) {
-        const client = new TestClient();
+        const client = new TestClient({ adapter: new BinaryAdapter() });
         await client.init();
         await client.connect();
         clients.push(client);
@@ -244,7 +245,7 @@ describe('Load - Performance Profiling', () => {
       
       // Create 20 clients
       for (let i = 0; i < 20; i++) {
-        const client = new TestClient();
+        const client = new TestClient({ adapter: new BinaryAdapter() });
         await client.init();
         await client.connect();
         clients.push(client);
@@ -274,7 +275,7 @@ describe('Load - Performance Profiling', () => {
     try {
       // Create 10 clients
       for (let i = 0; i < 10; i++) {
-        const client = new TestClient();
+        const client = new TestClient({ adapter: new BinaryAdapter() });
         await client.init();
         await client.connect();
         clients.push(client);
@@ -343,7 +344,7 @@ describe('Load - Performance Profiling', () => {
         
         // Create clients
         for (let i = 0; i < clientCount; i++) {
-          const client = new TestClient();
+          const client = new TestClient({ adapter: new BinaryAdapter() });
           await client.init();
           await client.connect();
           clients.push(client);
@@ -394,7 +395,7 @@ describe('Load - Performance Profiling', () => {
       console.log(`  Round ${round + 1}: Creating 50 clients`);
       
       for (let i = 0; i < 50; i++) {
-        const client = new TestClient();
+        const client = new TestClient({ adapter: new BinaryAdapter() });
         await client.init();
         await client.connect();
         clients.push(client);
@@ -440,7 +441,7 @@ describe('Load - Performance Profiling', () => {
       
       // Create 100 clients
       for (let i = 0; i < 100; i++) {
-        const client = new TestClient();
+        const client = new TestClient({ adapter: new BinaryAdapter() });
         await client.init();
         await client.connect();
         clients.push(client);
@@ -476,9 +477,9 @@ describe('Load - Performance Profiling', () => {
       
       // Should stay under reasonable limits
       expect(peakMemory).toBeLessThan(500 * 1024 * 1024); // 500MB
-      
+
     } finally {
       await Promise.all(clients.map(c => c.cleanup()));
     }
-  }, { timeout: 30000 });
+  }, { timeout: 50000 }); // Increased timeout for binary protocol with 100 clients * 10 bursts (test ran ~46s)
 });

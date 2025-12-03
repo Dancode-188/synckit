@@ -7,6 +7,7 @@
 import { describe, it, expect, beforeAll, afterAll } from 'bun:test';
 import { setupTestServer, teardownTestServer } from '../integration/helpers/test-server';
 import { TestClient } from '../integration/helpers/test-client';
+import { BinaryAdapter } from '../integration/helpers/binary-adapter';
 import { sleep } from '../integration/config';
 
 describe('Load - Sustained Load', () => {
@@ -29,7 +30,7 @@ describe('Load - Sustained Load', () => {
       
       // Create 100 clients
       for (let i = 0; i < 100; i++) {
-        const client = new TestClient();
+        const client = new TestClient({ adapter: new BinaryAdapter() });
         await client.init();
         clients.push(client);
         
@@ -112,7 +113,7 @@ describe('Load - Sustained Load', () => {
       
       // Create 50 clients
       for (let i = 0; i < 50; i++) {
-        const client = new TestClient();
+        const client = new TestClient({ adapter: new BinaryAdapter() });
         await client.init();
         await client.connect();
         clients.push(client);
@@ -193,7 +194,7 @@ describe('Load - Sustained Load', () => {
       
       // Create 30 clients
       for (let i = 0; i < 30; i++) {
-        const client = new TestClient();
+        const client = new TestClient({ adapter: new BinaryAdapter() });
         await client.init();
         await client.connect();
         clients.push(client);
@@ -270,7 +271,7 @@ describe('Load - Sustained Load', () => {
     try {
       // Create 30 clients
       for (let i = 0; i < 30; i++) {
-        const client = new TestClient();
+        const client = new TestClient({ adapter: new BinaryAdapter() });
         await client.init();
         await client.connect();
         clients.push(client);
@@ -336,7 +337,7 @@ describe('Load - Sustained Load', () => {
     try {
       // Create 40 clients
       for (let i = 0; i < 40; i++) {
-        const client = new TestClient();
+        const client = new TestClient({ adapter: new BinaryAdapter() });
         await client.init();
         await client.connect();
         clients.push(client);
@@ -412,7 +413,7 @@ describe('Load - Sustained Load', () => {
     try {
       // Create 20 clients
       for (let i = 0; i < 20; i++) {
-        const client = new TestClient();
+        const client = new TestClient({ adapter: new BinaryAdapter() });
         await client.init();
         await client.connect();
         clients.push(client);

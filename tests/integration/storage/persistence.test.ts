@@ -7,6 +7,7 @@
 import { describe, it, expect, beforeAll, afterAll } from 'bun:test';
 import { setupTestServer, teardownTestServer } from '../helpers/test-server';
 import { TestClient } from '../helpers/test-client';
+import { BinaryAdapter } from '../helpers/binary-adapter';
 import { sleep } from '../config';
 
 describe('Storage - Persistence', () => {
@@ -27,7 +28,7 @@ describe('Storage - Persistence', () => {
 
     try {
       // Create client and make changes
-      const client = new TestClient();
+      const client = new TestClient({ adapter: new BinaryAdapter() });
       await client.init();
       await client.connect();
       clients.push(client);
@@ -57,7 +58,7 @@ describe('Storage - Persistence', () => {
     const docId = generateDocId();
 
     try {
-      const client = new TestClient();
+      const client = new TestClient({ adapter: new BinaryAdapter() });
       await client.init();
       await client.connect();
       clients.push(client);
@@ -84,7 +85,7 @@ describe('Storage - Persistence', () => {
     const clients: TestClient[] = [];
     
     try {
-      const client = new TestClient();
+      const client = new TestClient({ adapter: new BinaryAdapter() });
       await client.init();
       await client.connect();
       clients.push(client);
@@ -115,7 +116,7 @@ describe('Storage - Persistence', () => {
     const clients: TestClient[] = [];
     
     try {
-      const client = new TestClient();
+      const client = new TestClient({ adapter: new BinaryAdapter() });
       await client.init();
       await client.connect();
       clients.push(client);
@@ -151,7 +152,7 @@ describe('Storage - Persistence', () => {
     const clients: TestClient[] = [];
     
     try {
-      const client = new TestClient();
+      const client = new TestClient({ adapter: new BinaryAdapter() });
       await client.init();
       await client.connect();
       clients.push(client);
@@ -193,7 +194,7 @@ describe('Storage - Persistence', () => {
       
       // Create 5 clients
       for (let i = 0; i < 5; i++) {
-        const client = new TestClient();
+        const client = new TestClient({ adapter: new BinaryAdapter() });
         await client.init();
         await client.connect();
         clients.push(client);
@@ -227,7 +228,7 @@ describe('Storage - Persistence', () => {
     const clients: TestClient[] = [];
     
     try {
-      const client = new TestClient();
+      const client = new TestClient({ adapter: new BinaryAdapter() });
       await client.init();
       await client.connect();
       clients.push(client);
@@ -265,7 +266,7 @@ describe('Storage - Persistence', () => {
     const clients: TestClient[] = [];
     
     try {
-      const client = new TestClient();
+      const client = new TestClient({ adapter: new BinaryAdapter() });
       await client.init();
       await client.connect();
       clients.push(client);
@@ -303,7 +304,7 @@ describe('Storage - Persistence', () => {
     const clients: TestClient[] = [];
     
     try {
-      const client = new TestClient();
+      const client = new TestClient({ adapter: new BinaryAdapter() });
       await client.init();
       await client.connect();
       clients.push(client);
@@ -336,7 +337,7 @@ describe('Storage - Persistence', () => {
     const clients: TestClient[] = [];
     
     try {
-      const client = new TestClient();
+      const client = new TestClient({ adapter: new BinaryAdapter() });
       await client.init();
       await client.connect();
       clients.push(client);
@@ -372,7 +373,7 @@ describe('Storage - Persistence', () => {
     const clients: TestClient[] = [];
     
     try {
-      const client = new TestClient();
+      const client = new TestClient({ adapter: new BinaryAdapter() });
       await client.init();
       await client.connect();
       clients.push(client);
@@ -405,7 +406,7 @@ describe('Storage - Persistence', () => {
     const clients: TestClient[] = [];
     
     try {
-      const client = new TestClient();
+      const client = new TestClient({ adapter: new BinaryAdapter() });
       await client.init();
       await client.connect();
       clients.push(client);

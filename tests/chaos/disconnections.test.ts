@@ -50,7 +50,7 @@ describe('Chaos - Random Disconnections', () => {
     } finally {
       await cleanupChaosClients(clients);
     }
-  });
+  }, { timeout: 20000 }); // Extended timeout for disconnection recovery (15s convergence + setup time)
 
   it('should handle frequent disconnections', async () => {
     const docId = getDocId();

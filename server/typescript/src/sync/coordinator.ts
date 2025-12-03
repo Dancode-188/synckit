@@ -67,7 +67,6 @@ export class SyncCoordinator {
    * Handle broadcast events from other servers
    */
   private handleBroadcastEvent(event: string, data: any) {
-    console.log(`Received broadcast event: ${event}`, data);
     // Handle cross-server events here
     // For example: invalidate cache, update metrics, etc.
   }
@@ -84,8 +83,6 @@ export class SyncCoordinator {
         try {
           const stored = await this.storage.getDocument(documentId);
           if (stored) {
-            console.log(`Loaded document from storage: ${documentId}`);
-
             // Restore from storage using mock document (for test compatibility)
             const mockWasmDoc = {
               documentId,
@@ -192,10 +189,8 @@ export class SyncCoordinator {
    */
   getDocumentSync(documentId: string): DocumentState {
     let state = this.documents.get(documentId);
-    
+
     if (!state) {
-      console.log(`[Coordinator] Creating new document: ${documentId}`);
-      
       // For tests, use plain JS objects instead of WASM
       const mockWasmDoc = {
         documentId,
@@ -280,9 +275,8 @@ export class SyncCoordinator {
         subscribers: new Set(),
         lastModified: Date.now(),
       };
-      
+
       this.documents.set(documentId, state);
-      console.log(`[Coordinator] Document created successfully (mock mode): ${documentId}`);
     }
     
     return state;
@@ -354,8 +348,6 @@ export class SyncCoordinator {
         // Continue - in-memory state is updated
       }
     }
-
-    // console.log(`Set field ${path} in ${documentId} by ${clientId}`);
 
     return authoritativeValue; // Return authoritative value after LWW
   }
@@ -475,7 +467,6 @@ export class SyncCoordinator {
     try {
       delta.applyTo(state.wasmDoc, clientId);
       state.lastModified = Date.now();
-      // console.log(`Applied delta to ${documentId} from ${clientId}`);
       return true;
     } catch (error) {
       console.error(`Error applying delta:`, error);
@@ -487,10 +478,8 @@ export class SyncCoordinator {
    * Subscribe connection to document updates
    */
   subscribe(documentId: string, connectionId: string) {
-    // console.log(`[Coordinator.subscribe] Called for doc=${documentId}, conn=${connectionId}`);
     const state = this.getDocumentSync(documentId);
     state.subscribers.add(connectionId);
-    // console.log(`Connection ${connectionId} subscribed to ${documentId}`);
   }
 
   /**

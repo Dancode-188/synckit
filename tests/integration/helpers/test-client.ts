@@ -7,6 +7,7 @@
 
 import { TEST_CONFIG, getWebSocketUrl, generateTestId, sleep } from '../config';
 import WebSocket from 'ws';
+import { ProtocolAdapter, JsonAdapter } from './protocol-adapter';
 
 /**
  * Deep equality comparison that ignores property order
@@ -51,6 +52,7 @@ export interface TestClientConfig {
   userId?: string;
   autoConnect?: boolean;
   token?: string;
+  adapter?: ProtocolAdapter; // Protocol adapter for message encoding/decoding
 }
 
 /**
@@ -68,7 +70,7 @@ export class TestClient {
   public readonly userId: string;
   private connected: boolean = false;
   private ws: WebSocket | null = null;
-  
+
   // Track document states locally
   private documents: Map<string, DocumentState> = new Map();
 
@@ -81,9 +83,13 @@ export class TestClient {
   // Message callbacks
   private messageCallbacks: Map<string, (data: any) => void> = new Map();
 
+  // Protocol adapter for message encoding/decoding (defaults to JSON for backward compatibility)
+  private adapter: ProtocolAdapter;
+
   constructor(config: TestClientConfig = {}) {
     this.clientId = config.clientId || generateTestId('client');
     this.userId = config.userId || generateTestId('user');
+    this.adapter = config.adapter || new JsonAdapter(); // Default to JSON for existing tests
   }
 
   /**
@@ -157,12 +163,17 @@ export class TestClient {
       });
 
       // Handle incoming messages
-      this.ws.on('message', (data: Buffer) => {
+      this.ws.on('message', (data: Buffer | string) => {
         try {
-          const message = JSON.parse(data.toString());
+          const message = this.adapter.decode(data);
           this.handleMessage(message);
         } catch (error) {
-          console.error('Failed to parse message:', error);
+          console.error(`[TestClient:${this.clientId}] Failed to decode message:`, error);
+          console.error('Data type:', typeof data);
+          console.error('Data length:', data.length);
+          if (Buffer.isBuffer(data)) {
+            console.error('First 50 bytes (hex):', data.subarray(0, Math.min(50, data.length)).toString('hex'));
+          }
         }
       });
     });
@@ -216,22 +227,38 @@ export class TestClient {
     if (message.type === 'delta' && message.documentId) {
       // Apply delta to local state
       const doc = this.documents.get(message.documentId) || {};
-      // For now, assuming delta contains the changes directly
+
+      // Handle both formats:
+      // 1. TestClient format: { delta: { field1: value1, field2: value2 } }
+      // 2. SDK format: { field: 'field1', value: value1 }
+      let deltaToApply: Record<string, any>;
+
       if (message.delta) {
-        // Apply each field in the delta
-        for (const [field, value] of Object.entries(message.delta)) {
-          // Check for tombstone marker (delete operation)
-          if (value !== null && typeof value === 'object' && '__deleted' in value && value.__deleted === true) {
-            // Delete field
-            delete doc[field];
-          } else {
-            // Set field value (including explicit null values)
-            // null is now a valid storable value!
-            doc[field] = value;
-          }
-        }
-        this.documents.set(message.documentId, doc);
+        // TestClient format: bundled delta object
+        deltaToApply = message.delta;
+      } else if ((message as any).field !== undefined) {
+        // SDK format: individual field/value
+        const field = (message as any).field;
+        const value = (message as any).value;
+        deltaToApply = { [field]: value };
+      } else {
+        console.warn(`[TestClient:${this.clientId}] Delta message has no 'delta' or 'field' property`);
+        deltaToApply = {};
       }
+
+      // Apply each field in the delta
+      for (const [field, value] of Object.entries(deltaToApply)) {
+        // Check for tombstone marker (delete operation)
+        if (value !== null && typeof value === 'object' && '__deleted' in value && value.__deleted === true) {
+          // Delete field
+          delete doc[field];
+        } else {
+          // Set field value (including explicit null values)
+          // null is now a valid storable value!
+          doc[field] = value;
+        }
+      }
+      this.documents.set(message.documentId, doc);
 
       // Send ACK to confirm receipt
       if (message.id) {
@@ -265,8 +292,9 @@ export class TestClient {
     if (!this.ws || !this.connected) {
       throw new Error('WebSocket not connected');
     }
-    
-    this.ws.send(JSON.stringify(message));
+
+    const encoded = this.adapter.encode(message);
+    this.ws.send(encoded);
   }
 
   /**

@@ -16,7 +16,7 @@ import {
   assertDocumentEmpty,
   TEST_CONFIG,
 } from '../setup';
-import { generateTestId } from '../config';
+import { generateTestId, sleep } from '../config';
 
 describe('E2E Sync - Basic CRUD', () => {
   setupTestSuite();
@@ -189,6 +189,9 @@ describe('E2E Sync - Basic CRUD', () => {
     for (let i = 0; i < 100; i++) {
       await client.setField(docId, 'counter', i);
     }
+
+    // Small delay to ensure final delta is processed (binary protocol batching)
+    await sleep(100);
 
     await assertFieldValue(client, docId, 'counter', 99);
   });

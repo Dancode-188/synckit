@@ -68,7 +68,6 @@ export class Connection {
       // Detect protocol type from first message
       if (typeof data === 'string' && this.protocolType === 'binary') {
         this.protocolType = 'json';
-        console.log(`[Connection ${this.id}] Detected JSON protocol`);
       }
 
       // Parse message (parseMessage handles both Buffer and string)

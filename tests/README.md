@@ -33,21 +33,23 @@ bun test:watch
 
 ```
 tests/
+├── binary/              # Binary protocol tests (7 tests)
 ├── integration/          # Integration tests
 │   ├── helpers/         # Test utilities
 │   ├── sync/            # Sync protocol tests (86 tests)
 │   ├── storage/         # Storage & persistence (55 tests)
 │   └── offline/         # Offline scenarios (103 tests)
-├── load/                # Load & stress tests (61 tests)
-├── chaos/               # Chaos engineering (80 tests)
+├── load/                # Load & stress tests (73 tests)
+├── chaos/               # Chaos engineering (86 tests)
 ```
 
 ## Test Coverage
 
+- **Binary Protocol Tests:** 7 tests (production WebSocket binary protocol)
 - **Integration Tests:** 244 tests (sync, storage, offline)
-- **Load Tests:** 61 tests (concurrent clients, sustained load, burst traffic)
-- **Chaos Tests:** 80 tests (network failures, packet loss, latency, convergence)
-- **Total:** 385 comprehensive tests
+- **Load Tests:** 73 tests (concurrent clients, sustained load, burst traffic)
+- **Chaos Tests:** 86 tests (network failures, packet loss, latency, convergence)
+- **Total:** 410 comprehensive tests ✅ (100% pass rate)
 
 ## Prerequisites
 
