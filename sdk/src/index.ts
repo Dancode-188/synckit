@@ -12,6 +12,7 @@
 // Core exports
 export { SyncKit } from './synckit'
 export { SyncDocument } from './document'
+export { SyncText } from './text'
 
 // Storage adapters
 export { MemoryStorage, IndexedDBStorage, createStorage } from './storage'
@@ -53,6 +54,7 @@ export {
   useNetworkStatus,
   useSyncState,
   useSyncDocumentWithState,
+  useSyncText,
 } from './adapters/react'
 export type { SyncProviderProps, UseSyncDocumentResult } from './adapters/react'
 

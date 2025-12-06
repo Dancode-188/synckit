@@ -1,0 +1,380 @@
+/**
+ * SyncText - Type-safe Text CRDT wrapper for collaborative text editing
+ *
+ * Wraps the Rust FugueText CRDT with TypeScript-friendly API and
+ * integrates with SyncKit's storage and sync infrastructure.
+ *
+ * @module text
+ */
+
+import { initWASM } from './wasm-loader'
+import type { StorageAdapter } from './storage'
+import type { SyncManager } from './sync/manager'
+
+export interface WasmFugueText {
+  insert(position: number, text: string): string  // returns JSON NodeId
+  delete(position: number, length: number): string  // returns JSON NodeId[]
+  toString(): string
+  length(): number
+  isEmpty(): boolean
+  getClientId(): string
+  getClock(): number
+  merge(other: WasmFugueText): void
+  toJSON(): string
+  free(): void
+}
+
+export interface TextStorageData {
+  content: string
+  clock: number
+  updatedAt: number
+}
+
+export type SubscriptionCallback<T> = (value: T) => void
+export type Unsubscribe = () => void
+
+/**
+ * SyncText - Collaborative text CRDT
+ *
+ * Provides real-time collaborative text editing with:
+ * - Fugue algorithm (maximal non-interleaving)
+ * - Automatic conflict resolution
+ * - Observable updates
+ * - Persistence integration
+ * - Network sync integration
+ *
+ * @example
+ * ```typescript
+ * const text = synckit.text('doc-123')
+ * await text.init()
+ *
+ * // Subscribe to changes
+ * text.subscribe((content) => {
+ *   console.log('Text:', content)
+ * })
+ *
+ * // Edit
+ * await text.insert(0, 'Hello ')
+ * await text.insert(6, 'World')
+ *
+ * console.log(text.get()) // "Hello World"
+ * ```
+ */
+export class SyncText {
+  private wasmText: WasmFugueText | null = null
+  private subscribers = new Set<SubscriptionCallback<string>>()
+  private content: string = ''
+  private clock: number = 0
+
+  constructor(
+    private readonly id: string,
+    private readonly clientId: string,
+    private readonly storage?: StorageAdapter,
+    private readonly syncManager?: SyncManager
+  ) {}
+
+  /**
+   * Initialize the text CRDT
+   * Must be called before using any other methods
+   */
+  async init(): Promise<void> {
+    if (this.wasmText) {
+      return
+    }
+
+    const wasm = await initWASM()
+
+    // Check if WasmFugueText is available
+    if (!('WasmFugueText' in wasm)) {
+      throw new Error(
+        'WasmFugueText not available. Make sure the WASM module was built with text-crdt feature enabled.'
+      )
+    }
+
+    this.wasmText = new (wasm as any).WasmFugueText(this.clientId)
+
+    // Load from storage if available
+    if (this.storage) {
+      const stored = await this.storage.get(this.id)
+      if (stored && this.isTextStorageData(stored)) {
+        // For now, just insert the stored content
+        // TODO: Properly restore from serialized state using fromJSON
+        if (stored.content && this.wasmText) {
+          this.wasmText.insert(0, stored.content)
+        }
+
+        this.clock = stored.clock
+      }
+    }
+
+    // Update local state
+    this.updateLocalState()
+
+    // Register with sync manager
+    if (this.syncManager) {
+      // TODO: Implement sync manager integration
+      // this.syncManager.registerText(this)
+      // await this.syncManager.subscribeDocument(this.id)
+    }
+  }
+
+  /**
+   * Get the current text content
+   */
+  get(): string {
+    return this.content
+  }
+
+  /**
+   * Get the current length (in graphemes)
+   */
+  length(): number {
+    if (!this.wasmText) {
+      throw new Error('Text not initialized. Call init() first.')
+    }
+    return this.wasmText.length()
+  }
+
+  /**
+   * Check if text is empty
+   */
+  isEmpty(): boolean {
+    return this.content.length === 0
+  }
+
+  /**
+   * Insert text at the given position
+   *
+   * @param position - Grapheme index (0-based)
+   * @param text - Text to insert
+   *
+   * @example
+   * ```typescript
+   * await text.insert(0, 'Hello')
+   * await text.insert(5, ' World')
+   * console.log(text.get()) // "Hello World"
+   * ```
+   */
+  async insert(position: number, text: string): Promise<void> {
+    if (!this.wasmText) {
+      throw new Error('Text not initialized. Call init() first.')
+    }
+
+    // Validate position
+    if (position < 0 || position > this.wasmText.length()) {
+      throw new Error(`Position ${position} out of bounds (length: ${this.wasmText.length()})`)
+    }
+
+    // Insert in WASM
+    this.wasmText.insert(position, text)
+
+    // Update local state
+    this.updateLocalState()
+
+    // Persist
+    await this.persist()
+
+    // Notify subscribers
+    this.notifySubscribers()
+
+    // Sync (if sync manager available)
+    if (this.syncManager) {
+      // TODO: Push operation to sync manager
+      /*
+      const operation = {
+        type: 'text-insert',
+        documentId: this.id,
+        position,
+        text,
+        nodeId,
+        clock: this.clock,
+        clientId: this.clientId,
+        timestamp: Date.now(),
+      }
+      await this.syncManager.pushOperation(operation)
+      */
+    }
+  }
+
+  /**
+   * Delete text at the given position
+   *
+   * @param position - Starting grapheme index
+   * @param length - Number of graphemes to delete
+   *
+   * @example
+   * ```typescript
+   * await text.insert(0, 'Hello World')
+   * await text.delete(5, 6)  // Delete " World"
+   * console.log(text.get()) // "Hello"
+   * ```
+   */
+  async delete(position: number, length: number): Promise<void> {
+    if (!this.wasmText) {
+      throw new Error('Text not initialized. Call init() first.')
+    }
+
+    // Validate range
+    if (position < 0 || position + length > this.wasmText.length()) {
+      throw new Error(`Range ${position}..${position + length} out of bounds (length: ${this.wasmText.length()})`)
+    }
+
+    // Delete in WASM
+    this.wasmText.delete(position, length)
+
+    // Update local state
+    this.updateLocalState()
+
+    // Persist
+    await this.persist()
+
+    // Notify subscribers
+    this.notifySubscribers()
+
+    // Sync (if sync manager available)
+    if (this.syncManager) {
+      // TODO: Push operation to sync manager
+    }
+  }
+
+  /**
+   * Subscribe to text changes
+   *
+   * @param callback - Called whenever text changes
+   * @returns Unsubscribe function
+   *
+   * @example
+   * ```typescript
+   * const unsubscribe = text.subscribe((content) => {
+   *   console.log('Text changed:', content)
+   * })
+   *
+   * // Later: stop listening
+   * unsubscribe()
+   * ```
+   */
+  subscribe(callback: SubscriptionCallback<string>): Unsubscribe {
+    this.subscribers.add(callback)
+
+    return () => {
+      this.subscribers.delete(callback)
+    }
+  }
+
+  /**
+   * Get current Lamport clock value
+   */
+  getClock(): number {
+    return this.clock
+  }
+
+  /**
+   * Merge with remote text state
+   *
+   * @param remoteJson - JSON string of remote FugueText state
+   */
+  async mergeRemote(remoteJson: string): Promise<void> {
+    if (!this.wasmText) {
+      throw new Error('Text not initialized. Call init() first.')
+    }
+
+    const wasm = await initWASM()
+    const remote = (wasm as any).WasmFugueText.fromJSON(remoteJson)
+
+    try {
+      this.wasmText.merge(remote)
+
+      // Update local state
+      this.updateLocalState()
+
+      // Persist
+      await this.persist()
+
+      // Notify subscribers
+      this.notifySubscribers()
+    } finally {
+      remote.free()
+    }
+  }
+
+  /**
+   * Export to JSON (for persistence/network)
+   */
+  toJSON(): string {
+    if (!this.wasmText) {
+      throw new Error('Text not initialized. Call init() first.')
+    }
+    return this.wasmText.toJSON()
+  }
+
+  /**
+   * Load from JSON serialization
+   */
+  async fromJSON(json: string): Promise<void> {
+    if (!this.wasmText) {
+      throw new Error('Text not initialized. Call init() first.')
+    }
+
+    const wasm = await initWASM()
+    this.wasmText = (wasm as any).WasmFugueText.fromJSON(json)
+    this.updateLocalState()
+    await this.persist()
+    this.notifySubscribers()
+  }
+
+  /**
+   * Dispose and free WASM memory
+   */
+  dispose(): void {
+    if (this.syncManager) {
+      // TODO: Unregister from sync manager
+    }
+
+    this.subscribers.clear()
+
+    if (this.wasmText) {
+      this.wasmText.free()
+      this.wasmText = null
+    }
+  }
+
+  // Private helpers
+
+  private updateLocalState(): void {
+    if (!this.wasmText) return
+
+    this.content = this.wasmText.toString()
+    this.clock = this.wasmText.getClock()
+  }
+
+  private notifySubscribers(): void {
+    const current = this.get()
+    this.subscribers.forEach(callback => {
+      try {
+        callback(current)
+      } catch (error) {
+        console.error('Error in subscription callback:', error)
+      }
+    })
+  }
+
+  private async persist(): Promise<void> {
+    if (!this.storage) return
+
+    const data: TextStorageData = {
+      content: this.content,
+      clock: this.clock,
+      updatedAt: Date.now()
+    }
+
+    await this.storage.set(this.id, data as any)
+  }
+
+  private isTextStorageData(data: any): data is TextStorageData {
+    return (
+      typeof data === 'object' &&
+      typeof data.content === 'string' &&
+      typeof data.clock === 'number'
+    )
+  }
+}

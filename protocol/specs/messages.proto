@@ -87,8 +87,8 @@ message TextOperation {
   
   // Length for delete operations
   int64 length = 4;
-  
-  // Unique operation ID (for YATA algorithm)
+
+  // Unique operation ID (for CRDT causality tracking)
   string op_id = 5;
   
   // Parent operation ID (causality)

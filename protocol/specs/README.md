@@ -62,7 +62,7 @@ Authentication and authorization:
 ### Tier 2: CRDT Text Editing
 - Collaborative text editing
 - Uses `TextOperation` messages
-- YATA algorithm for performance
+- Fugue algorithm for maximal non-interleaving
 - Examples: Collaborative editors, documentation
 
 ### Tier 3: Custom CRDTs
@@ -124,7 +124,7 @@ Client                          Server
 - Deterministic across all replicas
 
 ### CRDT Automatic Merge
-- Text: YATA algorithm (block-based)
+- Text: Fugue algorithm (maximal non-interleaving)
 - Sets: Observed-Remove semantics
 - Counters: Positive/Negative split
 - No manual conflict resolution needed
@@ -207,7 +207,7 @@ Protocol correctness verified through:
 
 - [Protocol Buffers Documentation](https://protobuf.dev/)
 - [CRDT Overview](https://crdt.tech/)
-- [YATA Algorithm](https://www.researchgate.net/publication/310212186_Near_Real-Time_Peer-to-Peer_Shared_Editing_on_Extensible_Data_Types)
+- [Fugue Algorithm](https://arxiv.org/abs/2305.00583) - Maximal non-interleaving for text CRDTs
 - [Vector Clocks](https://en.wikipedia.org/wiki/Vector_clock)
 
 ---

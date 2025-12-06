@@ -273,3 +273,123 @@ export function useSyncDocumentWithState<T extends Record<string, unknown>>(
     syncState,
   }
 }
+
+/**
+ * Hook for collaborative text editing with Fugue Text CRDT
+ *
+ * Provides real-time text collaboration with automatic conflict resolution.
+ *
+ * @param id - Document ID for the text
+ * @returns Tuple of [content, operations, textInstance]
+ *
+ * @example
+ * ```tsx
+ * function TextEditor({ docId }: { docId: string }) {
+ *   const [content, { insert, delete: del }, text] = useSyncText(docId)
+ *
+ *   return (
+ *     <textarea
+ *       value={content}
+ *       onChange={(e) => {
+ *         const newValue = e.target.value
+ *         const oldValue = content
+ *
+ *         // Simple diff: replace all content (not optimal, just for demo)
+ *         if (newValue.length > oldValue.length) {
+ *           insert(oldValue.length, newValue.slice(oldValue.length))
+ *         } else if (newValue.length < oldValue.length) {
+ *           del(newValue.length, oldValue.length - newValue.length)
+ *         }
+ *       }}
+ *     />
+ *   )
+ * }
+ * ```
+ */
+export function useSyncText(
+  id: string
+): [
+  string,
+  {
+    insert: (position: number, text: string) => Promise<void>
+    delete: (position: number, length: number) => Promise<void>
+  },
+  import('../text').SyncText
+] {
+  const synckit = useSyncKit()
+  const [content, setContent] = useState<string>('')
+  const textRef = useRef<import('../text').SyncText | null>(null)
+  const [initialized, setInitialized] = useState(false)
+
+  // Get or create text instance
+  // Note: This requires adding a text() method to SyncKit class
+  if (!textRef.current) {
+    // For now, create directly (will integrate with SyncKit.text() later)
+    const { SyncText } = require('../text')
+    textRef.current = new SyncText(
+      id,
+      synckit.getClientId?.() || `client-${Date.now()}`,
+      undefined, // TODO: Integrate with SyncKit.getStorage()
+      undefined  // TODO: Integrate with SyncKit.getSyncManager()
+    )
+  }
+
+  const text = textRef.current
+
+  // Initialize text
+  useEffect(() => {
+    if (!text) return
+
+    let cancelled = false
+
+    text.init().then(() => {
+      if (!cancelled) {
+        setInitialized(true)
+      }
+    }).catch((error) => {
+      console.error('Failed to initialize text:', error)
+    })
+
+    return () => {
+      cancelled = true
+    }
+  }, [text])
+
+  // Subscribe to changes (only after initialization)
+  useEffect(() => {
+    if (!initialized || !text) return
+
+    // Set initial content
+    setContent(text.get())
+
+    // Subscribe to future changes
+    const unsubscribe = text.subscribe((newContent) => {
+      setContent(newContent)
+    })
+
+    return unsubscribe
+  }, [text, initialized])
+
+  // Memoized operations
+  const insert = useCallback(
+    (position: number, str: string) => {
+      if (!text) {
+        return Promise.reject(new Error('Text not initialized'))
+      }
+      return text.insert(position, str)
+    },
+    [text]
+  )
+
+  const deleteText = useCallback(
+    (position: number, length: number) => {
+      if (!text) {
+        return Promise.reject(new Error('Text not initialized'))
+      }
+      return text.delete(position, length)
+    },
+    [text]
+  )
+
+  return [content, { insert, delete: deleteText }, text!]
+}

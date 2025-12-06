@@ -178,3 +178,115 @@ impl WasmDelta {
             .map_err(|e| JsValue::from_str(&format!("JSON serialization failed: {}", e)))
     }
 }
+
+/// JavaScript-friendly wrapper for FugueText CRDT
+/// Only available when text-crdt feature is enabled
+#[cfg(feature = "text-crdt")]
+#[wasm_bindgen]
+pub struct WasmFugueText {
+    inner: crate::crdt::FugueText,
+}
+
+#[cfg(feature = "text-crdt")]
+#[wasm_bindgen]
+impl WasmFugueText {
+    /// Create a new FugueText with the given client ID
+    #[wasm_bindgen(constructor)]
+    pub fn new(client_id: String) -> Self {
+        Self {
+            inner: crate::crdt::FugueText::new(client_id),
+        }
+    }
+
+    /// Insert text at the given position
+    ///
+    /// # Arguments
+    /// * `position` - Grapheme index (user-facing position)
+    /// * `text` - Text to insert
+    ///
+    /// # Returns
+    /// JSON string of NodeId for the created block
+    #[wasm_bindgen(js_name = insert)]
+    pub fn insert(&mut self, position: usize, text: String) -> Result<String, JsValue> {
+        let node_id = self
+            .inner
+            .insert(position, &text)
+            .map_err(|e| JsValue::from_str(&format!("Insert failed: {}", e)))?;
+
+        serde_json::to_string(&node_id)
+            .map_err(|e| JsValue::from_str(&format!("JSON serialization failed: {}", e)))
+    }
+
+    /// Delete text at the given position
+    ///
+    /// # Arguments
+    /// * `position` - Starting grapheme index
+    /// * `length` - Number of graphemes to delete
+    ///
+    /// # Returns
+    /// JSON string of array of deleted NodeIds
+    #[wasm_bindgen(js_name = delete)]
+    pub fn delete(&mut self, position: usize, length: usize) -> Result<String, JsValue> {
+        let deleted_ids = self
+            .inner
+            .delete(position, length)
+            .map_err(|e| JsValue::from_str(&format!("Delete failed: {}", e)))?;
+
+        serde_json::to_string(&deleted_ids)
+            .map_err(|e| JsValue::from_str(&format!("JSON serialization failed: {}", e)))
+    }
+
+    /// Get the text content as a string
+    #[wasm_bindgen(js_name = toString)]
+    pub fn to_string(&self) -> String {
+        self.inner.to_string()
+    }
+
+    /// Get the length in graphemes (user-perceived characters)
+    #[wasm_bindgen(js_name = length)]
+    pub fn length(&self) -> usize {
+        self.inner.len()
+    }
+
+    /// Check if the text is empty
+    #[wasm_bindgen(js_name = isEmpty)]
+    pub fn is_empty(&self) -> bool {
+        self.inner.is_empty()
+    }
+
+    /// Get the client ID
+    #[wasm_bindgen(js_name = getClientId)]
+    pub fn get_client_id(&self) -> String {
+        self.inner.client_id().to_string()
+    }
+
+    /// Get the current Lamport clock value
+    #[wasm_bindgen(js_name = getClock)]
+    pub fn get_clock(&self) -> u64 {
+        self.inner.clock()
+    }
+
+    /// Merge with another FugueText
+    #[wasm_bindgen(js_name = merge)]
+    pub fn merge(&mut self, other: &WasmFugueText) -> Result<(), JsValue> {
+        self.inner
+            .merge(&other.inner)
+            .map_err(|e| JsValue::from_str(&format!("Merge failed: {}", e)))
+    }
+
+    /// Export as JSON string (for persistence/network)
+    #[wasm_bindgen(js_name = toJSON)]
+    pub fn to_json(&self) -> Result<String, JsValue> {
+        serde_json::to_string(&self.inner)
+            .map_err(|e| JsValue::from_str(&format!("JSON serialization failed: {}", e)))
+    }
+
+    /// Import from JSON string (for loading from persistence/network)
+    #[wasm_bindgen(js_name = fromJSON)]
+    pub fn from_json(json: String) -> Result<WasmFugueText, JsValue> {
+        let inner: crate::crdt::FugueText = serde_json::from_str(&json)
+            .map_err(|e| JsValue::from_str(&format!("JSON deserialization failed: {}", e)))?;
+
+        Ok(Self { inner })
+    }
+}

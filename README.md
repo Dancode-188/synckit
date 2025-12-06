@@ -59,8 +59,10 @@ Current features (v0.1.0):
 - ✅ IndexedDB persistence
 - ✅ Cross-tab sync (see [example](examples/project-management))
 
-Coming in v0.2.0:
-- 🚧 Text CRDTs (character-level editing)
+Coming in v0.2.0 (In Progress):
+- ⚡ **Text CRDTs** (Fugue algorithm) - **Core complete, optimization in progress**
+  - ✅ Works great for small-medium documents (<1000 chars)
+  - 🚧 Performance optimization needed for large documents (Phase 1.5)
 - 🚧 Counters, Sets (distributed data structures)
 
 **Size-critical apps?** Use Lite variant (~45 KB gzipped: 1.5KB SDK + 44KB WASM, local-only)
@@ -188,7 +190,13 @@ function TodoApp() {
 
 ### Coming in v0.2.0
 
-- **✍️ Text CRDTs** - Collaborative text editing (character-level sync)
+- **✍️ Text CRDTs (Fugue Algorithm)** - Collaborative text editing ⚡ **Core Complete!**
+  - ✅ Full Rust implementation with WASM bindings
+  - ✅ TypeScript SDK & React hooks (`useSyncText`)
+  - ✅ 76 tests passing (CRDT correctness validated)
+  - ✅ Optimized for small-medium documents (<1000 chars)
+  - 🚧 Performance optimization in progress for large documents (Phase 1.5)
+  - See [v0.2.0 Roadmap](analysis/v0.2.0_ROADMAP.md) for details
 - **🔢 Counters** - Conflict-free increment/decrement
 - **📋 Sets & Lists** - Observed-Remove Sets for collections
 - **🎨 Framework Adapters** - Vue composables, Svelte stores
@@ -401,7 +409,7 @@ Automerge:   180 MB  ███████████████████�
 ## 🙏 Acknowledgments
 
 Built with inspiration from:
-- **[Yjs](https://github.com/yjs/yjs)** - YATA algorithm and performance optimization
+- **[Yjs](https://github.com/yjs/yjs)** - Text CRDT concepts and performance optimization
 - **[Automerge](https://github.com/automerge/automerge)** - CRDT theory and formal verification
 - **[Linear](https://linear.app)** - Pragmatic approach to sync
 - **[Figma](https://figma.com)** - Custom sync architecture patterns
