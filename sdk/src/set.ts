@@ -96,7 +96,7 @@ export class SyncSet<T extends string = string> {
     // Load from storage if available
     if (this.storage) {
       const stored = await this.storage.get(this.id)
-      if (stored && this.isSetStorageData(stored)) {
+      if (stored && this.isSetStorageData(stored) && this.wasmSet) {
         // Restore values
         for (const value of stored.values) {
           this.wasmSet.add(value)

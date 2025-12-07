@@ -551,7 +551,7 @@ export function useSyncSet<T extends string = string>(
 
   // Get or create set instance
   if (!setRef.current) {
-    const { SyncSet } = require('../set')
+    const { SyncSet } = require('../set') as { SyncSet: new <U extends string>(id: string, replicaId: string, storage?: any, syncManager?: any) => import('../set').SyncSet<U> }
     setRef.current = new SyncSet<T>(
       id,
       synckit.getClientId?.() || `client-${Date.now()}`,
