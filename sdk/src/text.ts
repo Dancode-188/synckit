@@ -100,7 +100,7 @@ export class SyncText implements SyncableDocument {
     if (this.storage) {
       const stored = await this.storage.get(this.id)
       if (stored && this.isTextStorageData(stored)) {
-        if (stored.crdt) {
+        if (stored.crdt && this.wasmText) {
           // Restore from serialized CRDT state
           const restoredText = (wasm as any).WasmFugueText.fromJSON(stored.crdt)
           this.wasmText.free()
@@ -389,10 +389,9 @@ export class SyncText implements SyncableDocument {
       return
     }
 
-    // Handle text operations
-    if (operation.type === 'text') {
-      const textOp = operation as any // Type assertion for text operations
-
+    // Handle text operations (cast to any since we extend Operation type)
+    const textOp = operation as any
+    if (textOp.type === 'text') {
       if (textOp.operation === 'insert') {
         this.wasmText.insert(textOp.position, textOp.value)
       } else if (textOp.operation === 'delete') {

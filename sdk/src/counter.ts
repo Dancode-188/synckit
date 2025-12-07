@@ -95,7 +95,7 @@ export class SyncCounter implements SyncableDocument {
     // Load from storage if available
     if (this.storage) {
       const stored = await this.storage.get(this.id)
-      if (stored && this.isCounterStorageData(stored) && stored.crdt) {
+      if (stored && this.isCounterStorageData(stored) && stored.crdt && this.wasmCounter) {
         // Restore from serialized CRDT state
         const restoredCounter = (wasm as any).WasmCounter.fromJSON(stored.crdt)
         this.wasmCounter.free()
@@ -361,10 +361,9 @@ export class SyncCounter implements SyncableDocument {
       return
     }
 
-    // Handle counter operations
-    if (operation.type === 'counter') {
-      const counterOp = operation as any // Type assertion for counter operations
-
+    // Handle counter operations (cast to any since we extend Operation type)
+    const counterOp = operation as any
+    if (counterOp.type === 'counter') {
       if (counterOp.operation === 'increment') {
         this.wasmCounter.increment(counterOp.value)
       } else if (counterOp.operation === 'decrement') {
