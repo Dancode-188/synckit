@@ -26,6 +26,7 @@ export interface WasmCounter {
 export interface CounterStorageData {
   value: number
   updatedAt: number
+  crdt?: string  // Serialized CRDT state (JSON)
 }
 
 export type SubscriptionCallback<T> = (value: T) => void
@@ -94,9 +95,11 @@ export class SyncCounter implements SyncableDocument {
     // Load from storage if available
     if (this.storage) {
       const stored = await this.storage.get(this.id)
-      if (stored && this.isCounterStorageData(stored)) {
-        // TODO: Properly restore from serialized state using fromJSON
-        // For now we don't restore since counter should start at 0
+      if (stored && this.isCounterStorageData(stored) && stored.crdt) {
+        // Restore from serialized CRDT state
+        const restoredCounter = (wasm as any).WasmCounter.fromJSON(stored.crdt)
+        this.wasmCounter.free()
+        this.wasmCounter = restoredCounter
       }
     }
 
@@ -396,11 +399,12 @@ export class SyncCounter implements SyncableDocument {
   }
 
   private async persist(): Promise<void> {
-    if (!this.storage) return
+    if (!this.storage || !this.wasmCounter) return
 
     const data: CounterStorageData = {
       value: this.currentValue,
-      updatedAt: Date.now()
+      updatedAt: Date.now(),
+      crdt: this.wasmCounter.toJSON()
     }
 
     await this.storage.set(this.id, data as any)

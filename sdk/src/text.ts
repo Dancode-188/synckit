@@ -9,7 +9,8 @@
 
 import { initWASM } from './wasm-loader'
 import type { StorageAdapter } from './storage'
-import type { SyncManager } from './sync/manager'
+import type { SyncManager, VectorClock } from './sync/manager'
+import type { SyncableDocument, Operation } from './sync/manager'
 
 export interface WasmFugueText {
   insert(position: number, text: string): string  // returns JSON NodeId
@@ -28,6 +29,7 @@ export interface TextStorageData {
   content: string
   clock: number
   updatedAt: number
+  crdt?: string  // Serialized CRDT state (JSON)
 }
 
 export type SubscriptionCallback<T> = (value: T) => void
@@ -60,11 +62,12 @@ export type Unsubscribe = () => void
  * console.log(text.get()) // "Hello World"
  * ```
  */
-export class SyncText {
+export class SyncText implements SyncableDocument {
   private wasmText: WasmFugueText | null = null
   private subscribers = new Set<SubscriptionCallback<string>>()
   private content: string = ''
   private clock: number = 0
+  private vectorClock: VectorClock = {}
 
   constructor(
     private readonly id: string,
@@ -97,9 +100,13 @@ export class SyncText {
     if (this.storage) {
       const stored = await this.storage.get(this.id)
       if (stored && this.isTextStorageData(stored)) {
-        // For now, just insert the stored content
-        // TODO: Properly restore from serialized state using fromJSON
-        if (stored.content && this.wasmText) {
+        if (stored.crdt) {
+          // Restore from serialized CRDT state
+          const restoredText = (wasm as any).WasmFugueText.fromJSON(stored.crdt)
+          this.wasmText.free()
+          this.wasmText = restoredText
+        } else if (stored.content && this.wasmText) {
+          // Fallback: insert content (for backward compatibility)
           this.wasmText.insert(0, stored.content)
         }
 
@@ -112,9 +119,8 @@ export class SyncText {
 
     // Register with sync manager
     if (this.syncManager) {
-      // TODO: Implement sync manager integration
-      // this.syncManager.registerText(this)
-      // await this.syncManager.subscribeDocument(this.id)
+      this.syncManager.registerDocument(this)
+      await this.syncManager.subscribeDocument(this.id)
     }
   }
 
@@ -179,20 +185,19 @@ export class SyncText {
 
     // Sync (if sync manager available)
     if (this.syncManager) {
-      // TODO: Push operation to sync manager
-      /*
-      const operation = {
-        type: 'text-insert',
-        documentId: this.id,
+      // Increment vector clock
+      this.vectorClock[this.clientId] = (this.vectorClock[this.clientId] || 0) + 1
+
+      await this.syncManager.pushOperation({
+        type: 'text' as any,
+        operation: 'insert',
         position,
-        text,
-        nodeId,
-        clock: this.clock,
+        value: text,
+        documentId: this.id,
         clientId: this.clientId,
         timestamp: Date.now(),
-      }
-      await this.syncManager.pushOperation(operation)
-      */
+        clock: { ...this.vectorClock }
+      } as any)
     }
   }
 
@@ -233,7 +238,19 @@ export class SyncText {
 
     // Sync (if sync manager available)
     if (this.syncManager) {
-      // TODO: Push operation to sync manager
+      // Increment vector clock
+      this.vectorClock[this.clientId] = (this.vectorClock[this.clientId] || 0) + 1
+
+      await this.syncManager.pushOperation({
+        type: 'text' as any,
+        operation: 'delete',
+        position,
+        value: length,
+        documentId: this.id,
+        clientId: this.clientId,
+        timestamp: Date.now(),
+        clock: { ...this.vectorClock }
+      } as any)
     }
   }
 
@@ -327,7 +344,7 @@ export class SyncText {
    */
   dispose(): void {
     if (this.syncManager) {
-      // TODO: Unregister from sync manager
+      this.syncManager.unregisterDocument(this.id)
     }
 
     this.subscribers.clear()
@@ -338,7 +355,59 @@ export class SyncText {
     }
   }
 
+  // ====================
+  // SyncableDocument Interface
+  // ====================
+
+  /**
+   * Get document ID
+   */
+  getId(): string {
+    return this.id
+  }
+
+  /**
+   * Get vector clock for causality tracking
+   */
+  getVectorClock(): VectorClock {
+    return this.vectorClock
+  }
+
+  /**
+   * Set vector clock (used during merge)
+   */
+  setVectorClock(clock: VectorClock): void {
+    this.vectorClock = clock
+  }
+
+  /**
+   * Apply remote operation from another replica
+   */
+  applyRemoteOperation(operation: Operation): void {
+    if (!this.wasmText) {
+      console.warn('Text not initialized, cannot apply remote operation')
+      return
+    }
+
+    // Handle text operations
+    if (operation.type === 'text') {
+      const textOp = operation as any // Type assertion for text operations
+
+      if (textOp.operation === 'insert') {
+        this.wasmText.insert(textOp.position, textOp.value)
+      } else if (textOp.operation === 'delete') {
+        this.wasmText.delete(textOp.position, textOp.value)
+      }
+
+      // Update local state and notify subscribers
+      this.updateLocalState()
+      this.notifySubscribers()
+    }
+  }
+
+  // ====================
   // Private helpers
+  // ====================
 
   private updateLocalState(): void {
     if (!this.wasmText) return
@@ -359,12 +428,13 @@ export class SyncText {
   }
 
   private async persist(): Promise<void> {
-    if (!this.storage) return
+    if (!this.storage || !this.wasmText) return
 
     const data: TextStorageData = {
       content: this.content,
       clock: this.clock,
-      updatedAt: Date.now()
+      updatedAt: Date.now(),
+      crdt: this.wasmText.toJSON()
     }
 
     await this.storage.set(this.id, data as any)

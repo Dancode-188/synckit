@@ -321,17 +321,9 @@ export function useSyncText(
   const textRef = useRef<import('../text').SyncText | null>(null)
   const [initialized, setInitialized] = useState(false)
 
-  // Get or create text instance
-  // Note: This requires adding a text() method to SyncKit class
+  // Get or create text instance using SyncKit factory
   if (!textRef.current) {
-    // For now, create directly (will integrate with SyncKit.text() later)
-    const { SyncText } = require('../text')
-    textRef.current = new SyncText(
-      id,
-      synckit.getClientId?.() || `client-${Date.now()}`,
-      undefined, // TODO: Integrate with SyncKit.getStorage()
-      undefined  // TODO: Integrate with SyncKit.getSyncManager()
-    )
+    textRef.current = synckit.text(id)
   }
 
   const text = textRef.current
@@ -433,15 +425,9 @@ export function useSyncCounter(
   const counterRef = useRef<import('../counter').SyncCounter | null>(null)
   const [initialized, setInitialized] = useState(false)
 
-  // Get or create counter instance
+  // Get or create counter instance using SyncKit factory
   if (!counterRef.current) {
-    const { SyncCounter } = require('../counter')
-    counterRef.current = new SyncCounter(
-      id,
-      synckit.getClientId?.() || `client-${Date.now()}`,
-      undefined, // TODO: Integrate with SyncKit.getStorage()
-      undefined  // TODO: Integrate with SyncKit.getSyncManager()
-    )
+    counterRef.current = synckit.counter(id)
   }
 
   const counter = counterRef.current
@@ -549,15 +535,9 @@ export function useSyncSet<T extends string = string>(
   const setRef = useRef<import('../set').SyncSet<T> | null>(null)
   const [initialized, setInitialized] = useState(false)
 
-  // Get or create set instance
+  // Get or create set instance using SyncKit factory
   if (!setRef.current) {
-    const { SyncSet } = require('../set') as { SyncSet: new <U extends string>(id: string, replicaId: string, storage?: any, syncManager?: any) => import('../set').SyncSet<U> }
-    setRef.current = new SyncSet<T>(
-      id,
-      synckit.getClientId?.() || `client-${Date.now()}`,
-      undefined, // TODO: Integrate with SyncKit.getStorage()
-      undefined  // TODO: Integrate with SyncKit.getSyncManager()
-    )
+    setRef.current = synckit.set<T>(id)
   }
 
   const set = setRef.current

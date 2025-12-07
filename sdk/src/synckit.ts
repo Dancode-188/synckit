@@ -13,6 +13,9 @@ import type {
 } from './types'
 import { SyncKitError } from './types'
 import { SyncDocument } from './document'
+import { SyncCounter } from './counter'
+import { SyncSet } from './set'
+import { SyncText } from './text'
 import { createStorage } from './storage'
 import { initWASM } from './wasm-loader'
 import { WebSocketClient } from './websocket/client'
@@ -25,6 +28,9 @@ export class SyncKit {
   private clientId: string
   private initialized = false
   private documents = new Map<string, SyncDocument<any>>()
+  private counters = new Map<string, SyncCounter>()
+  private sets = new Map<string, SyncSet<any>>()
+  private texts = new Map<string, SyncText>()
   private config: SyncKitConfig
 
   // Network components (initialized only if serverUrl provided)
@@ -162,7 +168,94 @@ export class SyncKit {
 
     return doc
   }
-  
+
+  /**
+   * Create or get a counter CRDT
+   * Counters are cached per ID
+   */
+  counter(id: string): SyncCounter {
+    if (!this.initialized) {
+      throw new SyncKitError(
+        'SyncKit not initialized. Call init() first.',
+        'NOT_INITIALIZED'
+      )
+    }
+
+    // Return cached counter if exists
+    if (this.counters.has(id)) {
+      return this.counters.get(id)!
+    }
+
+    // Create new counter
+    const counter = new SyncCounter(id, this.clientId, this.storage, this.syncManager)
+    this.counters.set(id, counter)
+
+    // Initialize counter asynchronously
+    counter.init().catch(error => {
+      console.error(`Failed to initialize counter ${id}:`, error)
+    })
+
+    return counter
+  }
+
+  /**
+   * Create or get a set CRDT
+   * Sets are cached per ID
+   */
+  set<T extends string = string>(id: string): SyncSet<T> {
+    if (!this.initialized) {
+      throw new SyncKitError(
+        'SyncKit not initialized. Call init() first.',
+        'NOT_INITIALIZED'
+      )
+    }
+
+    // Return cached set if exists
+    if (this.sets.has(id)) {
+      return this.sets.get(id)!
+    }
+
+    // Create new set
+    const set = new SyncSet<T>(id, this.clientId, this.storage, this.syncManager)
+    this.sets.set(id, set)
+
+    // Initialize set asynchronously
+    set.init().catch(error => {
+      console.error(`Failed to initialize set ${id}:`, error)
+    })
+
+    return set
+  }
+
+  /**
+   * Create or get a text CRDT
+   * Texts are cached per ID
+   */
+  text(id: string): SyncText {
+    if (!this.initialized) {
+      throw new SyncKitError(
+        'SyncKit not initialized. Call init() first.',
+        'NOT_INITIALIZED'
+      )
+    }
+
+    // Return cached text if exists
+    if (this.texts.has(id)) {
+      return this.texts.get(id)!
+    }
+
+    // Create new text
+    const text = new SyncText(id, this.clientId, this.storage, this.syncManager)
+    this.texts.set(id, text)
+
+    // Initialize text asynchronously
+    text.init().catch(error => {
+      console.error(`Failed to initialize text ${id}:`, error)
+    })
+
+    return text
+  }
+
   /**
    * List all document IDs in storage
    */
@@ -226,7 +319,21 @@ export class SyncKit {
   getClientId(): string {
     return this.clientId
   }
-  
+
+  /**
+   * Get storage adapter instance
+   */
+  getStorage(): StorageAdapter {
+    return this.storage
+  }
+
+  /**
+   * Get sync manager instance (only available if serverUrl is configured)
+   */
+  getSyncManager(): SyncManager | undefined {
+    return this.syncManager
+  }
+
   /**
    * Check if SyncKit is initialized
    */
@@ -328,6 +435,24 @@ export class SyncKit {
       doc.dispose()
     }
     this.documents.clear()
+
+    // Dispose all counters
+    for (const counter of this.counters.values()) {
+      counter.dispose()
+    }
+    this.counters.clear()
+
+    // Dispose all sets
+    for (const set of this.sets.values()) {
+      set.dispose()
+    }
+    this.sets.clear()
+
+    // Dispose all texts
+    for (const text of this.texts.values()) {
+      text.dispose()
+    }
+    this.texts.clear()
 
     // Dispose network components
     if (this.syncManager) {
