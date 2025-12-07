@@ -13,6 +13,8 @@
 export { SyncKit } from './synckit'
 export { SyncDocument } from './document'
 export { SyncText } from './text'
+export { SyncCounter } from './counter'
+export { SyncSet } from './set'
 
 // Storage adapters
 export { MemoryStorage, IndexedDBStorage, createStorage } from './storage'
@@ -55,6 +57,8 @@ export {
   useSyncState,
   useSyncDocumentWithState,
   useSyncText,
+  useSyncCounter,
+  useSyncSet,
 } from './adapters/react'
 export type { SyncProviderProps, UseSyncDocumentResult } from './adapters/react'
 

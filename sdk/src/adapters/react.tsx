@@ -321,17 +321,9 @@ export function useSyncText(
   const textRef = useRef<import('../text').SyncText | null>(null)
   const [initialized, setInitialized] = useState(false)
 
-  // Get or create text instance
-  // Note: This requires adding a text() method to SyncKit class
+  // Get or create text instance using SyncKit factory
   if (!textRef.current) {
-    // For now, create directly (will integrate with SyncKit.text() later)
-    const { SyncText } = require('../text')
-    textRef.current = new SyncText(
-      id,
-      synckit.getClientId?.() || `client-${Date.now()}`,
-      undefined, // TODO: Integrate with SyncKit.getStorage()
-      undefined  // TODO: Integrate with SyncKit.getSyncManager()
-    )
+    textRef.current = synckit.text(id)
   }
 
   const text = textRef.current
@@ -392,4 +384,228 @@ export function useSyncText(
   )
 
   return [content, { insert, delete: deleteText }, text!]
+}
+
+// ====================
+// Counter Hook
+// ====================
+
+/**
+ * Hook for collaborative counter CRDT
+ * Returns [value, { increment, decrement }, counter]
+ *
+ * @example
+ * ```tsx
+ * function ViewCounter() {
+ *   const [count, { increment, decrement }] = useSyncCounter('page-views')
+ *
+ *   return (
+ *     <div>
+ *       <p>Views: {count}</p>
+ *       <button onClick={() => increment()}>+1</button>
+ *       <button onClick={() => increment(5)}>+5</button>
+ *       <button onClick={() => decrement()}>-1</button>
+ *     </div>
+ *   )
+ * }
+ * ```
+ */
+export function useSyncCounter(
+  id: string
+): [
+  number,
+  {
+    increment: (amount?: number) => Promise<void>
+    decrement: (amount?: number) => Promise<void>
+  },
+  import('../counter').SyncCounter
+] {
+  const synckit = useSyncKit()
+  const [value, setValue] = useState<number>(0)
+  const counterRef = useRef<import('../counter').SyncCounter | null>(null)
+  const [initialized, setInitialized] = useState(false)
+
+  // Get or create counter instance using SyncKit factory
+  if (!counterRef.current) {
+    counterRef.current = synckit.counter(id)
+  }
+
+  const counter = counterRef.current
+
+  // Initialize counter
+  useEffect(() => {
+    if (!counter) return
+
+    let cancelled = false
+
+    counter.init().then(() => {
+      if (!cancelled) {
+        setInitialized(true)
+      }
+    }).catch((error) => {
+      console.error('Failed to initialize counter:', error)
+    })
+
+    return () => {
+      cancelled = true
+    }
+  }, [counter])
+
+  // Subscribe to changes (only after initialization)
+  useEffect(() => {
+    if (!initialized || !counter) return
+
+    // Set initial value
+    setValue(counter.value)
+
+    // Subscribe to future changes
+    const unsubscribe = counter.subscribe((newValue) => {
+      setValue(newValue)
+    })
+
+    return unsubscribe
+  }, [counter, initialized])
+
+  // Memoized operations
+  const increment = useCallback(
+    (amount?: number) => {
+      if (!counter) {
+        return Promise.reject(new Error('Counter not initialized'))
+      }
+      return counter.increment(amount)
+    },
+    [counter]
+  )
+
+  const decrement = useCallback(
+    (amount?: number) => {
+      if (!counter) {
+        return Promise.reject(new Error('Counter not initialized'))
+      }
+      return counter.decrement(amount)
+    },
+    [counter]
+  )
+
+  return [value, { increment, decrement }, counter!]
+}
+
+// ====================
+// Set Hook
+// ====================
+
+/**
+ * Hook for collaborative set CRDT
+ * Returns [values, { add, remove, clear }, set]
+ *
+ * @example
+ * ```tsx
+ * function TagEditor() {
+ *   const [tags, { add, remove }] = useSyncSet<string>('document-tags')
+ *
+ *   return (
+ *     <div>
+ *       <div>
+ *         {Array.from(tags).map(tag => (
+ *           <span key={tag}>
+ *             {tag}
+ *             <button onClick={() => remove(tag)}>×</button>
+ *           </span>
+ *         ))}
+ *       </div>
+ *       <button onClick={() => add('urgent')}>Add Tag</button>
+ *     </div>
+ *   )
+ * }
+ * ```
+ */
+export function useSyncSet<T extends string = string>(
+  id: string
+): [
+  Set<T>,
+  {
+    add: (value: T) => Promise<void>
+    remove: (value: T) => Promise<void>
+    clear: () => Promise<void>
+  },
+  import('../set').SyncSet<T>
+] {
+  const synckit = useSyncKit()
+  const [values, setValues] = useState<Set<T>>(new Set())
+  const setRef = useRef<import('../set').SyncSet<T> | null>(null)
+  const [initialized, setInitialized] = useState(false)
+
+  // Get or create set instance using SyncKit factory
+  if (!setRef.current) {
+    setRef.current = synckit.set<T>(id)
+  }
+
+  const set = setRef.current
+
+  // Initialize set
+  useEffect(() => {
+    if (!set) return
+
+    let cancelled = false
+
+    set.init().then(() => {
+      if (!cancelled) {
+        setInitialized(true)
+      }
+    }).catch((error) => {
+      console.error('Failed to initialize set:', error)
+    })
+
+    return () => {
+      cancelled = true
+    }
+  }, [set])
+
+  // Subscribe to changes (only after initialization)
+  useEffect(() => {
+    if (!initialized || !set) return
+
+    // Set initial values
+    setValues(new Set(set.values()))
+
+    // Subscribe to future changes
+    const unsubscribe = set.subscribe((newValues) => {
+      setValues(new Set(newValues))
+    })
+
+    return unsubscribe
+  }, [set, initialized])
+
+  // Memoized operations
+  const add = useCallback(
+    (value: T) => {
+      if (!set) {
+        return Promise.reject(new Error('Set not initialized'))
+      }
+      return set.add(value)
+    },
+    [set]
+  )
+
+  const remove = useCallback(
+    (value: T) => {
+      if (!set) {
+        return Promise.reject(new Error('Set not initialized'))
+      }
+      return set.remove(value)
+    },
+    [set]
+  )
+
+  const clear = useCallback(
+    () => {
+      if (!set) {
+        return Promise.reject(new Error('Set not initialized'))
+      }
+      return set.clear()
+    },
+    [set]
+  )
+
+  return [values, { add, remove, clear }, set!]
 }
