@@ -9,7 +9,8 @@
 
 import { initWASM } from './wasm-loader'
 import type { StorageAdapter } from './storage'
-import type { SyncManager } from './sync/manager'
+import type { SyncManager, VectorClock } from './sync/manager'
+import type { SyncableDocument, Operation } from './sync/manager'
 
 export interface WasmCounter {
   increment(amount?: number): void
@@ -57,10 +58,11 @@ export type Unsubscribe = () => void
  * console.log(counter.value) // 6
  * ```
  */
-export class SyncCounter {
+export class SyncCounter implements SyncableDocument {
   private wasmCounter: WasmCounter | null = null
   private subscribers = new Set<SubscriptionCallback<number>>()
   private currentValue: number = 0
+  private vectorClock: VectorClock = {}
 
   constructor(
     private readonly id: string,
@@ -103,7 +105,8 @@ export class SyncCounter {
 
     // Register with sync manager
     if (this.syncManager) {
-      // TODO: Implement sync manager integration
+      this.syncManager.registerDocument(this)
+      await this.syncManager.subscribeDocument(this.id)
     }
   }
 
@@ -148,7 +151,18 @@ export class SyncCounter {
 
     // Sync (if sync manager available)
     if (this.syncManager) {
-      // TODO: Push operation to sync manager
+      // Increment vector clock
+      this.vectorClock[this.replicaId] = (this.vectorClock[this.replicaId] || 0) + 1
+
+      await this.syncManager.pushOperation({
+        type: 'counter' as any,
+        operation: 'increment',
+        value: amount,
+        documentId: this.id,
+        clientId: this.replicaId,
+        timestamp: Date.now(),
+        clock: { ...this.vectorClock }
+      } as any)
     }
   }
 
@@ -186,7 +200,18 @@ export class SyncCounter {
 
     // Sync (if sync manager available)
     if (this.syncManager) {
-      // TODO: Push operation to sync manager
+      // Increment vector clock
+      this.vectorClock[this.replicaId] = (this.vectorClock[this.replicaId] || 0) + 1
+
+      await this.syncManager.pushOperation({
+        type: 'counter' as any,
+        operation: 'decrement',
+        value: amount,
+        documentId: this.id,
+        clientId: this.replicaId,
+        timestamp: Date.now(),
+        clock: { ...this.vectorClock }
+      } as any)
     }
   }
 
@@ -288,7 +313,7 @@ export class SyncCounter {
    */
   dispose(): void {
     if (this.syncManager) {
-      // TODO: Unregister from sync manager
+      this.syncManager.unregisterDocument(this.id)
     }
 
     this.subscribers.clear()
@@ -299,7 +324,59 @@ export class SyncCounter {
     }
   }
 
+  // ====================
+  // SyncableDocument Interface
+  // ====================
+
+  /**
+   * Get document ID
+   */
+  getId(): string {
+    return this.id
+  }
+
+  /**
+   * Get vector clock for causality tracking
+   */
+  getVectorClock(): VectorClock {
+    return this.vectorClock
+  }
+
+  /**
+   * Set vector clock (used during merge)
+   */
+  setVectorClock(clock: VectorClock): void {
+    this.vectorClock = clock
+  }
+
+  /**
+   * Apply remote operation from another replica
+   */
+  applyRemoteOperation(operation: Operation): void {
+    if (!this.wasmCounter) {
+      console.warn('Counter not initialized, cannot apply remote operation')
+      return
+    }
+
+    // Handle counter operations
+    if (operation.type === 'counter') {
+      const counterOp = operation as any // Type assertion for counter operations
+
+      if (counterOp.operation === 'increment') {
+        this.wasmCounter.increment(counterOp.value)
+      } else if (counterOp.operation === 'decrement') {
+        this.wasmCounter.decrement(counterOp.value)
+      }
+
+      // Update local state and notify subscribers
+      this.updateLocalState()
+      this.notifySubscribers()
+    }
+  }
+
+  // ====================
   // Private helpers
+  // ====================
 
   private updateLocalState(): void {
     if (!this.wasmCounter) return
