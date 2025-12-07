@@ -290,3 +290,176 @@ impl WasmFugueText {
         Ok(Self { inner })
     }
 }
+
+/// JavaScript-friendly wrapper for PNCounter CRDT
+/// Only available when counters feature is enabled
+#[cfg(feature = "counters")]
+#[wasm_bindgen]
+pub struct WasmCounter {
+    inner: crate::crdt::PNCounter,
+}
+
+#[cfg(feature = "counters")]
+#[wasm_bindgen]
+impl WasmCounter {
+    /// Create a new PNCounter with the given replica ID
+    #[wasm_bindgen(constructor)]
+    pub fn new(replica_id: String) -> Self {
+        Self {
+            inner: crate::crdt::PNCounter::new(replica_id),
+        }
+    }
+
+    /// Increment the counter
+    ///
+    /// # Arguments
+    /// * `amount` - Amount to increment (defaults to 1 if not provided)
+    #[wasm_bindgen(js_name = increment)]
+    pub fn increment(&mut self, amount: Option<i64>) {
+        self.inner.increment(amount.unwrap_or(1));
+    }
+
+    /// Decrement the counter
+    ///
+    /// # Arguments
+    /// * `amount` - Amount to decrement (defaults to 1 if not provided)
+    #[wasm_bindgen(js_name = decrement)]
+    pub fn decrement(&mut self, amount: Option<i64>) {
+        self.inner.decrement(amount.unwrap_or(1));
+    }
+
+    /// Get the current counter value
+    #[wasm_bindgen(js_name = value)]
+    pub fn value(&self) -> i64 {
+        self.inner.value()
+    }
+
+    /// Get the replica ID
+    #[wasm_bindgen(js_name = getReplicaId)]
+    pub fn get_replica_id(&self) -> String {
+        self.inner.replica_id().clone()
+    }
+
+    /// Merge with another counter
+    #[wasm_bindgen(js_name = merge)]
+    pub fn merge(&mut self, other: &WasmCounter) {
+        self.inner.merge(&other.inner);
+    }
+
+    /// Reset the counter to zero (local operation)
+    #[wasm_bindgen(js_name = reset)]
+    pub fn reset(&mut self) {
+        self.inner.reset();
+    }
+
+    /// Export as JSON string
+    #[wasm_bindgen(js_name = toJSON)]
+    pub fn to_json(&self) -> Result<String, JsValue> {
+        serde_json::to_string(&self.inner)
+            .map_err(|e| JsValue::from_str(&format!("JSON serialization failed: {}", e)))
+    }
+
+    /// Import from JSON string
+    #[wasm_bindgen(js_name = fromJSON)]
+    pub fn from_json(json: String) -> Result<WasmCounter, JsValue> {
+        let inner: crate::crdt::PNCounter = serde_json::from_str(&json)
+            .map_err(|e| JsValue::from_str(&format!("JSON deserialization failed: {}", e)))?;
+
+        Ok(Self { inner })
+    }
+}
+
+/// JavaScript-friendly wrapper for ORSet CRDT
+/// Only available when sets feature is enabled
+#[cfg(feature = "sets")]
+#[wasm_bindgen]
+pub struct WasmSet {
+    inner: crate::crdt::ORSet<String>,
+}
+
+#[cfg(feature = "sets")]
+#[wasm_bindgen]
+impl WasmSet {
+    /// Create a new ORSet with the given replica ID
+    #[wasm_bindgen(constructor)]
+    pub fn new(replica_id: String) -> Self {
+        Self {
+            inner: crate::crdt::ORSet::new(replica_id),
+        }
+    }
+
+    /// Add an element to the set
+    ///
+    /// # Arguments
+    /// * `value` - Element to add
+    #[wasm_bindgen(js_name = add)]
+    pub fn add(&mut self, value: String) {
+        self.inner.add(value);
+    }
+
+    /// Remove an element from the set
+    ///
+    /// # Arguments
+    /// * `value` - Element to remove
+    #[wasm_bindgen(js_name = remove)]
+    pub fn remove(&mut self, value: String) {
+        self.inner.remove(&value);
+    }
+
+    /// Check if the set contains an element
+    ///
+    /// # Arguments
+    /// * `value` - Element to check
+    #[wasm_bindgen(js_name = has)]
+    pub fn has(&mut self, value: String) -> bool {
+        self.inner.contains(&value)
+    }
+
+    /// Get the number of elements in the set
+    #[wasm_bindgen(js_name = size)]
+    pub fn size(&self) -> usize {
+        self.inner.len()
+    }
+
+    /// Check if the set is empty
+    #[wasm_bindgen(js_name = isEmpty)]
+    pub fn is_empty(&self) -> bool {
+        self.inner.is_empty()
+    }
+
+    /// Get all values in the set as a JSON array string
+    #[wasm_bindgen(js_name = values)]
+    pub fn values(&self) -> Result<String, JsValue> {
+        let values: Vec<_> = self.inner.iter().collect();
+        serde_json::to_string(&values)
+            .map_err(|e| JsValue::from_str(&format!("JSON serialization failed: {}", e)))
+    }
+
+    /// Clear all elements from the set
+    #[wasm_bindgen(js_name = clear)]
+    pub fn clear(&mut self) {
+        self.inner.clear();
+    }
+
+    /// Merge with another set
+    #[wasm_bindgen(js_name = merge)]
+    pub fn merge(&mut self, other: &WasmSet) {
+        self.inner.merge(&other.inner);
+    }
+
+    /// Export as JSON string
+    #[wasm_bindgen(js_name = toJSON)]
+    pub fn to_json(&self) -> Result<String, JsValue> {
+        serde_json::to_string(&self.inner)
+            .map_err(|e| JsValue::from_str(&format!("JSON serialization failed: {}", e)))
+    }
+
+    /// Import from JSON string
+    #[wasm_bindgen(js_name = fromJSON)]
+    pub fn from_json(json: String) -> Result<WasmSet, JsValue> {
+        let inner: crate::crdt::ORSet<String> = serde_json::from_str(&json)
+            .map_err(|e| JsValue::from_str(&format!("JSON deserialization failed: {}", e)))?;
+
+        Ok(Self { inner })
+    }
+}
