@@ -5,7 +5,7 @@ edition = "2021"
 authors = ["SyncKit Contributors"]
 description = "High-performance sync engine for local-first applications"
 license = "MIT"
-repository = "https://github.com/yourusername/synckit"
+repository = "https://github.com/Dancode-188/synckit"
 keywords = ["sync", "crdt", "local-first", "offline-first", "realtime"]
 categories = ["wasm", "data-structures", "network-programming"]
 
@@ -38,6 +38,10 @@ wee_alloc = { version = "0.4.5", optional = true }
 # Utilities (always needed)
 uuid = { version = "1.0", features = ["v4", "serde", "js"] }
 
+# Optional: Rope data structure for efficient text editing (text-fugue CRDT)
+ropey = { version = "1.6", optional = true }
+unicode-segmentation = { version = "1.10", optional = true }
+
 [build-dependencies]
 # Optional: Protobuf code generation (only when prost feature enabled)
 prost-build = { version = "0.14", optional = true }
@@ -45,7 +49,7 @@ protoc-bin-vendored = { version = "3.0", optional = true }
 
 [dev-dependencies]
 # Testing
-criterion = "0.8"        # Benchmarking
+criterion = "0.5"        # Benchmarking (compatible with Rust 1.83)
 proptest = "1.0"         # Property-based testing
 
 [features]
@@ -57,7 +61,7 @@ core-lite = ["wee_alloc"]              # Minimal: LWW + Vector Clock (~22-25KB t
 core = ["prost", "bytes", "base64", "chrono", "prost-build", "protoc-bin-vendored"]  # Full: + Protocol + DateTime (~40-45KB)
 
 # Individual CRDTs (opt-in, require core)
-text-crdt = ["core"]
+text-crdt = ["core", "ropey", "unicode-segmentation"]  # Fugue Text CRDT with Rope
 counters = ["core"]
 sets = ["core"]
 fractional-index = ["core"]
@@ -88,6 +92,12 @@ path = "benches/vector_clock_bench.rs"
 name = "delta_bench"
 harness = false
 path = "benches/delta_bench.rs"
+
+[[bench]]
+name = "fugue_bench"
+harness = false
+path = "benches/fugue_bench.rs"
+required-features = ["text-crdt"]
 
 [profile.release]
 opt-level = 3

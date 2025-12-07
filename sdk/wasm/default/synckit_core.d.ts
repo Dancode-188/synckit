@@ -1,13 +1,6 @@
 /* tslint:disable */
 /* eslint-disable */
-/**
- * Initialize panic hook for better error messages in browser
- */
-export function init_panic_hook(): void;
-/**
- * JavaScript-friendly wrapper for DocumentDelta
- * Only available when protocol support is enabled (core variant, not core-lite)
- */
+
 export class WasmDelta {
   private constructor();
   free(): void;
@@ -33,9 +26,7 @@ export class WasmDelta {
    */
   toJSON(): string;
 }
-/**
- * JavaScript-friendly wrapper for Document
- */
+
 export class WasmDocument {
   free(): void;
   [Symbol.dispose](): void;
@@ -72,9 +63,70 @@ export class WasmDocument {
    */
   merge(other: WasmDocument): void;
 }
-/**
- * JavaScript-friendly wrapper for VectorClock
- */
+
+export class WasmFugueText {
+  free(): void;
+  [Symbol.dispose](): void;
+  /**
+   * Create a new FugueText with the given client ID
+   */
+  constructor(client_id: string);
+  /**
+   * Insert text at the given position
+   *
+   * # Arguments
+   * * `position` - Grapheme index (user-facing position)
+   * * `text` - Text to insert
+   *
+   * # Returns
+   * JSON string of NodeId for the created block
+   */
+  insert(position: number, text: string): string;
+  /**
+   * Delete text at the given position
+   *
+   * # Arguments
+   * * `position` - Starting grapheme index
+   * * `length` - Number of graphemes to delete
+   *
+   * # Returns
+   * JSON string of array of deleted NodeIds
+   */
+  delete(position: number, length: number): string;
+  /**
+   * Get the text content as a string
+   */
+  toString(): string;
+  /**
+   * Get the length in graphemes (user-perceived characters)
+   */
+  length(): number;
+  /**
+   * Check if the text is empty
+   */
+  isEmpty(): boolean;
+  /**
+   * Get the client ID
+   */
+  getClientId(): string;
+  /**
+   * Get the current Lamport clock value
+   */
+  getClock(): bigint;
+  /**
+   * Merge with another FugueText
+   */
+  merge(other: WasmFugueText): void;
+  /**
+   * Export as JSON string (for persistence/network)
+   */
+  toJSON(): string;
+  /**
+   * Import from JSON string (for loading from persistence/network)
+   */
+  static fromJSON(json: string): WasmFugueText;
+}
+
 export class WasmVectorClock {
   free(): void;
   [Symbol.dispose](): void;
@@ -104,6 +156,11 @@ export class WasmVectorClock {
   toJSON(): string;
 }
 
+/**
+ * Initialize panic hook for better error messages in browser
+ */
+export function init_panic_hook(): void;
+
 export type InitInput = RequestInfo | URL | Response | BufferSource | WebAssembly.Module;
 
 export interface InitOutput {
@@ -130,6 +187,18 @@ export interface InitOutput {
   readonly wasmdelta_getDocumentId: (a: number, b: number) => void;
   readonly wasmdelta_changeCount: (a: number) => number;
   readonly wasmdelta_toJSON: (a: number, b: number) => void;
+  readonly __wbg_wasmfuguetext_free: (a: number, b: number) => void;
+  readonly wasmfuguetext_new: (a: number, b: number) => number;
+  readonly wasmfuguetext_insert: (a: number, b: number, c: number, d: number, e: number) => void;
+  readonly wasmfuguetext_delete: (a: number, b: number, c: number, d: number) => void;
+  readonly wasmfuguetext_toString: (a: number, b: number) => void;
+  readonly wasmfuguetext_length: (a: number) => number;
+  readonly wasmfuguetext_isEmpty: (a: number) => number;
+  readonly wasmfuguetext_getClientId: (a: number, b: number) => void;
+  readonly wasmfuguetext_getClock: (a: number) => bigint;
+  readonly wasmfuguetext_merge: (a: number, b: number, c: number) => void;
+  readonly wasmfuguetext_toJSON: (a: number, b: number) => void;
+  readonly wasmfuguetext_fromJSON: (a: number, b: number, c: number) => void;
   readonly init_panic_hook: () => void;
   readonly __wbindgen_export: (a: number, b: number, c: number) => void;
   readonly __wbindgen_export2: (a: number, b: number) => number;
@@ -138,6 +207,7 @@ export interface InitOutput {
 }
 
 export type SyncInitInput = BufferSource | WebAssembly.Module;
+
 /**
 * Instantiates the given `module`, which can either be bytes or
 * a precompiled `WebAssembly.Module`.

@@ -1,41 +1,5 @@
 let wasm;
 
-let cachedUint8ArrayMemory0 = null;
-
-function getUint8ArrayMemory0() {
-    if (cachedUint8ArrayMemory0 === null || cachedUint8ArrayMemory0.byteLength === 0) {
-        cachedUint8ArrayMemory0 = new Uint8Array(wasm.memory.buffer);
-    }
-    return cachedUint8ArrayMemory0;
-}
-
-let cachedTextDecoder = new TextDecoder('utf-8', { ignoreBOM: true, fatal: true });
-
-cachedTextDecoder.decode();
-
-const MAX_SAFARI_DECODE_BYTES = 2146435072;
-let numBytesDecoded = 0;
-function decodeText(ptr, len) {
-    numBytesDecoded += len;
-    if (numBytesDecoded >= MAX_SAFARI_DECODE_BYTES) {
-        cachedTextDecoder = new TextDecoder('utf-8', { ignoreBOM: true, fatal: true });
-        cachedTextDecoder.decode();
-        numBytesDecoded = len;
-    }
-    return cachedTextDecoder.decode(getUint8ArrayMemory0().subarray(ptr, ptr + len));
-}
-
-function getStringFromWasm0(ptr, len) {
-    ptr = ptr >>> 0;
-    return decodeText(ptr, len);
-}
-
-let heap = new Array(128).fill(undefined);
-
-heap.push(undefined, null, true, false);
-
-let heap_next = heap.length;
-
 function addHeapObject(obj) {
     if (heap_next === heap.length) heap.push(heap.length + 1);
     const idx = heap_next;
@@ -45,25 +9,47 @@ function addHeapObject(obj) {
     return idx;
 }
 
-function getObject(idx) { return heap[idx]; }
-
-let WASM_VECTOR_LEN = 0;
-
-const cachedTextEncoder = new TextEncoder();
-
-if (!('encodeInto' in cachedTextEncoder)) {
-    cachedTextEncoder.encodeInto = function (arg, view) {
-        const buf = cachedTextEncoder.encode(arg);
-        view.set(buf);
-        return {
-            read: arg.length,
-            written: buf.length
-        };
+function _assertClass(instance, klass) {
+    if (!(instance instanceof klass)) {
+        throw new Error(`expected instance of ${klass.name}`);
     }
 }
 
-function passStringToWasm0(arg, malloc, realloc) {
+function dropObject(idx) {
+    if (idx < 132) return;
+    heap[idx] = heap_next;
+    heap_next = idx;
+}
 
+let cachedDataViewMemory0 = null;
+function getDataViewMemory0() {
+    if (cachedDataViewMemory0 === null || cachedDataViewMemory0.buffer.detached === true || (cachedDataViewMemory0.buffer.detached === undefined && cachedDataViewMemory0.buffer !== wasm.memory.buffer)) {
+        cachedDataViewMemory0 = new DataView(wasm.memory.buffer);
+    }
+    return cachedDataViewMemory0;
+}
+
+function getStringFromWasm0(ptr, len) {
+    ptr = ptr >>> 0;
+    return decodeText(ptr, len);
+}
+
+let cachedUint8ArrayMemory0 = null;
+function getUint8ArrayMemory0() {
+    if (cachedUint8ArrayMemory0 === null || cachedUint8ArrayMemory0.byteLength === 0) {
+        cachedUint8ArrayMemory0 = new Uint8Array(wasm.memory.buffer);
+    }
+    return cachedUint8ArrayMemory0;
+}
+
+function getObject(idx) { return heap[idx]; }
+
+let heap = new Array(128).fill(undefined);
+heap.push(undefined, null, true, false);
+
+let heap_next = heap.length;
+
+function passStringToWasm0(arg, malloc, realloc) {
     if (realloc === undefined) {
         const buf = cachedTextEncoder.encode(arg);
         const ptr = malloc(buf.length, 1) >>> 0;
@@ -84,7 +70,6 @@ function passStringToWasm0(arg, malloc, realloc) {
         if (code > 0x7F) break;
         mem[ptr + offset] = code;
     }
-
     if (offset !== len) {
         if (offset !== 0) {
             arg = arg.slice(offset);
@@ -101,48 +86,62 @@ function passStringToWasm0(arg, malloc, realloc) {
     return ptr;
 }
 
-let cachedDataViewMemory0 = null;
-
-function getDataViewMemory0() {
-    if (cachedDataViewMemory0 === null || cachedDataViewMemory0.buffer.detached === true || (cachedDataViewMemory0.buffer.detached === undefined && cachedDataViewMemory0.buffer !== wasm.memory.buffer)) {
-        cachedDataViewMemory0 = new DataView(wasm.memory.buffer);
-    }
-    return cachedDataViewMemory0;
-}
-
-function dropObject(idx) {
-    if (idx < 132) return;
-    heap[idx] = heap_next;
-    heap_next = idx;
-}
-
 function takeObject(idx) {
     const ret = getObject(idx);
     dropObject(idx);
     return ret;
 }
 
-function _assertClass(instance, klass) {
-    if (!(instance instanceof klass)) {
-        throw new Error(`expected instance of ${klass.name}`);
+let cachedTextDecoder = new TextDecoder('utf-8', { ignoreBOM: true, fatal: true });
+cachedTextDecoder.decode();
+const MAX_SAFARI_DECODE_BYTES = 2146435072;
+let numBytesDecoded = 0;
+function decodeText(ptr, len) {
+    numBytesDecoded += len;
+    if (numBytesDecoded >= MAX_SAFARI_DECODE_BYTES) {
+        cachedTextDecoder = new TextDecoder('utf-8', { ignoreBOM: true, fatal: true });
+        cachedTextDecoder.decode();
+        numBytesDecoded = len;
+    }
+    return cachedTextDecoder.decode(getUint8ArrayMemory0().subarray(ptr, ptr + len));
+}
+
+const cachedTextEncoder = new TextEncoder();
+
+if (!('encodeInto' in cachedTextEncoder)) {
+    cachedTextEncoder.encodeInto = function (arg, view) {
+        const buf = cachedTextEncoder.encode(arg);
+        view.set(buf);
+        return {
+            read: arg.length,
+            written: buf.length
+        };
     }
 }
-/**
- * Initialize panic hook for better error messages in browser
- */
-export function init_panic_hook() {
-    wasm.init_panic_hook();
-}
+
+let WASM_VECTOR_LEN = 0;
 
 const WasmDeltaFinalization = (typeof FinalizationRegistry === 'undefined')
     ? { register: () => {}, unregister: () => {} }
     : new FinalizationRegistry(ptr => wasm.__wbg_wasmdelta_free(ptr >>> 0, 1));
+
+const WasmDocumentFinalization = (typeof FinalizationRegistry === 'undefined')
+    ? { register: () => {}, unregister: () => {} }
+    : new FinalizationRegistry(ptr => wasm.__wbg_wasmdocument_free(ptr >>> 0, 1));
+
+const WasmFugueTextFinalization = (typeof FinalizationRegistry === 'undefined')
+    ? { register: () => {}, unregister: () => {} }
+    : new FinalizationRegistry(ptr => wasm.__wbg_wasmfuguetext_free(ptr >>> 0, 1));
+
+const WasmVectorClockFinalization = (typeof FinalizationRegistry === 'undefined')
+    ? { register: () => {}, unregister: () => {} }
+    : new FinalizationRegistry(ptr => wasm.__wbg_wasmvectorclock_free(ptr >>> 0, 1));
+
 /**
  * JavaScript-friendly wrapper for DocumentDelta
  * Only available when protocol support is enabled (core variant, not core-lite)
  */
 export class WasmDelta {
-
     static __wrap(ptr) {
         ptr = ptr >>> 0;
         const obj = Object.create(WasmDelta.prototype);
@@ -150,14 +149,12 @@ export class WasmDelta {
         WasmDeltaFinalization.register(obj, obj.__wbg_ptr, obj);
         return obj;
     }
-
     __destroy_into_raw() {
         const ptr = this.__wbg_ptr;
         this.__wbg_ptr = 0;
         WasmDeltaFinalization.unregister(this);
         return ptr;
     }
-
     free() {
         const ptr = this.__destroy_into_raw();
         wasm.__wbg_wasmdelta_free(ptr, 0);
@@ -265,21 +262,16 @@ export class WasmDelta {
 }
 if (Symbol.dispose) WasmDelta.prototype[Symbol.dispose] = WasmDelta.prototype.free;
 
-const WasmDocumentFinalization = (typeof FinalizationRegistry === 'undefined')
-    ? { register: () => {}, unregister: () => {} }
-    : new FinalizationRegistry(ptr => wasm.__wbg_wasmdocument_free(ptr >>> 0, 1));
 /**
  * JavaScript-friendly wrapper for Document
  */
 export class WasmDocument {
-
     __destroy_into_raw() {
         const ptr = this.__wbg_ptr;
         this.__wbg_ptr = 0;
         WasmDocumentFinalization.unregister(this);
         return ptr;
     }
-
     free() {
         const ptr = this.__destroy_into_raw();
         wasm.__wbg_wasmdocument_free(ptr, 0);
@@ -413,21 +405,261 @@ export class WasmDocument {
 }
 if (Symbol.dispose) WasmDocument.prototype[Symbol.dispose] = WasmDocument.prototype.free;
 
-const WasmVectorClockFinalization = (typeof FinalizationRegistry === 'undefined')
-    ? { register: () => {}, unregister: () => {} }
-    : new FinalizationRegistry(ptr => wasm.__wbg_wasmvectorclock_free(ptr >>> 0, 1));
+/**
+ * JavaScript-friendly wrapper for FugueText CRDT
+ * Only available when text-crdt feature is enabled
+ */
+export class WasmFugueText {
+    static __wrap(ptr) {
+        ptr = ptr >>> 0;
+        const obj = Object.create(WasmFugueText.prototype);
+        obj.__wbg_ptr = ptr;
+        WasmFugueTextFinalization.register(obj, obj.__wbg_ptr, obj);
+        return obj;
+    }
+    __destroy_into_raw() {
+        const ptr = this.__wbg_ptr;
+        this.__wbg_ptr = 0;
+        WasmFugueTextFinalization.unregister(this);
+        return ptr;
+    }
+    free() {
+        const ptr = this.__destroy_into_raw();
+        wasm.__wbg_wasmfuguetext_free(ptr, 0);
+    }
+    /**
+     * Create a new FugueText with the given client ID
+     * @param {string} client_id
+     */
+    constructor(client_id) {
+        const ptr0 = passStringToWasm0(client_id, wasm.__wbindgen_export2, wasm.__wbindgen_export3);
+        const len0 = WASM_VECTOR_LEN;
+        const ret = wasm.wasmfuguetext_new(ptr0, len0);
+        this.__wbg_ptr = ret >>> 0;
+        WasmFugueTextFinalization.register(this, this.__wbg_ptr, this);
+        return this;
+    }
+    /**
+     * Insert text at the given position
+     *
+     * # Arguments
+     * * `position` - Grapheme index (user-facing position)
+     * * `text` - Text to insert
+     *
+     * # Returns
+     * JSON string of NodeId for the created block
+     * @param {number} position
+     * @param {string} text
+     * @returns {string}
+     */
+    insert(position, text) {
+        let deferred3_0;
+        let deferred3_1;
+        try {
+            const retptr = wasm.__wbindgen_add_to_stack_pointer(-16);
+            const ptr0 = passStringToWasm0(text, wasm.__wbindgen_export2, wasm.__wbindgen_export3);
+            const len0 = WASM_VECTOR_LEN;
+            wasm.wasmfuguetext_insert(retptr, this.__wbg_ptr, position, ptr0, len0);
+            var r0 = getDataViewMemory0().getInt32(retptr + 4 * 0, true);
+            var r1 = getDataViewMemory0().getInt32(retptr + 4 * 1, true);
+            var r2 = getDataViewMemory0().getInt32(retptr + 4 * 2, true);
+            var r3 = getDataViewMemory0().getInt32(retptr + 4 * 3, true);
+            var ptr2 = r0;
+            var len2 = r1;
+            if (r3) {
+                ptr2 = 0; len2 = 0;
+                throw takeObject(r2);
+            }
+            deferred3_0 = ptr2;
+            deferred3_1 = len2;
+            return getStringFromWasm0(ptr2, len2);
+        } finally {
+            wasm.__wbindgen_add_to_stack_pointer(16);
+            wasm.__wbindgen_export(deferred3_0, deferred3_1, 1);
+        }
+    }
+    /**
+     * Delete text at the given position
+     *
+     * # Arguments
+     * * `position` - Starting grapheme index
+     * * `length` - Number of graphemes to delete
+     *
+     * # Returns
+     * JSON string of array of deleted NodeIds
+     * @param {number} position
+     * @param {number} length
+     * @returns {string}
+     */
+    delete(position, length) {
+        let deferred2_0;
+        let deferred2_1;
+        try {
+            const retptr = wasm.__wbindgen_add_to_stack_pointer(-16);
+            wasm.wasmfuguetext_delete(retptr, this.__wbg_ptr, position, length);
+            var r0 = getDataViewMemory0().getInt32(retptr + 4 * 0, true);
+            var r1 = getDataViewMemory0().getInt32(retptr + 4 * 1, true);
+            var r2 = getDataViewMemory0().getInt32(retptr + 4 * 2, true);
+            var r3 = getDataViewMemory0().getInt32(retptr + 4 * 3, true);
+            var ptr1 = r0;
+            var len1 = r1;
+            if (r3) {
+                ptr1 = 0; len1 = 0;
+                throw takeObject(r2);
+            }
+            deferred2_0 = ptr1;
+            deferred2_1 = len1;
+            return getStringFromWasm0(ptr1, len1);
+        } finally {
+            wasm.__wbindgen_add_to_stack_pointer(16);
+            wasm.__wbindgen_export(deferred2_0, deferred2_1, 1);
+        }
+    }
+    /**
+     * Get the text content as a string
+     * @returns {string}
+     */
+    toString() {
+        let deferred1_0;
+        let deferred1_1;
+        try {
+            const retptr = wasm.__wbindgen_add_to_stack_pointer(-16);
+            wasm.wasmfuguetext_toString(retptr, this.__wbg_ptr);
+            var r0 = getDataViewMemory0().getInt32(retptr + 4 * 0, true);
+            var r1 = getDataViewMemory0().getInt32(retptr + 4 * 1, true);
+            deferred1_0 = r0;
+            deferred1_1 = r1;
+            return getStringFromWasm0(r0, r1);
+        } finally {
+            wasm.__wbindgen_add_to_stack_pointer(16);
+            wasm.__wbindgen_export(deferred1_0, deferred1_1, 1);
+        }
+    }
+    /**
+     * Get the length in graphemes (user-perceived characters)
+     * @returns {number}
+     */
+    length() {
+        const ret = wasm.wasmfuguetext_length(this.__wbg_ptr);
+        return ret >>> 0;
+    }
+    /**
+     * Check if the text is empty
+     * @returns {boolean}
+     */
+    isEmpty() {
+        const ret = wasm.wasmfuguetext_isEmpty(this.__wbg_ptr);
+        return ret !== 0;
+    }
+    /**
+     * Get the client ID
+     * @returns {string}
+     */
+    getClientId() {
+        let deferred1_0;
+        let deferred1_1;
+        try {
+            const retptr = wasm.__wbindgen_add_to_stack_pointer(-16);
+            wasm.wasmfuguetext_getClientId(retptr, this.__wbg_ptr);
+            var r0 = getDataViewMemory0().getInt32(retptr + 4 * 0, true);
+            var r1 = getDataViewMemory0().getInt32(retptr + 4 * 1, true);
+            deferred1_0 = r0;
+            deferred1_1 = r1;
+            return getStringFromWasm0(r0, r1);
+        } finally {
+            wasm.__wbindgen_add_to_stack_pointer(16);
+            wasm.__wbindgen_export(deferred1_0, deferred1_1, 1);
+        }
+    }
+    /**
+     * Get the current Lamport clock value
+     * @returns {bigint}
+     */
+    getClock() {
+        const ret = wasm.wasmfuguetext_getClock(this.__wbg_ptr);
+        return BigInt.asUintN(64, ret);
+    }
+    /**
+     * Merge with another FugueText
+     * @param {WasmFugueText} other
+     */
+    merge(other) {
+        try {
+            const retptr = wasm.__wbindgen_add_to_stack_pointer(-16);
+            _assertClass(other, WasmFugueText);
+            wasm.wasmfuguetext_merge(retptr, this.__wbg_ptr, other.__wbg_ptr);
+            var r0 = getDataViewMemory0().getInt32(retptr + 4 * 0, true);
+            var r1 = getDataViewMemory0().getInt32(retptr + 4 * 1, true);
+            if (r1) {
+                throw takeObject(r0);
+            }
+        } finally {
+            wasm.__wbindgen_add_to_stack_pointer(16);
+        }
+    }
+    /**
+     * Export as JSON string (for persistence/network)
+     * @returns {string}
+     */
+    toJSON() {
+        let deferred2_0;
+        let deferred2_1;
+        try {
+            const retptr = wasm.__wbindgen_add_to_stack_pointer(-16);
+            wasm.wasmfuguetext_toJSON(retptr, this.__wbg_ptr);
+            var r0 = getDataViewMemory0().getInt32(retptr + 4 * 0, true);
+            var r1 = getDataViewMemory0().getInt32(retptr + 4 * 1, true);
+            var r2 = getDataViewMemory0().getInt32(retptr + 4 * 2, true);
+            var r3 = getDataViewMemory0().getInt32(retptr + 4 * 3, true);
+            var ptr1 = r0;
+            var len1 = r1;
+            if (r3) {
+                ptr1 = 0; len1 = 0;
+                throw takeObject(r2);
+            }
+            deferred2_0 = ptr1;
+            deferred2_1 = len1;
+            return getStringFromWasm0(ptr1, len1);
+        } finally {
+            wasm.__wbindgen_add_to_stack_pointer(16);
+            wasm.__wbindgen_export(deferred2_0, deferred2_1, 1);
+        }
+    }
+    /**
+     * Import from JSON string (for loading from persistence/network)
+     * @param {string} json
+     * @returns {WasmFugueText}
+     */
+    static fromJSON(json) {
+        try {
+            const retptr = wasm.__wbindgen_add_to_stack_pointer(-16);
+            const ptr0 = passStringToWasm0(json, wasm.__wbindgen_export2, wasm.__wbindgen_export3);
+            const len0 = WASM_VECTOR_LEN;
+            wasm.wasmfuguetext_fromJSON(retptr, ptr0, len0);
+            var r0 = getDataViewMemory0().getInt32(retptr + 4 * 0, true);
+            var r1 = getDataViewMemory0().getInt32(retptr + 4 * 1, true);
+            var r2 = getDataViewMemory0().getInt32(retptr + 4 * 2, true);
+            if (r2) {
+                throw takeObject(r1);
+            }
+            return WasmFugueText.__wrap(r0);
+        } finally {
+            wasm.__wbindgen_add_to_stack_pointer(16);
+        }
+    }
+}
+if (Symbol.dispose) WasmFugueText.prototype[Symbol.dispose] = WasmFugueText.prototype.free;
+
 /**
  * JavaScript-friendly wrapper for VectorClock
  */
 export class WasmVectorClock {
-
     __destroy_into_raw() {
         const ptr = this.__wbg_ptr;
         this.__wbg_ptr = 0;
         WasmVectorClockFinalization.unregister(this);
         return ptr;
     }
-
     free() {
         const ptr = this.__destroy_into_raw();
         wasm.__wbg_wasmvectorclock_free(ptr, 0);
@@ -502,6 +734,13 @@ export class WasmVectorClock {
 }
 if (Symbol.dispose) WasmVectorClock.prototype[Symbol.dispose] = WasmVectorClock.prototype.free;
 
+/**
+ * Initialize panic hook for better error messages in browser
+ */
+export function init_panic_hook() {
+    wasm.init_panic_hook();
+}
+
 const EXPECTED_RESPONSE_TYPES = new Set(['basic', 'cors', 'default']);
 
 async function __wbg_load(module, imports) {
@@ -509,7 +748,6 @@ async function __wbg_load(module, imports) {
         if (typeof WebAssembly.instantiateStreaming === 'function') {
             try {
                 return await WebAssembly.instantiateStreaming(module, imports);
-
             } catch (e) {
                 const validResponse = module.ok && EXPECTED_RESPONSE_TYPES.has(module.type);
 
@@ -524,13 +762,11 @@ async function __wbg_load(module, imports) {
 
         const bytes = await module.arrayBuffer();
         return await WebAssembly.instantiate(bytes, imports);
-
     } else {
         const instance = await WebAssembly.instantiate(module, imports);
 
         if (instance instanceof WebAssembly.Instance) {
             return { instance, module };
-
         } else {
             return instance;
         }
@@ -540,7 +776,7 @@ async function __wbg_load(module, imports) {
 function __wbg_get_imports() {
     const imports = {};
     imports.wbg = {};
-    imports.wbg.__wbg___wbindgen_throw_b855445ff6a94295 = function(arg0, arg1) {
+    imports.wbg.__wbg___wbindgen_throw_dd24417ed36fc46e = function(arg0, arg1) {
         throw new Error(getStringFromWasm0(arg0, arg1));
     };
     imports.wbg.__wbg_error_7534b8e9a36f1ab4 = function(arg0, arg1) {
@@ -601,13 +837,10 @@ function initSync(module) {
     }
 
     const imports = __wbg_get_imports();
-
     if (!(module instanceof WebAssembly.Module)) {
         module = new WebAssembly.Module(module);
     }
-
     const instance = new WebAssembly.Instance(module, imports);
-
     return __wbg_finalize_init(instance, module);
 }
 

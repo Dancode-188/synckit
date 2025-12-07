@@ -8,7 +8,7 @@
 //! - **PN-Counter:** Positive-Negative Counter (`feature = "counters"`)
 //! - **OR-Set:** Observed-Remove Set (`feature = "sets"`)
 //! - **Fractional Index:** Position-based ordering (`feature = "fractional-index"`)
-//! - **Text CRDT:** YATA-style collaborative text (`feature = "text-crdt"`)
+//! - **Text CRDT:** Fugue-based collaborative text with maximal non-interleaving (`feature = "text-crdt"`)
 //!
 //! # Usage
 //!
@@ -21,7 +21,7 @@
 //!
 //! - "A comprehensive study of CRDTs" by Marc Shapiro et al.
 //! - "Conflict-free Replicated Data Types" (INRIA Research Report 7687)
-//! - "Near Real-Time Peer-to-Peer Shared Editing on Extensible Data Types" (YATA)
+//! - "Fugue: A CRDT for Shared Text Editing" by Weihai Yu et al.
 
 // Conditionally compile each CRDT based on features
 #[cfg(feature = "counters")]
@@ -34,7 +34,7 @@ pub mod or_set;
 pub mod fractional_index;
 
 #[cfg(feature = "text-crdt")]
-pub mod text;
+pub mod text_fugue;
 
 // Re-exports (only if features enabled)
 #[cfg(feature = "counters")]
@@ -47,4 +47,4 @@ pub use or_set::ORSet;
 pub use fractional_index::FractionalIndex;
 
 #[cfg(feature = "text-crdt")]
-pub use text::Text;
+pub use text_fugue::{FugueBlock, FugueText, LamportClock, NodeId, TextError};
