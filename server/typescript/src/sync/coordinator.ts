@@ -86,7 +86,7 @@ export class SyncCoordinator {
   /**
    * Handle broadcast events from other servers
    */
-  private handleBroadcastEvent(event: string, data: any) {
+  private handleBroadcastEvent(_event: string, _data: any) {
     // Handle cross-server events here
     // For example: invalidate cache, update metrics, etc.
   }
@@ -305,7 +305,7 @@ export class SyncCoordinator {
   /**
    * Get maximum clock value across all clients (for Lamport clock implementation)
    */
-  private getMaxClock(vectorClock: any): bigint {
+  private _getMaxClock(vectorClock: any): bigint {
     try {
       const clockJson = vectorClock.toJSON();
       const clocks = JSON.parse(clockJson);
@@ -343,9 +343,13 @@ export class SyncCoordinator {
     // Use provided timestamp or current time for LWW
     const writeTimestamp = timestamp || Date.now();
 
-    // Set field - returns authoritative value after LWW (works with both WASM and mock)
-    const authoritativeValue = state.wasmDoc.setField(path, JSON.stringify(value), newClock, clientId, writeTimestamp);
+    // Set field with LWW conflict resolution
+    state.wasmDoc.setField(path, JSON.stringify(value), newClock, clientId);
     state.lastModified = writeTimestamp;
+
+    // Get the authoritative value after LWW resolution
+    const fieldValue = state.wasmDoc.getField(path);
+    const authoritativeValue = fieldValue ? JSON.parse(fieldValue) : value;
 
     // Persist to storage if available
     if (this.storage) {
@@ -394,21 +398,23 @@ export class SyncCoordinator {
     const writeTimestamp = timestamp || Date.now();
 
     // Delete using LWW - set field to a special tombstone value
-    // The mock's setField will handle LWW comparison
     const tombstone = { __deleted: true };
-    const authoritativeValue = state.wasmDoc.setField(
+    state.wasmDoc.setField(
       path,
       JSON.stringify(tombstone),
       newClock,
-      clientId,
-      writeTimestamp
+      clientId
     );
     state.lastModified = writeTimestamp;
+
+    // Get the authoritative value after LWW resolution
+    const fieldValue = state.wasmDoc.getField(path);
+    const authoritativeValue = fieldValue ? JSON.parse(fieldValue) : null;
 
     let result: any;
 
     // If LWW determined the delete wins, actually remove from fields and return null
-    if (authoritativeValue && authoritativeValue.__deleted === true) {
+    if (authoritativeValue && typeof authoritativeValue === 'object' && authoritativeValue.__deleted === true) {
       if ('fields' in state.wasmDoc && state.wasmDoc.fields instanceof Map) {
         state.wasmDoc.fields.delete(path);
       }
@@ -550,11 +556,11 @@ export class SyncCoordinator {
 
   /**
    * Clone document (for delta computation)
-   * 
+   *
    * Note: Currently creates empty document for delta computation.
    * In production, would need proper field-by-field cloning.
    */
-  private cloneDocument(doc: WasmDocument): WasmDocument {
+  private _cloneDocument(doc: WasmDocument): WasmDocument {
     // Get document JSON for cloning
     const jsonStr = doc.toJSON();
     const data = JSON.parse(jsonStr);

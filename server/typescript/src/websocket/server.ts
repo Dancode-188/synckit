@@ -636,7 +636,7 @@ export class SyncWebSocketServer {
    */
   private cleanupStaleAwarenessClients() {
     // Get all document IDs that have awareness state
-    const documentIds = Array.from((this.coordinator as any).awarenessStates.keys());
+    const documentIds = Array.from((this.coordinator as any).awarenessStates.keys()) as string[];
 
     let totalRemoved = 0;
     for (const documentId of documentIds) {
@@ -773,7 +773,7 @@ export class SyncWebSocketServer {
 
     // Clean up awareness subscriptions for this connection
     // Get all document IDs with awareness state
-    const documentIds = Array.from((this.coordinator as any).awarenessStates.keys());
+    const documentIds = Array.from((this.coordinator as any).awarenessStates.keys()) as string[];
     for (const documentId of documentIds) {
       this.coordinator.unsubscribeFromAwareness(documentId, connection.id);
     }
