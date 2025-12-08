@@ -26,6 +26,9 @@ export enum MessageTypeCode {
   ACK = 0x21,
   PING = 0x30,
   PONG = 0x31,
+  AWARENESS_UPDATE = 0x40,
+  AWARENESS_SUBSCRIBE = 0x41,
+  AWARENESS_STATE = 0x42,
   ERROR = 0xff,
 }
 
@@ -51,6 +54,11 @@ export enum MessageType {
   SYNC_RESPONSE = 'sync_response',
   DELTA = 'delta',
   ACK = 'ack',
+
+  // Awareness (presence)
+  AWARENESS_UPDATE = 'awareness_update',
+  AWARENESS_SUBSCRIBE = 'awareness_subscribe',
+  AWARENESS_STATE = 'awareness_state',
 
   // Errors
   ERROR = 'error',
@@ -135,6 +143,29 @@ export interface ErrorMessage extends BaseMessage {
   details?: any;
 }
 
+export interface AwarenessUpdateMessage extends BaseMessage {
+  type: MessageType.AWARENESS_UPDATE;
+  documentId: string;
+  clientId: string;
+  state: Record<string, unknown> | null; // null means client left
+  clock: number;
+}
+
+export interface AwarenessSubscribeMessage extends BaseMessage {
+  type: MessageType.AWARENESS_SUBSCRIBE;
+  documentId: string;
+}
+
+export interface AwarenessStateMessage extends BaseMessage {
+  type: MessageType.AWARENESS_STATE;
+  documentId: string;
+  states: Array<{
+    clientId: string;
+    state: Record<string, unknown>;
+    clock: number;
+  }>;
+}
+
 export type Message =
   | ConnectMessage
   | PingMessage
@@ -148,6 +179,9 @@ export type Message =
   | SyncResponseMessage
   | DeltaMessage
   | AckMessage
+  | AwarenessUpdateMessage
+  | AwarenessSubscribeMessage
+  | AwarenessStateMessage
   | ErrorMessage;
 
 /**
@@ -165,6 +199,9 @@ const TYPE_CODE_TO_NAME: Record<number, MessageType> = {
   [MessageTypeCode.ACK]: MessageType.ACK,
   [MessageTypeCode.PING]: MessageType.PING,
   [MessageTypeCode.PONG]: MessageType.PONG,
+  [MessageTypeCode.AWARENESS_UPDATE]: MessageType.AWARENESS_UPDATE,
+  [MessageTypeCode.AWARENESS_SUBSCRIBE]: MessageType.AWARENESS_SUBSCRIBE,
+  [MessageTypeCode.AWARENESS_STATE]: MessageType.AWARENESS_STATE,
   [MessageTypeCode.ERROR]: MessageType.ERROR,
 };
 
@@ -183,6 +220,9 @@ const TYPE_NAME_TO_CODE: Record<MessageType, number> = {
   [MessageType.ACK]: MessageTypeCode.ACK,
   [MessageType.PING]: MessageTypeCode.PING,
   [MessageType.PONG]: MessageTypeCode.PONG,
+  [MessageType.AWARENESS_UPDATE]: MessageTypeCode.AWARENESS_UPDATE,
+  [MessageType.AWARENESS_SUBSCRIBE]: MessageTypeCode.AWARENESS_SUBSCRIBE,
+  [MessageType.AWARENESS_STATE]: MessageTypeCode.AWARENESS_STATE,
   [MessageType.ERROR]: MessageTypeCode.ERROR,
   [MessageType.CONNECT]: MessageTypeCode.AUTH, // Map connect to auth for compatibility
   [MessageType.DISCONNECT]: MessageTypeCode.ERROR,

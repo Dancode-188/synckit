@@ -14,6 +14,25 @@ export interface DocumentState {
 }
 
 /**
+ * Awareness Client - tracks awareness state for a single client
+ */
+export interface AwarenessClient {
+  clientId: string;
+  state: Record<string, unknown> | null;
+  clock: number;
+  lastUpdated: number; // timestamp for stale detection
+}
+
+/**
+ * Awareness Document State - tracks awareness for a document
+ */
+export interface AwarenessDocumentState {
+  documentId: string;
+  clients: Map<string, AwarenessClient>; // clientId -> awareness state
+  subscribers: Set<string>; // Connection IDs subscribed to awareness updates
+}
+
+/**
  * Sync Coordinator - manages document synchronization
  * 
  * This is the core sync engine that:
@@ -27,6 +46,7 @@ export interface DocumentState {
  */
 export class SyncCoordinator {
   private documents: Map<string, DocumentState> = new Map();
+  private awarenessStates: Map<string, AwarenessDocumentState> = new Map();
   private storage?: StorageAdapter;
   private pubsub?: RedisPubSub;
   private serverId: string;
@@ -576,6 +596,134 @@ export class SyncCoordinator {
     this.documents.clear();
   }
 
+  // ===================
+  // Awareness Management
+  // ===================
+
+  /**
+   * Get or create awareness state for a document
+   */
+  private getAwarenessState(documentId: string): AwarenessDocumentState {
+    let state = this.awarenessStates.get(documentId);
+
+    if (!state) {
+      state = {
+        documentId,
+        clients: new Map(),
+        subscribers: new Set(),
+      };
+      this.awarenessStates.set(documentId, state);
+    }
+
+    return state;
+  }
+
+  /**
+   * Set awareness state for a client
+   */
+  setAwarenessState(
+    documentId: string,
+    clientId: string,
+    state: Record<string, unknown> | null,
+    clock: number
+  ): void {
+    const awarenessState = this.getAwarenessState(documentId);
+
+    if (state === null) {
+      // Client is leaving
+      awarenessState.clients.delete(clientId);
+    } else {
+      // Update or create client state
+      awarenessState.clients.set(clientId, {
+        clientId,
+        state,
+        clock,
+        lastUpdated: Date.now(),
+      });
+    }
+  }
+
+  /**
+   * Get all awareness states for a document
+   */
+  getAwarenessStates(documentId: string): AwarenessClient[] {
+    const awarenessState = this.awarenessStates.get(documentId);
+    if (!awarenessState) {
+      return [];
+    }
+
+    return Array.from(awarenessState.clients.values());
+  }
+
+  /**
+   * Get awareness state for a specific client
+   */
+  getAwarenessClient(documentId: string, clientId: string): AwarenessClient | undefined {
+    const awarenessState = this.awarenessStates.get(documentId);
+    return awarenessState?.clients.get(clientId);
+  }
+
+  /**
+   * Remove stale awareness clients (haven't updated within timeout)
+   */
+  removeStaleAwarenessClients(documentId: string, timeoutMs: number = 30000): string[] {
+    const awarenessState = this.awarenessStates.get(documentId);
+    if (!awarenessState) {
+      return [];
+    }
+
+    const now = Date.now();
+    const removedClients: string[] = [];
+
+    for (const [clientId, client] of awarenessState.clients.entries()) {
+      if (now - client.lastUpdated > timeoutMs) {
+        awarenessState.clients.delete(clientId);
+        removedClients.push(clientId);
+      }
+    }
+
+    return removedClients;
+  }
+
+  /**
+   * Subscribe connection to awareness updates for a document
+   */
+  subscribeToAwareness(documentId: string, connectionId: string): void {
+    const awarenessState = this.getAwarenessState(documentId);
+    awarenessState.subscribers.add(connectionId);
+  }
+
+  /**
+   * Unsubscribe connection from awareness updates
+   */
+  unsubscribeFromAwareness(documentId: string, connectionId: string): void {
+    const awarenessState = this.awarenessStates.get(documentId);
+    if (awarenessState) {
+      awarenessState.subscribers.delete(connectionId);
+    }
+  }
+
+  /**
+   * Get all subscribers to awareness updates for a document
+   */
+  getAwarenessSubscribers(documentId: string): string[] {
+    const awarenessState = this.awarenessStates.get(documentId);
+    if (!awarenessState) {
+      return [];
+    }
+
+    return Array.from(awarenessState.subscribers);
+  }
+
+  /**
+   * Clear awareness state for a specific client across all documents
+   */
+  clearClientAwareness(clientId: string): void {
+    for (const awarenessState of this.awarenessStates.values()) {
+      awarenessState.clients.delete(clientId);
+    }
+  }
+
   /**
    * Cleanup - dispose all WASM resources and connections
    */
@@ -595,6 +743,9 @@ export class SyncCoordinator {
       state.vectorClock.free();
     }
     this.documents.clear();
+
+    // Clear awareness states
+    this.awarenessStates.clear();
 
     // Close storage connection
     if (this.storage) {
