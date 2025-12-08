@@ -6,6 +6,9 @@
 use super::clock::IncreasingClock;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
+
+// Time tracking only available on non-WASM targets
+#[cfg(not(target_arch = "wasm32"))]
 use std::time::{Duration, Instant};
 
 /// Awareness state for a single client
@@ -21,6 +24,8 @@ pub struct AwarenessState {
     pub clock: u64,
 
     /// Last update timestamp (for timeout detection)
+    /// Not available in WASM builds
+    #[cfg(not(target_arch = "wasm32"))]
     #[serde(skip)]
     pub last_updated: Option<Instant>,
 }
@@ -79,6 +84,7 @@ impl Awareness {
             client_id: self.client_id.clone(),
             state: state.clone(),
             clock,
+            #[cfg(not(target_arch = "wasm32"))]
             last_updated: Some(Instant::now()),
         };
 
@@ -111,6 +117,7 @@ impl Awareness {
                             client_id: update.client_id,
                             state,
                             clock: update.clock,
+                            #[cfg(not(target_arch = "wasm32"))]
                             last_updated: Some(Instant::now()),
                         },
                     );
@@ -125,6 +132,7 @@ impl Awareness {
 
     /// Remove clients that haven't updated within timeout
     /// Returns list of removed client IDs
+    #[cfg(not(target_arch = "wasm32"))]
     pub fn remove_stale_clients(&mut self, timeout: Duration) -> Vec<String> {
         let now = Instant::now();
         let mut removed = Vec::new();
@@ -140,6 +148,16 @@ impl Awareness {
         });
 
         removed
+    }
+
+    /// Remove clients that haven't updated within timeout
+    /// Returns list of removed client IDs
+    /// WASM version: No-op since time tracking is not available
+    #[cfg(target_arch = "wasm32")]
+    pub fn remove_stale_clients(&mut self, _timeout_ms: u64) -> Vec<String> {
+        // Time tracking not available in WASM
+        // Stale client removal should be handled server-side
+        Vec::new()
     }
 
     /// Create update to signal local client leaving
