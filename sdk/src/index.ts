@@ -61,6 +61,10 @@ export {
   useSyncText,
   useSyncCounter,
   useSyncSet,
+  useAwareness,
+  usePresence,
+  useOthers,
+  useSelf,
 } from './adapters/react'
 export type { SyncProviderProps, UseSyncDocumentResult } from './adapters/react'
 
