@@ -303,26 +303,6 @@ export class SyncCoordinator {
   }
 
   /**
-   * Get maximum clock value across all clients (for Lamport clock implementation)
-   */
-  private _getMaxClock(vectorClock: any): bigint {
-    try {
-      const clockJson = vectorClock.toJSON();
-      const clocks = JSON.parse(clockJson);
-      let max = 0n;
-      for (const value of Object.values(clocks)) {
-        const clockValue = BigInt(value as number);
-        if (clockValue > max) {
-          max = clockValue;
-        }
-      }
-      return max;
-    } catch (error) {
-      return 0n;
-    }
-  }
-
-  /**
    * Set field value in document (with persistence)
    * Returns the authoritative value after LWW conflict resolution
    */
@@ -552,26 +532,6 @@ export class SyncCoordinator {
       console.error('Error getting vector clock:', error);
       return {};
     }
-  }
-
-  /**
-   * Clone document (for delta computation)
-   *
-   * Note: Currently creates empty document for delta computation.
-   * In production, would need proper field-by-field cloning.
-   */
-  private _cloneDocument(doc: WasmDocument): WasmDocument {
-    // Get document JSON for cloning
-    const jsonStr = doc.toJSON();
-    const data = JSON.parse(jsonStr);
-    
-    // Create new document with same ID for delta computation
-    const clone = new WasmDocument(data.id || 'temp-clone');
-    
-    // TODO: Restore all fields from original document
-    // For now, using empty document which works for basic delta computation
-    
-    return clone;
   }
 
   /**

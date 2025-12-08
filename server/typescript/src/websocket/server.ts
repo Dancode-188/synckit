@@ -57,8 +57,6 @@ export class SyncWebSocketServer {
 
   // ACK tracking for reliable delivery
   private pendingAcks: Map<string, PendingAckInfo> = new Map();
-  private readonly ACK_TIMEOUT = 3000; // 3 seconds
-  private readonly MAX_RETRIES = 3;
 
   // Delta batching to reduce message volume
   private pendingBatches: Map<string, { delta: Record<string, any>, timer: NodeJS.Timeout }> = new Map();
