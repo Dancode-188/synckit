@@ -765,6 +765,20 @@ export class SyncManager {
    */
   registerAwareness(documentId: string, awareness: Awareness): void {
     this.awarenessManager.registerAwareness(documentId, awareness)
+
+    // Set up onChange callback to automatically broadcast updates to server
+    awareness.setOnChange((update) => {
+      this.websocket.send({
+        type: 'awareness_update',
+        payload: {
+          documentId,
+          clientId: update.client_id,
+          state: update.state,
+          clock: update.clock,
+        },
+        timestamp: Date.now(),
+      })
+    })
   }
 
   /**

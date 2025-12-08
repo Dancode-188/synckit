@@ -82,8 +82,17 @@ export class Awareness {
   private wasmAwareness: WasmAwareness | null = null
   private subscribers = new Set<AwarenessCallback>()
   private cachedStates = new Map<string, AwarenessState>()
+  private onChangeCallback?: (update: AwarenessUpdate) => void
 
   constructor(private readonly clientId: string) {}
+
+  /**
+   * Set callback to be called when local state changes
+   * Used by AwarenessManager to broadcast updates to server
+   */
+  setOnChange(callback: (update: AwarenessUpdate) => void): void {
+    this.onChangeCallback = callback
+  }
 
   /**
    * Initialize the awareness instance
@@ -129,6 +138,11 @@ export class Awareness {
 
     // Update cache
     this.updateCache(update)
+
+    // Notify change callback (for broadcasting to server)
+    if (this.onChangeCallback) {
+      this.onChangeCallback(update)
+    }
 
     return update
   }
