@@ -719,6 +719,7 @@ export function usePresence(
   Record<string, unknown> | undefined,
   (state: Record<string, unknown>) => Promise<void>
 ] {
+  const synckit = useSyncKit()
   const [awareness, { setLocalState }] = useAwareness(documentId)
   const [localState, setLocalStateValue] = useState<Record<string, unknown> | undefined>(initialState)
   const [subscribed, setSubscribed] = useState(false)
@@ -753,6 +754,25 @@ export function usePresence(
       setSubscribed(false)
     }
   }, [awareness, subscribed])
+
+  // Cleanup: Send leave message on unmount
+  useEffect(() => {
+    if (!awareness) return
+
+    return () => {
+      // Send leave update to notify other clients
+      const syncManager = (synckit as any).syncManager
+      if (syncManager) {
+        try {
+          syncManager.sendAwarenessLeave(documentId).catch((error: Error) => {
+            console.error(`Failed to send leave update for ${documentId}:`, error)
+          })
+        } catch (error) {
+          console.error(`Failed to send leave update for ${documentId}:`, error)
+        }
+      }
+    }
+  }, [awareness, documentId, synckit])
 
   // Memoized setter that updates both awareness and local state
   const updatePresence = useCallback(

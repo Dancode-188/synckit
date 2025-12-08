@@ -78,6 +78,9 @@ export class SyncKit {
         await this.initNetworkLayer()
       }
 
+      // Setup beforeunload handler to send leave updates
+      this.setupBeforeUnloadHandler()
+
       this.initialized = true
     } catch (error) {
       throw new SyncKitError(
@@ -462,9 +465,31 @@ export class SyncKit {
   }
 
   /**
+   * Send leave updates for all awareness instances
+   * Call this before closing/navigating to notify other clients
+   */
+  sendAllLeaveUpdates(): void {
+    if (!this.syncManager) return
+
+    for (const documentId of this.awarenessInstances.keys()) {
+      try {
+        // Fire and forget - can't await in beforeunload handler
+        this.syncManager.sendAwarenessLeave(documentId).catch((error) => {
+          console.error(`Failed to send leave update for ${documentId}:`, error)
+        })
+      } catch (error) {
+        console.error(`Failed to send leave update for ${documentId}:`, error)
+      }
+    }
+  }
+
+  /**
    * Cleanup and dispose all resources
    */
   dispose(): void {
+    // Send leave updates before disposal
+    this.sendAllLeaveUpdates()
+
     // Dispose all documents
     for (const doc of this.documents.values()) {
       doc.dispose()
@@ -510,7 +535,22 @@ export class SyncKit {
   }
 
   // Private methods
-  
+
+  /**
+   * Setup beforeunload handler to send leave updates when page closes
+   */
+  private setupBeforeUnloadHandler(): void {
+    // Only in browser environment
+    if (typeof window === 'undefined') return
+
+    const handleBeforeUnload = () => {
+      // Send leave updates synchronously before page unloads
+      this.sendAllLeaveUpdates()
+    }
+
+    window.addEventListener('beforeunload', handleBeforeUnload)
+  }
+
   private generateClientId(): string {
     // Generate a random client ID
     const timestamp = Date.now().toString(36)
