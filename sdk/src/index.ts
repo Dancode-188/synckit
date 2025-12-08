@@ -15,6 +15,8 @@ export { SyncDocument } from './document'
 export { SyncText } from './text'
 export { SyncCounter } from './counter'
 export { SyncSet } from './set'
+export { Awareness } from './awareness'
+export type { AwarenessState, AwarenessUpdate, AwarenessCallback } from './awareness'
 
 // Storage adapters
 export { MemoryStorage, IndexedDBStorage, createStorage } from './storage'

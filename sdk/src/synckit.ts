@@ -16,6 +16,7 @@ import { SyncDocument } from './document'
 import { SyncCounter } from './counter'
 import { SyncSet } from './set'
 import { SyncText } from './text'
+import { Awareness } from './awareness'
 import { createStorage } from './storage'
 import { initWASM } from './wasm-loader'
 import { WebSocketClient } from './websocket/client'
@@ -31,6 +32,7 @@ export class SyncKit {
   private counters = new Map<string, SyncCounter>()
   private sets = new Map<string, SyncSet<any>>()
   private texts = new Map<string, SyncText>()
+  private awareness?: Awareness
   private config: SyncKitConfig
 
   // Network components (initialized only if serverUrl provided)
@@ -257,6 +259,34 @@ export class SyncKit {
   }
 
   /**
+   * Get or create awareness instance for presence/ephemeral state
+   * Only one awareness instance exists per SyncKit instance
+   */
+  getAwareness(): Awareness {
+    if (!this.initialized) {
+      throw new SyncKitError(
+        'SyncKit not initialized. Call init() first.',
+        'NOT_INITIALIZED'
+      )
+    }
+
+    // Return cached awareness if exists
+    if (this.awareness) {
+      return this.awareness
+    }
+
+    // Create new awareness
+    this.awareness = new Awareness(this.clientId)
+
+    // Initialize awareness asynchronously
+    this.awareness.init().catch(error => {
+      console.error('Failed to initialize awareness:', error)
+    })
+
+    return this.awareness
+  }
+
+  /**
    * List all document IDs in storage
    */
   async listDocuments(): Promise<string[]> {
@@ -453,6 +483,12 @@ export class SyncKit {
       text.dispose()
     }
     this.texts.clear()
+
+    // Dispose awareness
+    if (this.awareness) {
+      this.awareness.dispose()
+      this.awareness = undefined
+    }
 
     // Dispose network components
     if (this.syncManager) {

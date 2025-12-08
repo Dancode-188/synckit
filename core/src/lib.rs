@@ -26,6 +26,7 @@
 #[global_allocator]
 static ALLOC: wee_alloc::WeeAlloc = wee_alloc::WeeAlloc::INIT;
 
+pub mod awareness;
 pub mod document;
 pub mod error;
 pub mod storage;
@@ -48,6 +49,7 @@ pub mod crdt;
 pub mod wasm;
 
 // Re-exports for convenience
+pub use awareness::{Awareness, AwarenessState, AwarenessUpdate};
 pub use document::Document;
 pub use error::{Result, SyncError};
 pub use sync::{Timestamp, VectorClock};
