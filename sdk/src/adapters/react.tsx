@@ -615,13 +615,15 @@ export function useSyncSet<T extends string = string>(
 // ====================
 
 /**
- * Hook for accessing awareness instance
+ * Hook for accessing awareness instance for a specific document
  * Returns [awareness, { setLocalState }]
+ *
+ * @param documentId - The document ID to track awareness for
  *
  * @example
  * ```tsx
  * function UserPresence() {
- *   const [awareness, { setLocalState }] = useAwareness()
+ *   const [awareness, { setLocalState }] = useAwareness('doc-123')
  *
  *   useEffect(() => {
  *     setLocalState({
@@ -634,7 +636,7 @@ export function useSyncSet<T extends string = string>(
  * }
  * ```
  */
-export function useAwareness(): [
+export function useAwareness(documentId: string): [
   import('../awareness').Awareness | null,
   {
     setLocalState: (state: Record<string, unknown>) => Promise<import('../awareness').AwarenessUpdate>
@@ -646,7 +648,7 @@ export function useAwareness(): [
 
   // Get awareness instance from SyncKit
   if (!awarenessRef.current) {
-    awarenessRef.current = synckit.getAwareness()
+    awarenessRef.current = synckit.getAwareness(documentId)
   }
 
   const awareness = awarenessRef.current
@@ -685,14 +687,17 @@ export function useAwareness(): [
 }
 
 /**
- * Hook for managing local user presence state
+ * Hook for managing local user presence state for a specific document
  * Automatically updates awareness with provided state
  * Returns [localState, setLocalState]
+ *
+ * @param documentId - The document ID to track presence for
+ * @param initialState - Initial presence state
  *
  * @example
  * ```tsx
  * function Cursor() {
- *   const [presence, setPresence] = usePresence({
+ *   const [presence, setPresence] = usePresence('doc-123', {
  *     user: { name: 'Alice', color: '#FF6B6B' }
  *   })
  *
@@ -708,12 +713,13 @@ export function useAwareness(): [
  * ```
  */
 export function usePresence(
+  documentId: string,
   initialState?: Record<string, unknown>
 ): [
   Record<string, unknown> | undefined,
   (state: Record<string, unknown>) => Promise<void>
 ] {
-  const [awareness, { setLocalState }] = useAwareness()
+  const [awareness, { setLocalState }] = useAwareness(documentId)
   const [localState, setLocalStateValue] = useState<Record<string, unknown> | undefined>(initialState)
   const [subscribed, setSubscribed] = useState(false)
 
@@ -761,13 +767,15 @@ export function usePresence(
 }
 
 /**
- * Hook for tracking other online users (excluding self)
+ * Hook for tracking other online users (excluding self) for a specific document
  * Returns array of other client states
+ *
+ * @param documentId - The document ID to track users for
  *
  * @example
  * ```tsx
  * function OnlineUsers() {
- *   const others = useOthers()
+ *   const others = useOthers('doc-123')
  *
  *   return (
  *     <div>
@@ -782,8 +790,8 @@ export function usePresence(
  * }
  * ```
  */
-export function useOthers(): import('../awareness').AwarenessState[] {
-  const [awareness] = useAwareness()
+export function useOthers(documentId: string): import('../awareness').AwarenessState[] {
+  const [awareness] = useAwareness(documentId)
   const [others, setOthers] = useState<import('../awareness').AwarenessState[]>([])
 
   useEffect(() => {
@@ -813,13 +821,15 @@ export function useOthers(): import('../awareness').AwarenessState[] {
 }
 
 /**
- * Hook for tracking local user state
+ * Hook for tracking local user state for a specific document
  * Returns local client's awareness state
+ *
+ * @param documentId - The document ID to track state for
  *
  * @example
  * ```tsx
  * function MyPresence() {
- *   const self = useSelf()
+ *   const self = useSelf('doc-123')
  *
  *   if (!self) {
  *     return <p>Not initialized</p>
@@ -834,8 +844,8 @@ export function useOthers(): import('../awareness').AwarenessState[] {
  * }
  * ```
  */
-export function useSelf(): import('../awareness').AwarenessState | undefined {
-  const [awareness] = useAwareness()
+export function useSelf(documentId: string): import('../awareness').AwarenessState | undefined {
+  const [awareness] = useAwareness(documentId)
   const [self, setSelf] = useState<import('../awareness').AwarenessState | undefined>()
 
   useEffect(() => {

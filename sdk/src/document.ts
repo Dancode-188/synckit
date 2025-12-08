@@ -56,6 +56,8 @@ export class SyncDocument<T extends Record<string, unknown> = Record<string, unk
       this.syncManager.registerDocument(this)
       // Subscribe to server updates for real-time sync
       await this.syncManager.subscribeDocument(this.id)
+      // Subscribe to awareness for presence synchronization
+      await this.syncManager.subscribeToAwareness(this.id)
     }
   }
   
@@ -293,6 +295,8 @@ export class SyncDocument<T extends Record<string, unknown> = Record<string, unk
     // Unregister from sync manager
     if (this.syncManager) {
       this.syncManager.unregisterDocument(this.id)
+      // Unregister awareness
+      this.syncManager.getAwarenessManager().unregisterAwareness(this.id)
     }
 
     this.subscribers.clear()

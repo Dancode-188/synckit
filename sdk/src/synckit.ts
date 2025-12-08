@@ -32,7 +32,7 @@ export class SyncKit {
   private counters = new Map<string, SyncCounter>()
   private sets = new Map<string, SyncSet<any>>()
   private texts = new Map<string, SyncText>()
-  private awareness?: Awareness
+  private awarenessInstances = new Map<string, Awareness>()
   private config: SyncKitConfig
 
   // Network components (initialized only if serverUrl provided)
@@ -128,7 +128,6 @@ export class SyncKit {
       websocket: this.websocket,
       storage: this.storage,
       offlineQueue: this.offlineQueue,
-      clientId: this.clientId,
     })
 
     // Connect to server
@@ -259,10 +258,10 @@ export class SyncKit {
   }
 
   /**
-   * Get or create awareness instance for presence/ephemeral state
-   * Only one awareness instance exists per SyncKit instance
+   * Get or create awareness instance for a document
+   * Awareness instances are cached per document ID
    */
-  getAwareness(): Awareness {
+  getAwareness(documentId: string): Awareness {
     if (!this.initialized) {
       throw new SyncKitError(
         'SyncKit not initialized. Call init() first.',
@@ -271,19 +270,25 @@ export class SyncKit {
     }
 
     // Return cached awareness if exists
-    if (this.awareness) {
-      return this.awareness
+    if (this.awarenessInstances.has(documentId)) {
+      return this.awarenessInstances.get(documentId)!
     }
 
     // Create new awareness
-    this.awareness = new Awareness(this.clientId)
+    const awareness = new Awareness(this.clientId)
+    this.awarenessInstances.set(documentId, awareness)
 
     // Initialize awareness asynchronously
-    this.awareness.init().catch(error => {
-      console.error('Failed to initialize awareness:', error)
+    awareness.init().then(() => {
+      // Register with sync manager if available
+      if (this.syncManager) {
+        this.syncManager.registerAwareness(documentId, awareness)
+      }
+    }).catch(error => {
+      console.error(`Failed to initialize awareness for ${documentId}:`, error)
     })
 
-    return this.awareness
+    return awareness
   }
 
   /**
@@ -484,11 +489,11 @@ export class SyncKit {
     }
     this.texts.clear()
 
-    // Dispose awareness
-    if (this.awareness) {
-      this.awareness.dispose()
-      this.awareness = undefined
+    // Dispose all awareness instances
+    for (const awareness of this.awarenessInstances.values()) {
+      awareness.dispose()
     }
+    this.awarenessInstances.clear()
 
     // Dispose network components
     if (this.syncManager) {
