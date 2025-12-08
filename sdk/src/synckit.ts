@@ -16,6 +16,7 @@ import { SyncDocument } from './document'
 import { SyncCounter } from './counter'
 import { SyncSet } from './set'
 import { SyncText } from './text'
+import { Awareness } from './awareness'
 import { createStorage } from './storage'
 import { initWASM } from './wasm-loader'
 import { WebSocketClient } from './websocket/client'
@@ -31,6 +32,7 @@ export class SyncKit {
   private counters = new Map<string, SyncCounter>()
   private sets = new Map<string, SyncSet<any>>()
   private texts = new Map<string, SyncText>()
+  private awarenessInstances = new Map<string, Awareness>()
   private config: SyncKitConfig
 
   // Network components (initialized only if serverUrl provided)
@@ -75,6 +77,9 @@ export class SyncKit {
       if (this.config.serverUrl) {
         await this.initNetworkLayer()
       }
+
+      // Setup beforeunload handler to send leave updates
+      this.setupBeforeUnloadHandler()
 
       this.initialized = true
     } catch (error) {
@@ -126,7 +131,6 @@ export class SyncKit {
       websocket: this.websocket,
       storage: this.storage,
       offlineQueue: this.offlineQueue,
-      clientId: this.clientId,
     })
 
     // Connect to server
@@ -254,6 +258,40 @@ export class SyncKit {
     })
 
     return text
+  }
+
+  /**
+   * Get or create awareness instance for a document
+   * Awareness instances are cached per document ID
+   */
+  getAwareness(documentId: string): Awareness {
+    if (!this.initialized) {
+      throw new SyncKitError(
+        'SyncKit not initialized. Call init() first.',
+        'NOT_INITIALIZED'
+      )
+    }
+
+    // Return cached awareness if exists
+    if (this.awarenessInstances.has(documentId)) {
+      return this.awarenessInstances.get(documentId)!
+    }
+
+    // Create new awareness
+    const awareness = new Awareness(this.clientId)
+    this.awarenessInstances.set(documentId, awareness)
+
+    // Initialize awareness asynchronously
+    awareness.init().then(() => {
+      // Register with sync manager if available
+      if (this.syncManager) {
+        this.syncManager.registerAwareness(documentId, awareness)
+      }
+    }).catch(error => {
+      console.error(`Failed to initialize awareness for ${documentId}:`, error)
+    })
+
+    return awareness
   }
 
   /**
@@ -427,9 +465,31 @@ export class SyncKit {
   }
 
   /**
+   * Send leave updates for all awareness instances
+   * Call this before closing/navigating to notify other clients
+   */
+  sendAllLeaveUpdates(): void {
+    if (!this.syncManager) return
+
+    for (const documentId of this.awarenessInstances.keys()) {
+      try {
+        // Fire and forget - can't await in beforeunload handler
+        this.syncManager.sendAwarenessLeave(documentId).catch((error) => {
+          console.error(`Failed to send leave update for ${documentId}:`, error)
+        })
+      } catch (error) {
+        console.error(`Failed to send leave update for ${documentId}:`, error)
+      }
+    }
+  }
+
+  /**
    * Cleanup and dispose all resources
    */
   dispose(): void {
+    // Send leave updates before disposal
+    this.sendAllLeaveUpdates()
+
     // Dispose all documents
     for (const doc of this.documents.values()) {
       doc.dispose()
@@ -454,6 +514,12 @@ export class SyncKit {
     }
     this.texts.clear()
 
+    // Dispose all awareness instances
+    for (const awareness of this.awarenessInstances.values()) {
+      awareness.dispose()
+    }
+    this.awarenessInstances.clear()
+
     // Dispose network components
     if (this.syncManager) {
       this.syncManager.dispose()
@@ -469,7 +535,22 @@ export class SyncKit {
   }
 
   // Private methods
-  
+
+  /**
+   * Setup beforeunload handler to send leave updates when page closes
+   */
+  private setupBeforeUnloadHandler(): void {
+    // Only in browser environment
+    if (typeof window === 'undefined') return
+
+    const handleBeforeUnload = () => {
+      // Send leave updates synchronously before page unloads
+      this.sendAllLeaveUpdates()
+    }
+
+    window.addEventListener('beforeunload', handleBeforeUnload)
+  }
+
   private generateClientId(): string {
     // Generate a random client ID
     const timestamp = Date.now().toString(36)

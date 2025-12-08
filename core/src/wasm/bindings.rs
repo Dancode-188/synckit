@@ -463,3 +463,108 @@ impl WasmSet {
         Ok(Self { inner })
     }
 }
+/// JavaScript-friendly wrapper for Awareness
+#[wasm_bindgen]
+pub struct WasmAwareness {
+    inner: crate::awareness::Awareness,
+}
+
+#[wasm_bindgen]
+impl WasmAwareness {
+    /// Create a new awareness instance
+    #[wasm_bindgen(constructor)]
+    pub fn new(client_id: String) -> Self {
+        Self {
+            inner: crate::awareness::Awareness::new(client_id),
+        }
+    }
+
+    /// Get the local client ID
+    #[wasm_bindgen(js_name = getClientId)]
+    pub fn get_client_id(&self) -> String {
+        self.inner.client_id().to_string()
+    }
+
+    /// Set local client state (pass JSON string)
+    #[wasm_bindgen(js_name = setLocalState)]
+    pub fn set_local_state(&mut self, state_json: String) -> Result<String, JsValue> {
+        let state: serde_json::Value = serde_json::from_str(&state_json)
+            .map_err(|e| JsValue::from_str(&format!("Invalid JSON: {}", e)))?;
+
+        let update = self.inner.set_local_state(state);
+
+        serde_json::to_string(&update)
+            .map_err(|e| JsValue::from_str(&format!("Serialization failed: {}", e)))
+    }
+
+    /// Apply remote awareness update (pass JSON string)
+    #[wasm_bindgen(js_name = applyUpdate)]
+    pub fn apply_update(&mut self, update_json: String) -> Result<(), JsValue> {
+        let update: crate::awareness::AwarenessUpdate = serde_json::from_str(&update_json)
+            .map_err(|e| JsValue::from_str(&format!("Invalid update JSON: {}", e)))?;
+
+        self.inner.apply_update(update);
+        Ok(())
+    }
+
+    /// Get all client states as JSON string
+    #[wasm_bindgen(js_name = getStates)]
+    pub fn get_states(&self) -> Result<String, JsValue> {
+        serde_json::to_string(self.inner.get_states())
+            .map_err(|e| JsValue::from_str(&format!("Serialization failed: {}", e)))
+    }
+
+    /// Get state for specific client as JSON string
+    #[wasm_bindgen(js_name = getState)]
+    pub fn get_state(&self, client_id: String) -> Result<Option<String>, JsValue> {
+        match self.inner.get_state(&client_id) {
+            Some(state) => serde_json::to_string(state)
+                .map(Some)
+                .map_err(|e| JsValue::from_str(&format!("Serialization failed: {}", e))),
+            None => Ok(None),
+        }
+    }
+
+    /// Get local client's state as JSON string
+    #[wasm_bindgen(js_name = getLocalState)]
+    pub fn get_local_state(&self) -> Result<Option<String>, JsValue> {
+        match self.inner.get_local_state() {
+            Some(state) => serde_json::to_string(state)
+                .map(Some)
+                .map_err(|e| JsValue::from_str(&format!("Serialization failed: {}", e))),
+            None => Ok(None),
+        }
+    }
+
+    /// Remove stale clients (timeout in milliseconds)
+    /// Returns JSON array of removed client IDs
+    #[wasm_bindgen(js_name = removeStaleClients)]
+    pub fn remove_stale_clients(&mut self, timeout_ms: u64) -> Result<String, JsValue> {
+        // In WASM, the inner method takes u64 directly (time tracking not available)
+        let removed = self.inner.remove_stale_clients(timeout_ms);
+
+        serde_json::to_string(&removed)
+            .map_err(|e| JsValue::from_str(&format!("Serialization failed: {}", e)))
+    }
+
+    /// Create update to signal leaving
+    #[wasm_bindgen(js_name = createLeaveUpdate)]
+    pub fn create_leave_update(&self) -> Result<String, JsValue> {
+        let update = self.inner.create_leave_update();
+
+        serde_json::to_string(&update)
+            .map_err(|e| JsValue::from_str(&format!("Serialization failed: {}", e)))
+    }
+
+    /// Get number of online clients
+    #[wasm_bindgen(js_name = clientCount)]
+    pub fn client_count(&self) -> usize {
+        self.inner.client_count()
+    }
+
+    /// Get number of other clients (excluding self)
+    #[wasm_bindgen(js_name = otherClientCount)]
+    pub fn other_client_count(&self) -> usize {
+        self.inner.other_client_count()
+    }
+}

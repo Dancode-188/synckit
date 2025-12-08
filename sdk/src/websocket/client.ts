@@ -76,6 +76,9 @@ export type MessageType =
   | 'ack'
   | 'ping'
   | 'pong'
+  | 'awareness_update'
+  | 'awareness_subscribe'
+  | 'awareness_state'
   | 'error'
 
 // Message type codes for binary encoding
@@ -91,6 +94,9 @@ enum MessageTypeCode {
   ACK = 0x21,
   PING = 0x30,
   PONG = 0x31,
+  AWARENESS_UPDATE = 0x40,
+  AWARENESS_SUBSCRIBE = 0x41,
+  AWARENESS_STATE = 0x42,
   ERROR = 0xff,
 }
 
@@ -694,6 +700,9 @@ export class WebSocketClient {
       ack: MessageTypeCode.ACK,
       ping: MessageTypeCode.PING,
       pong: MessageTypeCode.PONG,
+      awareness_update: MessageTypeCode.AWARENESS_UPDATE,
+      awareness_subscribe: MessageTypeCode.AWARENESS_SUBSCRIBE,
+      awareness_state: MessageTypeCode.AWARENESS_STATE,
       error: MessageTypeCode.ERROR,
     }
 
@@ -716,6 +725,9 @@ export class WebSocketClient {
       [MessageTypeCode.ACK]: 'ack',
       [MessageTypeCode.PING]: 'ping',
       [MessageTypeCode.PONG]: 'pong',
+      [MessageTypeCode.AWARENESS_UPDATE]: 'awareness_update',
+      [MessageTypeCode.AWARENESS_SUBSCRIBE]: 'awareness_subscribe',
+      [MessageTypeCode.AWARENESS_STATE]: 'awareness_state',
       [MessageTypeCode.ERROR]: 'error',
     }
 

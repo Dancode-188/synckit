@@ -121,98 +121,54 @@ if (!('encodeInto' in cachedTextEncoder)) {
 
 let WASM_VECTOR_LEN = 0;
 
-const WasmDeltaFinalization = (typeof FinalizationRegistry === 'undefined')
+const WasmAwarenessFinalization = (typeof FinalizationRegistry === 'undefined')
     ? { register: () => {}, unregister: () => {} }
-    : new FinalizationRegistry(ptr => wasm.__wbg_wasmdelta_free(ptr >>> 0, 1));
+    : new FinalizationRegistry(ptr => wasm.__wbg_wasmawareness_free(ptr >>> 0, 1));
 
 const WasmDocumentFinalization = (typeof FinalizationRegistry === 'undefined')
     ? { register: () => {}, unregister: () => {} }
     : new FinalizationRegistry(ptr => wasm.__wbg_wasmdocument_free(ptr >>> 0, 1));
-
-const WasmFugueTextFinalization = (typeof FinalizationRegistry === 'undefined')
-    ? { register: () => {}, unregister: () => {} }
-    : new FinalizationRegistry(ptr => wasm.__wbg_wasmfuguetext_free(ptr >>> 0, 1));
 
 const WasmVectorClockFinalization = (typeof FinalizationRegistry === 'undefined')
     ? { register: () => {}, unregister: () => {} }
     : new FinalizationRegistry(ptr => wasm.__wbg_wasmvectorclock_free(ptr >>> 0, 1));
 
 /**
- * JavaScript-friendly wrapper for DocumentDelta
- * Only available when protocol support is enabled (core variant, not core-lite)
+ * JavaScript-friendly wrapper for Awareness
  */
-export class WasmDelta {
-    static __wrap(ptr) {
-        ptr = ptr >>> 0;
-        const obj = Object.create(WasmDelta.prototype);
-        obj.__wbg_ptr = ptr;
-        WasmDeltaFinalization.register(obj, obj.__wbg_ptr, obj);
-        return obj;
-    }
+export class WasmAwareness {
     __destroy_into_raw() {
         const ptr = this.__wbg_ptr;
         this.__wbg_ptr = 0;
-        WasmDeltaFinalization.unregister(this);
+        WasmAwarenessFinalization.unregister(this);
         return ptr;
     }
     free() {
         const ptr = this.__destroy_into_raw();
-        wasm.__wbg_wasmdelta_free(ptr, 0);
+        wasm.__wbg_wasmawareness_free(ptr, 0);
     }
     /**
-     * Compute delta between two documents
-     * @param {WasmDocument} from
-     * @param {WasmDocument} to
-     * @returns {WasmDelta}
-     */
-    static compute(from, to) {
-        try {
-            const retptr = wasm.__wbindgen_add_to_stack_pointer(-16);
-            _assertClass(from, WasmDocument);
-            _assertClass(to, WasmDocument);
-            wasm.wasmdelta_compute(retptr, from.__wbg_ptr, to.__wbg_ptr);
-            var r0 = getDataViewMemory0().getInt32(retptr + 4 * 0, true);
-            var r1 = getDataViewMemory0().getInt32(retptr + 4 * 1, true);
-            var r2 = getDataViewMemory0().getInt32(retptr + 4 * 2, true);
-            if (r2) {
-                throw takeObject(r1);
-            }
-            return WasmDelta.__wrap(r0);
-        } finally {
-            wasm.__wbindgen_add_to_stack_pointer(16);
-        }
-    }
-    /**
-     * Apply delta to a document
-     * @param {WasmDocument} document
+     * Create a new awareness instance
      * @param {string} client_id
      */
-    applyTo(document, client_id) {
-        try {
-            const retptr = wasm.__wbindgen_add_to_stack_pointer(-16);
-            _assertClass(document, WasmDocument);
-            const ptr0 = passStringToWasm0(client_id, wasm.__wbindgen_export2, wasm.__wbindgen_export3);
-            const len0 = WASM_VECTOR_LEN;
-            wasm.wasmdelta_applyTo(retptr, this.__wbg_ptr, document.__wbg_ptr, ptr0, len0);
-            var r0 = getDataViewMemory0().getInt32(retptr + 4 * 0, true);
-            var r1 = getDataViewMemory0().getInt32(retptr + 4 * 1, true);
-            if (r1) {
-                throw takeObject(r0);
-            }
-        } finally {
-            wasm.__wbindgen_add_to_stack_pointer(16);
-        }
+    constructor(client_id) {
+        const ptr0 = passStringToWasm0(client_id, wasm.__wbindgen_export2, wasm.__wbindgen_export3);
+        const len0 = WASM_VECTOR_LEN;
+        const ret = wasm.wasmawareness_new(ptr0, len0);
+        this.__wbg_ptr = ret >>> 0;
+        WasmAwarenessFinalization.register(this, this.__wbg_ptr, this);
+        return this;
     }
     /**
-     * Get document ID this delta applies to
+     * Get the local client ID
      * @returns {string}
      */
-    getDocumentId() {
+    getClientId() {
         let deferred1_0;
         let deferred1_1;
         try {
             const retptr = wasm.__wbindgen_add_to_stack_pointer(-16);
-            wasm.wasmdelta_getDocumentId(retptr, this.__wbg_ptr);
+            wasm.wasmawareness_getClientId(retptr, this.__wbg_ptr);
             var r0 = getDataViewMemory0().getInt32(retptr + 4 * 0, true);
             var r1 = getDataViewMemory0().getInt32(retptr + 4 * 1, true);
             deferred1_0 = r0;
@@ -224,23 +180,65 @@ export class WasmDelta {
         }
     }
     /**
-     * Get number of changes in this delta
-     * @returns {number}
-     */
-    changeCount() {
-        const ret = wasm.wasmdelta_changeCount(this.__wbg_ptr);
-        return ret >>> 0;
-    }
-    /**
-     * Export as JSON string
+     * Set local client state (pass JSON string)
+     * @param {string} state_json
      * @returns {string}
      */
-    toJSON() {
+    setLocalState(state_json) {
+        let deferred3_0;
+        let deferred3_1;
+        try {
+            const retptr = wasm.__wbindgen_add_to_stack_pointer(-16);
+            const ptr0 = passStringToWasm0(state_json, wasm.__wbindgen_export2, wasm.__wbindgen_export3);
+            const len0 = WASM_VECTOR_LEN;
+            wasm.wasmawareness_setLocalState(retptr, this.__wbg_ptr, ptr0, len0);
+            var r0 = getDataViewMemory0().getInt32(retptr + 4 * 0, true);
+            var r1 = getDataViewMemory0().getInt32(retptr + 4 * 1, true);
+            var r2 = getDataViewMemory0().getInt32(retptr + 4 * 2, true);
+            var r3 = getDataViewMemory0().getInt32(retptr + 4 * 3, true);
+            var ptr2 = r0;
+            var len2 = r1;
+            if (r3) {
+                ptr2 = 0; len2 = 0;
+                throw takeObject(r2);
+            }
+            deferred3_0 = ptr2;
+            deferred3_1 = len2;
+            return getStringFromWasm0(ptr2, len2);
+        } finally {
+            wasm.__wbindgen_add_to_stack_pointer(16);
+            wasm.__wbindgen_export(deferred3_0, deferred3_1, 1);
+        }
+    }
+    /**
+     * Apply remote awareness update (pass JSON string)
+     * @param {string} update_json
+     */
+    applyUpdate(update_json) {
+        try {
+            const retptr = wasm.__wbindgen_add_to_stack_pointer(-16);
+            const ptr0 = passStringToWasm0(update_json, wasm.__wbindgen_export2, wasm.__wbindgen_export3);
+            const len0 = WASM_VECTOR_LEN;
+            wasm.wasmawareness_applyUpdate(retptr, this.__wbg_ptr, ptr0, len0);
+            var r0 = getDataViewMemory0().getInt32(retptr + 4 * 0, true);
+            var r1 = getDataViewMemory0().getInt32(retptr + 4 * 1, true);
+            if (r1) {
+                throw takeObject(r0);
+            }
+        } finally {
+            wasm.__wbindgen_add_to_stack_pointer(16);
+        }
+    }
+    /**
+     * Get all client states as JSON string
+     * @returns {string}
+     */
+    getStates() {
         let deferred2_0;
         let deferred2_1;
         try {
             const retptr = wasm.__wbindgen_add_to_stack_pointer(-16);
-            wasm.wasmdelta_toJSON(retptr, this.__wbg_ptr);
+            wasm.wasmawareness_getStates(retptr, this.__wbg_ptr);
             var r0 = getDataViewMemory0().getInt32(retptr + 4 * 0, true);
             var r1 = getDataViewMemory0().getInt32(retptr + 4 * 1, true);
             var r2 = getDataViewMemory0().getInt32(retptr + 4 * 2, true);
@@ -259,8 +257,135 @@ export class WasmDelta {
             wasm.__wbindgen_export(deferred2_0, deferred2_1, 1);
         }
     }
+    /**
+     * Get state for specific client as JSON string
+     * @param {string} client_id
+     * @returns {string | undefined}
+     */
+    getState(client_id) {
+        try {
+            const retptr = wasm.__wbindgen_add_to_stack_pointer(-16);
+            const ptr0 = passStringToWasm0(client_id, wasm.__wbindgen_export2, wasm.__wbindgen_export3);
+            const len0 = WASM_VECTOR_LEN;
+            wasm.wasmawareness_getState(retptr, this.__wbg_ptr, ptr0, len0);
+            var r0 = getDataViewMemory0().getInt32(retptr + 4 * 0, true);
+            var r1 = getDataViewMemory0().getInt32(retptr + 4 * 1, true);
+            var r2 = getDataViewMemory0().getInt32(retptr + 4 * 2, true);
+            var r3 = getDataViewMemory0().getInt32(retptr + 4 * 3, true);
+            if (r3) {
+                throw takeObject(r2);
+            }
+            let v2;
+            if (r0 !== 0) {
+                v2 = getStringFromWasm0(r0, r1).slice();
+                wasm.__wbindgen_export(r0, r1 * 1, 1);
+            }
+            return v2;
+        } finally {
+            wasm.__wbindgen_add_to_stack_pointer(16);
+        }
+    }
+    /**
+     * Get local client's state as JSON string
+     * @returns {string | undefined}
+     */
+    getLocalState() {
+        try {
+            const retptr = wasm.__wbindgen_add_to_stack_pointer(-16);
+            wasm.wasmawareness_getLocalState(retptr, this.__wbg_ptr);
+            var r0 = getDataViewMemory0().getInt32(retptr + 4 * 0, true);
+            var r1 = getDataViewMemory0().getInt32(retptr + 4 * 1, true);
+            var r2 = getDataViewMemory0().getInt32(retptr + 4 * 2, true);
+            var r3 = getDataViewMemory0().getInt32(retptr + 4 * 3, true);
+            if (r3) {
+                throw takeObject(r2);
+            }
+            let v1;
+            if (r0 !== 0) {
+                v1 = getStringFromWasm0(r0, r1).slice();
+                wasm.__wbindgen_export(r0, r1 * 1, 1);
+            }
+            return v1;
+        } finally {
+            wasm.__wbindgen_add_to_stack_pointer(16);
+        }
+    }
+    /**
+     * Remove stale clients (timeout in milliseconds)
+     * Returns JSON array of removed client IDs
+     * @param {bigint} timeout_ms
+     * @returns {string}
+     */
+    removeStaleClients(timeout_ms) {
+        let deferred2_0;
+        let deferred2_1;
+        try {
+            const retptr = wasm.__wbindgen_add_to_stack_pointer(-16);
+            wasm.wasmawareness_removeStaleClients(retptr, this.__wbg_ptr, timeout_ms);
+            var r0 = getDataViewMemory0().getInt32(retptr + 4 * 0, true);
+            var r1 = getDataViewMemory0().getInt32(retptr + 4 * 1, true);
+            var r2 = getDataViewMemory0().getInt32(retptr + 4 * 2, true);
+            var r3 = getDataViewMemory0().getInt32(retptr + 4 * 3, true);
+            var ptr1 = r0;
+            var len1 = r1;
+            if (r3) {
+                ptr1 = 0; len1 = 0;
+                throw takeObject(r2);
+            }
+            deferred2_0 = ptr1;
+            deferred2_1 = len1;
+            return getStringFromWasm0(ptr1, len1);
+        } finally {
+            wasm.__wbindgen_add_to_stack_pointer(16);
+            wasm.__wbindgen_export(deferred2_0, deferred2_1, 1);
+        }
+    }
+    /**
+     * Create update to signal leaving
+     * @returns {string}
+     */
+    createLeaveUpdate() {
+        let deferred2_0;
+        let deferred2_1;
+        try {
+            const retptr = wasm.__wbindgen_add_to_stack_pointer(-16);
+            wasm.wasmawareness_createLeaveUpdate(retptr, this.__wbg_ptr);
+            var r0 = getDataViewMemory0().getInt32(retptr + 4 * 0, true);
+            var r1 = getDataViewMemory0().getInt32(retptr + 4 * 1, true);
+            var r2 = getDataViewMemory0().getInt32(retptr + 4 * 2, true);
+            var r3 = getDataViewMemory0().getInt32(retptr + 4 * 3, true);
+            var ptr1 = r0;
+            var len1 = r1;
+            if (r3) {
+                ptr1 = 0; len1 = 0;
+                throw takeObject(r2);
+            }
+            deferred2_0 = ptr1;
+            deferred2_1 = len1;
+            return getStringFromWasm0(ptr1, len1);
+        } finally {
+            wasm.__wbindgen_add_to_stack_pointer(16);
+            wasm.__wbindgen_export(deferred2_0, deferred2_1, 1);
+        }
+    }
+    /**
+     * Get number of online clients
+     * @returns {number}
+     */
+    clientCount() {
+        const ret = wasm.wasmawareness_clientCount(this.__wbg_ptr);
+        return ret >>> 0;
+    }
+    /**
+     * Get number of other clients (excluding self)
+     * @returns {number}
+     */
+    otherClientCount() {
+        const ret = wasm.wasmawareness_otherClientCount(this.__wbg_ptr);
+        return ret >>> 0;
+    }
 }
-if (Symbol.dispose) WasmDelta.prototype[Symbol.dispose] = WasmDelta.prototype.free;
+if (Symbol.dispose) WasmAwareness.prototype[Symbol.dispose] = WasmAwareness.prototype.free;
 
 /**
  * JavaScript-friendly wrapper for Document
@@ -371,7 +496,7 @@ export class WasmDocument {
      * @returns {number}
      */
     fieldCount() {
-        const ret = wasm.wasmdocument_fieldCount(this.__wbg_ptr);
+        const ret = wasm.wasmawareness_clientCount(this.__wbg_ptr);
         return ret >>> 0;
     }
     /**
@@ -404,251 +529,6 @@ export class WasmDocument {
     }
 }
 if (Symbol.dispose) WasmDocument.prototype[Symbol.dispose] = WasmDocument.prototype.free;
-
-/**
- * JavaScript-friendly wrapper for FugueText CRDT
- * Only available when text-crdt feature is enabled
- */
-export class WasmFugueText {
-    static __wrap(ptr) {
-        ptr = ptr >>> 0;
-        const obj = Object.create(WasmFugueText.prototype);
-        obj.__wbg_ptr = ptr;
-        WasmFugueTextFinalization.register(obj, obj.__wbg_ptr, obj);
-        return obj;
-    }
-    __destroy_into_raw() {
-        const ptr = this.__wbg_ptr;
-        this.__wbg_ptr = 0;
-        WasmFugueTextFinalization.unregister(this);
-        return ptr;
-    }
-    free() {
-        const ptr = this.__destroy_into_raw();
-        wasm.__wbg_wasmfuguetext_free(ptr, 0);
-    }
-    /**
-     * Create a new FugueText with the given client ID
-     * @param {string} client_id
-     */
-    constructor(client_id) {
-        const ptr0 = passStringToWasm0(client_id, wasm.__wbindgen_export2, wasm.__wbindgen_export3);
-        const len0 = WASM_VECTOR_LEN;
-        const ret = wasm.wasmfuguetext_new(ptr0, len0);
-        this.__wbg_ptr = ret >>> 0;
-        WasmFugueTextFinalization.register(this, this.__wbg_ptr, this);
-        return this;
-    }
-    /**
-     * Insert text at the given position
-     *
-     * # Arguments
-     * * `position` - Grapheme index (user-facing position)
-     * * `text` - Text to insert
-     *
-     * # Returns
-     * JSON string of NodeId for the created block
-     * @param {number} position
-     * @param {string} text
-     * @returns {string}
-     */
-    insert(position, text) {
-        let deferred3_0;
-        let deferred3_1;
-        try {
-            const retptr = wasm.__wbindgen_add_to_stack_pointer(-16);
-            const ptr0 = passStringToWasm0(text, wasm.__wbindgen_export2, wasm.__wbindgen_export3);
-            const len0 = WASM_VECTOR_LEN;
-            wasm.wasmfuguetext_insert(retptr, this.__wbg_ptr, position, ptr0, len0);
-            var r0 = getDataViewMemory0().getInt32(retptr + 4 * 0, true);
-            var r1 = getDataViewMemory0().getInt32(retptr + 4 * 1, true);
-            var r2 = getDataViewMemory0().getInt32(retptr + 4 * 2, true);
-            var r3 = getDataViewMemory0().getInt32(retptr + 4 * 3, true);
-            var ptr2 = r0;
-            var len2 = r1;
-            if (r3) {
-                ptr2 = 0; len2 = 0;
-                throw takeObject(r2);
-            }
-            deferred3_0 = ptr2;
-            deferred3_1 = len2;
-            return getStringFromWasm0(ptr2, len2);
-        } finally {
-            wasm.__wbindgen_add_to_stack_pointer(16);
-            wasm.__wbindgen_export(deferred3_0, deferred3_1, 1);
-        }
-    }
-    /**
-     * Delete text at the given position
-     *
-     * # Arguments
-     * * `position` - Starting grapheme index
-     * * `length` - Number of graphemes to delete
-     *
-     * # Returns
-     * JSON string of array of deleted NodeIds
-     * @param {number} position
-     * @param {number} length
-     * @returns {string}
-     */
-    delete(position, length) {
-        let deferred2_0;
-        let deferred2_1;
-        try {
-            const retptr = wasm.__wbindgen_add_to_stack_pointer(-16);
-            wasm.wasmfuguetext_delete(retptr, this.__wbg_ptr, position, length);
-            var r0 = getDataViewMemory0().getInt32(retptr + 4 * 0, true);
-            var r1 = getDataViewMemory0().getInt32(retptr + 4 * 1, true);
-            var r2 = getDataViewMemory0().getInt32(retptr + 4 * 2, true);
-            var r3 = getDataViewMemory0().getInt32(retptr + 4 * 3, true);
-            var ptr1 = r0;
-            var len1 = r1;
-            if (r3) {
-                ptr1 = 0; len1 = 0;
-                throw takeObject(r2);
-            }
-            deferred2_0 = ptr1;
-            deferred2_1 = len1;
-            return getStringFromWasm0(ptr1, len1);
-        } finally {
-            wasm.__wbindgen_add_to_stack_pointer(16);
-            wasm.__wbindgen_export(deferred2_0, deferred2_1, 1);
-        }
-    }
-    /**
-     * Get the text content as a string
-     * @returns {string}
-     */
-    toString() {
-        let deferred1_0;
-        let deferred1_1;
-        try {
-            const retptr = wasm.__wbindgen_add_to_stack_pointer(-16);
-            wasm.wasmfuguetext_toString(retptr, this.__wbg_ptr);
-            var r0 = getDataViewMemory0().getInt32(retptr + 4 * 0, true);
-            var r1 = getDataViewMemory0().getInt32(retptr + 4 * 1, true);
-            deferred1_0 = r0;
-            deferred1_1 = r1;
-            return getStringFromWasm0(r0, r1);
-        } finally {
-            wasm.__wbindgen_add_to_stack_pointer(16);
-            wasm.__wbindgen_export(deferred1_0, deferred1_1, 1);
-        }
-    }
-    /**
-     * Get the length in graphemes (user-perceived characters)
-     * @returns {number}
-     */
-    length() {
-        const ret = wasm.wasmfuguetext_length(this.__wbg_ptr);
-        return ret >>> 0;
-    }
-    /**
-     * Check if the text is empty
-     * @returns {boolean}
-     */
-    isEmpty() {
-        const ret = wasm.wasmfuguetext_isEmpty(this.__wbg_ptr);
-        return ret !== 0;
-    }
-    /**
-     * Get the client ID
-     * @returns {string}
-     */
-    getClientId() {
-        let deferred1_0;
-        let deferred1_1;
-        try {
-            const retptr = wasm.__wbindgen_add_to_stack_pointer(-16);
-            wasm.wasmfuguetext_getClientId(retptr, this.__wbg_ptr);
-            var r0 = getDataViewMemory0().getInt32(retptr + 4 * 0, true);
-            var r1 = getDataViewMemory0().getInt32(retptr + 4 * 1, true);
-            deferred1_0 = r0;
-            deferred1_1 = r1;
-            return getStringFromWasm0(r0, r1);
-        } finally {
-            wasm.__wbindgen_add_to_stack_pointer(16);
-            wasm.__wbindgen_export(deferred1_0, deferred1_1, 1);
-        }
-    }
-    /**
-     * Get the current Lamport clock value
-     * @returns {bigint}
-     */
-    getClock() {
-        const ret = wasm.wasmfuguetext_getClock(this.__wbg_ptr);
-        return BigInt.asUintN(64, ret);
-    }
-    /**
-     * Merge with another FugueText
-     * @param {WasmFugueText} other
-     */
-    merge(other) {
-        try {
-            const retptr = wasm.__wbindgen_add_to_stack_pointer(-16);
-            _assertClass(other, WasmFugueText);
-            wasm.wasmfuguetext_merge(retptr, this.__wbg_ptr, other.__wbg_ptr);
-            var r0 = getDataViewMemory0().getInt32(retptr + 4 * 0, true);
-            var r1 = getDataViewMemory0().getInt32(retptr + 4 * 1, true);
-            if (r1) {
-                throw takeObject(r0);
-            }
-        } finally {
-            wasm.__wbindgen_add_to_stack_pointer(16);
-        }
-    }
-    /**
-     * Export as JSON string (for persistence/network)
-     * @returns {string}
-     */
-    toJSON() {
-        let deferred2_0;
-        let deferred2_1;
-        try {
-            const retptr = wasm.__wbindgen_add_to_stack_pointer(-16);
-            wasm.wasmfuguetext_toJSON(retptr, this.__wbg_ptr);
-            var r0 = getDataViewMemory0().getInt32(retptr + 4 * 0, true);
-            var r1 = getDataViewMemory0().getInt32(retptr + 4 * 1, true);
-            var r2 = getDataViewMemory0().getInt32(retptr + 4 * 2, true);
-            var r3 = getDataViewMemory0().getInt32(retptr + 4 * 3, true);
-            var ptr1 = r0;
-            var len1 = r1;
-            if (r3) {
-                ptr1 = 0; len1 = 0;
-                throw takeObject(r2);
-            }
-            deferred2_0 = ptr1;
-            deferred2_1 = len1;
-            return getStringFromWasm0(ptr1, len1);
-        } finally {
-            wasm.__wbindgen_add_to_stack_pointer(16);
-            wasm.__wbindgen_export(deferred2_0, deferred2_1, 1);
-        }
-    }
-    /**
-     * Import from JSON string (for loading from persistence/network)
-     * @param {string} json
-     * @returns {WasmFugueText}
-     */
-    static fromJSON(json) {
-        try {
-            const retptr = wasm.__wbindgen_add_to_stack_pointer(-16);
-            const ptr0 = passStringToWasm0(json, wasm.__wbindgen_export2, wasm.__wbindgen_export3);
-            const len0 = WASM_VECTOR_LEN;
-            wasm.wasmfuguetext_fromJSON(retptr, ptr0, len0);
-            var r0 = getDataViewMemory0().getInt32(retptr + 4 * 0, true);
-            var r1 = getDataViewMemory0().getInt32(retptr + 4 * 1, true);
-            var r2 = getDataViewMemory0().getInt32(retptr + 4 * 2, true);
-            if (r2) {
-                throw takeObject(r1);
-            }
-            return WasmFugueText.__wrap(r0);
-        } finally {
-            wasm.__wbindgen_add_to_stack_pointer(16);
-        }
-    }
-}
-if (Symbol.dispose) WasmFugueText.prototype[Symbol.dispose] = WasmFugueText.prototype.free;
 
 /**
  * JavaScript-friendly wrapper for VectorClock

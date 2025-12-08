@@ -14,7 +14,10 @@ import {
   SyncRequestMessage,
   SyncResponseMessage,
   DeltaMessage,
-  AckMessage
+  AckMessage,
+  AwarenessSubscribeMessage,
+  AwarenessUpdateMessage,
+  AwarenessStateMessage
 } from './protocol';
 import { config } from '../config';
 import { verifyToken } from '../auth/jwt';
@@ -54,12 +57,15 @@ export class SyncWebSocketServer {
 
   // ACK tracking for reliable delivery
   private pendingAcks: Map<string, PendingAckInfo> = new Map();
-  private readonly ACK_TIMEOUT = 3000; // 3 seconds
-  private readonly MAX_RETRIES = 3;
 
   // Delta batching to reduce message volume
   private pendingBatches: Map<string, { delta: Record<string, any>, timer: NodeJS.Timeout }> = new Map();
   private readonly BATCH_INTERVAL = 50; // 50ms batching window
+
+  // Awareness cleanup
+  private awarenessCleanupTimer?: NodeJS.Timeout;
+  private readonly AWARENESS_CLEANUP_INTERVAL = 30000; // 30 seconds
+  private readonly AWARENESS_TIMEOUT = 30000; // 30 seconds
 
   constructor(
     server: Server,
@@ -85,6 +91,7 @@ export class SyncWebSocketServer {
     console.log(`🔐 Authentication: ${authRequired ? 'Required' : 'Disabled (Dev Mode)'}`);
 
     this.setupHandlers();
+    this.startAwarenessCleanup();
   }
 
   /**
@@ -188,6 +195,14 @@ export class SyncWebSocketServer {
 
         case MessageType.ACK:
           this.handleAck(connection, message as AckMessage);
+          break;
+
+        case MessageType.AWARENESS_SUBSCRIBE:
+          await this.handleAwarenessSubscribe(connection, message as AwarenessSubscribeMessage);
+          break;
+
+        case MessageType.AWARENESS_UPDATE:
+          await this.handleAwarenessUpdate(connection, message as AwarenessUpdateMessage);
           break;
 
         default:
@@ -599,6 +614,149 @@ export class SyncWebSocketServer {
   }
 
 
+  // ===================
+  // Awareness Handlers
+  // ===================
+
+  /**
+   * Start periodic cleanup of stale awareness clients
+   */
+  private startAwarenessCleanup() {
+    this.awarenessCleanupTimer = setInterval(() => {
+      this.cleanupStaleAwarenessClients();
+    }, this.AWARENESS_CLEANUP_INTERVAL);
+
+    console.log(`🧹 Awareness cleanup started (interval: ${this.AWARENESS_CLEANUP_INTERVAL}ms, timeout: ${this.AWARENESS_TIMEOUT}ms)`);
+  }
+
+  /**
+   * Clean up stale awareness clients across all documents
+   */
+  private cleanupStaleAwarenessClients() {
+    // Get all document IDs that have awareness state
+    const documentIds = Array.from((this.coordinator as any).awarenessStates.keys()) as string[];
+
+    let totalRemoved = 0;
+    for (const documentId of documentIds) {
+      const removedClients = this.coordinator.removeStaleAwarenessClients(documentId, this.AWARENESS_TIMEOUT);
+
+      if (removedClients.length > 0) {
+        console.log(`[AwarenessCleanup] Removed ${removedClients.length} stale clients from ${documentId}`);
+
+        // Broadcast removal to subscribers
+        const subscribers = this.coordinator.getAwarenessSubscribers(documentId);
+
+        for (const clientId of removedClients) {
+          const updateMessage: AwarenessUpdateMessage = {
+            type: MessageType.AWARENESS_UPDATE,
+            id: createMessageId(),
+            timestamp: Date.now(),
+            documentId,
+            clientId,
+            state: null, // null indicates client left
+            clock: Date.now()
+          };
+
+          for (const connectionId of subscribers) {
+            const connection = this.registry.get(connectionId);
+            if (connection && connection.state === ConnectionState.AUTHENTICATED) {
+              connection.send(updateMessage);
+            }
+          }
+        }
+
+        totalRemoved += removedClients.length;
+      }
+    }
+
+    if (totalRemoved > 0) {
+      console.log(`[AwarenessCleanup] Total removed: ${totalRemoved} stale clients`);
+    }
+  }
+
+  /**
+   * Handle awareness subscription - client wants to receive awareness updates
+   */
+  private async handleAwarenessSubscribe(
+    connection: Connection,
+    message: AwarenessSubscribeMessage
+  ) {
+    const { documentId } = message;
+
+    console.log(`[AwarenessSubscribe] ${connection.id} subscribing to awareness for ${documentId}`);
+
+    try {
+      // Subscribe to awareness updates
+      this.coordinator.subscribeToAwareness(documentId, connection.id);
+
+      // Send current awareness state to the client
+      const awarenessStates = this.coordinator.getAwarenessStates(documentId);
+
+      const stateMessage: AwarenessStateMessage = {
+        type: MessageType.AWARENESS_STATE,
+        id: createMessageId(),
+        timestamp: Date.now(),
+        documentId,
+        states: awarenessStates.map(client => ({
+          clientId: client.clientId,
+          state: client.state!,
+          clock: client.clock
+        }))
+      };
+
+      connection.send(stateMessage);
+
+      console.log(`[AwarenessSubscribe] Sent ${awarenessStates.length} awareness states to ${connection.id}`);
+    } catch (error) {
+      console.error('[AwarenessSubscribe] Error:', error);
+      connection.sendError('Failed to subscribe to awareness');
+    }
+  }
+
+  /**
+   * Handle awareness update - client sent presence update, broadcast to others
+   */
+  private async handleAwarenessUpdate(
+    connection: Connection,
+    message: AwarenessUpdateMessage
+  ) {
+    const { documentId, clientId, state, clock } = message;
+
+    console.log(`[AwarenessUpdate] ${connection.id} updating awareness for client ${clientId} in ${documentId}`);
+
+    try {
+      // Update awareness state in coordinator
+      this.coordinator.setAwarenessState(documentId, clientId, state, clock);
+
+      // Broadcast to all awareness subscribers (including sender for echo)
+      const subscribers = this.coordinator.getAwarenessSubscribers(documentId);
+
+      const updateMessage: AwarenessUpdateMessage = {
+        type: MessageType.AWARENESS_UPDATE,
+        id: createMessageId(),
+        timestamp: Date.now(),
+        documentId,
+        clientId,
+        state,
+        clock
+      };
+
+      let broadcastCount = 0;
+      for (const connectionId of subscribers) {
+        const targetConnection = this.registry.get(connectionId);
+        if (targetConnection && targetConnection.state === ConnectionState.AUTHENTICATED) {
+          targetConnection.send(updateMessage);
+          broadcastCount++;
+        }
+      }
+
+      console.log(`[AwarenessUpdate] Broadcasted to ${broadcastCount} subscribers`);
+    } catch (error) {
+      console.error('[AwarenessUpdate] Error:', error);
+      connection.sendError('Failed to update awareness');
+    }
+  }
+
   /**
    * Handle connection disconnect
    */
@@ -610,6 +768,16 @@ export class SyncWebSocketServer {
     for (const documentId of subscriptions) {
       this.coordinator.unsubscribe(documentId, connection.id);
     }
+
+    // Clean up awareness subscriptions for this connection
+    // Get all document IDs with awareness state
+    const documentIds = Array.from((this.coordinator as any).awarenessStates.keys()) as string[];
+    for (const documentId of documentIds) {
+      this.coordinator.unsubscribeFromAwareness(documentId, connection.id);
+    }
+
+    // Note: Awareness client state will be cleaned up by the periodic cleanup task
+    // when the client stops sending heartbeats (30s timeout)
 
     // Clean up pending ACKs for this connection
     const keysToDelete: string[] = [];
@@ -648,6 +816,12 @@ export class SyncWebSocketServer {
 
   async close() {
     console.log('Closing WebSocket server...');
+
+    // Stop awareness cleanup timer
+    if (this.awarenessCleanupTimer) {
+      clearInterval(this.awarenessCleanupTimer);
+      this.awarenessCleanupTimer = undefined;
+    }
 
     // Close all connections
     this.registry.closeAll(1001, 'Server shutdown');

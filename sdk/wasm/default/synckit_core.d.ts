@@ -1,30 +1,54 @@
 /* tslint:disable */
 /* eslint-disable */
 
-export class WasmDelta {
-  private constructor();
+export class WasmAwareness {
   free(): void;
   [Symbol.dispose](): void;
   /**
-   * Compute delta between two documents
+   * Create a new awareness instance
    */
-  static compute(from: WasmDocument, to: WasmDocument): WasmDelta;
+  constructor(client_id: string);
   /**
-   * Apply delta to a document
+   * Get the local client ID
    */
-  applyTo(document: WasmDocument, client_id: string): void;
+  getClientId(): string;
   /**
-   * Get document ID this delta applies to
+   * Set local client state (pass JSON string)
    */
-  getDocumentId(): string;
+  setLocalState(state_json: string): string;
   /**
-   * Get number of changes in this delta
+   * Apply remote awareness update (pass JSON string)
    */
-  changeCount(): number;
+  applyUpdate(update_json: string): void;
   /**
-   * Export as JSON string
+   * Get all client states as JSON string
    */
-  toJSON(): string;
+  getStates(): string;
+  /**
+   * Get state for specific client as JSON string
+   */
+  getState(client_id: string): string | undefined;
+  /**
+   * Get local client's state as JSON string
+   */
+  getLocalState(): string | undefined;
+  /**
+   * Remove stale clients (timeout in milliseconds)
+   * Returns JSON array of removed client IDs
+   */
+  removeStaleClients(timeout_ms: bigint): string;
+  /**
+   * Create update to signal leaving
+   */
+  createLeaveUpdate(): string;
+  /**
+   * Get number of online clients
+   */
+  clientCount(): number;
+  /**
+   * Get number of other clients (excluding self)
+   */
+  otherClientCount(): number;
 }
 
 export class WasmDocument {
@@ -62,69 +86,6 @@ export class WasmDocument {
    * Merge with another document
    */
   merge(other: WasmDocument): void;
-}
-
-export class WasmFugueText {
-  free(): void;
-  [Symbol.dispose](): void;
-  /**
-   * Create a new FugueText with the given client ID
-   */
-  constructor(client_id: string);
-  /**
-   * Insert text at the given position
-   *
-   * # Arguments
-   * * `position` - Grapheme index (user-facing position)
-   * * `text` - Text to insert
-   *
-   * # Returns
-   * JSON string of NodeId for the created block
-   */
-  insert(position: number, text: string): string;
-  /**
-   * Delete text at the given position
-   *
-   * # Arguments
-   * * `position` - Starting grapheme index
-   * * `length` - Number of graphemes to delete
-   *
-   * # Returns
-   * JSON string of array of deleted NodeIds
-   */
-  delete(position: number, length: number): string;
-  /**
-   * Get the text content as a string
-   */
-  toString(): string;
-  /**
-   * Get the length in graphemes (user-perceived characters)
-   */
-  length(): number;
-  /**
-   * Check if the text is empty
-   */
-  isEmpty(): boolean;
-  /**
-   * Get the client ID
-   */
-  getClientId(): string;
-  /**
-   * Get the current Lamport clock value
-   */
-  getClock(): bigint;
-  /**
-   * Merge with another FugueText
-   */
-  merge(other: WasmFugueText): void;
-  /**
-   * Export as JSON string (for persistence/network)
-   */
-  toJSON(): string;
-  /**
-   * Import from JSON string (for loading from persistence/network)
-   */
-  static fromJSON(json: string): WasmFugueText;
 }
 
 export class WasmVectorClock {
@@ -171,7 +132,6 @@ export interface InitOutput {
   readonly wasmdocument_getField: (a: number, b: number, c: number, d: number) => void;
   readonly wasmdocument_deleteField: (a: number, b: number, c: number) => void;
   readonly wasmdocument_getId: (a: number, b: number) => void;
-  readonly wasmdocument_fieldCount: (a: number) => number;
   readonly wasmdocument_toJSON: (a: number, b: number) => void;
   readonly wasmdocument_merge: (a: number, b: number) => void;
   readonly __wbg_wasmvectorclock_free: (a: number, b: number) => void;
@@ -181,24 +141,19 @@ export interface InitOutput {
   readonly wasmvectorclock_get: (a: number, b: number, c: number) => bigint;
   readonly wasmvectorclock_merge: (a: number, b: number) => void;
   readonly wasmvectorclock_toJSON: (a: number, b: number) => void;
-  readonly __wbg_wasmdelta_free: (a: number, b: number) => void;
-  readonly wasmdelta_compute: (a: number, b: number, c: number) => void;
-  readonly wasmdelta_applyTo: (a: number, b: number, c: number, d: number, e: number) => void;
-  readonly wasmdelta_getDocumentId: (a: number, b: number) => void;
-  readonly wasmdelta_changeCount: (a: number) => number;
-  readonly wasmdelta_toJSON: (a: number, b: number) => void;
-  readonly __wbg_wasmfuguetext_free: (a: number, b: number) => void;
-  readonly wasmfuguetext_new: (a: number, b: number) => number;
-  readonly wasmfuguetext_insert: (a: number, b: number, c: number, d: number, e: number) => void;
-  readonly wasmfuguetext_delete: (a: number, b: number, c: number, d: number) => void;
-  readonly wasmfuguetext_toString: (a: number, b: number) => void;
-  readonly wasmfuguetext_length: (a: number) => number;
-  readonly wasmfuguetext_isEmpty: (a: number) => number;
-  readonly wasmfuguetext_getClientId: (a: number, b: number) => void;
-  readonly wasmfuguetext_getClock: (a: number) => bigint;
-  readonly wasmfuguetext_merge: (a: number, b: number, c: number) => void;
-  readonly wasmfuguetext_toJSON: (a: number, b: number) => void;
-  readonly wasmfuguetext_fromJSON: (a: number, b: number, c: number) => void;
+  readonly __wbg_wasmawareness_free: (a: number, b: number) => void;
+  readonly wasmawareness_new: (a: number, b: number) => number;
+  readonly wasmawareness_getClientId: (a: number, b: number) => void;
+  readonly wasmawareness_setLocalState: (a: number, b: number, c: number, d: number) => void;
+  readonly wasmawareness_applyUpdate: (a: number, b: number, c: number, d: number) => void;
+  readonly wasmawareness_getStates: (a: number, b: number) => void;
+  readonly wasmawareness_getState: (a: number, b: number, c: number, d: number) => void;
+  readonly wasmawareness_getLocalState: (a: number, b: number) => void;
+  readonly wasmawareness_removeStaleClients: (a: number, b: number, c: bigint) => void;
+  readonly wasmawareness_createLeaveUpdate: (a: number, b: number) => void;
+  readonly wasmawareness_clientCount: (a: number) => number;
+  readonly wasmawareness_otherClientCount: (a: number) => number;
+  readonly wasmdocument_fieldCount: (a: number) => number;
   readonly init_panic_hook: () => void;
   readonly __wbindgen_export: (a: number, b: number, c: number) => void;
   readonly __wbindgen_export2: (a: number, b: number) => number;

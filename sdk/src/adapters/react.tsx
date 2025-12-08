@@ -609,3 +609,286 @@ export function useSyncSet<T extends string = string>(
 
   return [values, { add, remove, clear }, set!]
 }
+
+// ====================
+// Awareness Hooks
+// ====================
+
+/**
+ * Hook for accessing awareness instance for a specific document
+ * Returns [awareness, { setLocalState }]
+ *
+ * @param documentId - The document ID to track awareness for
+ *
+ * @example
+ * ```tsx
+ * function UserPresence() {
+ *   const [awareness, { setLocalState }] = useAwareness('doc-123')
+ *
+ *   useEffect(() => {
+ *     setLocalState({
+ *       user: { name: 'Alice', color: '#FF6B6B' }
+ *     })
+ *   }, [])
+ *
+ *   const states = awareness?.getStates()
+ *   return <p>{states?.size || 0} users online</p>
+ * }
+ * ```
+ */
+export function useAwareness(documentId: string): [
+  import('../awareness').Awareness | null,
+  {
+    setLocalState: (state: Record<string, unknown>) => Promise<import('../awareness').AwarenessUpdate>
+  }
+] {
+  const synckit = useSyncKit()
+  const awarenessRef = useRef<import('../awareness').Awareness | null>(null)
+  const [initialized, setInitialized] = useState(false)
+
+  // Get awareness instance from SyncKit
+  if (!awarenessRef.current) {
+    awarenessRef.current = synckit.getAwareness(documentId)
+  }
+
+  const awareness = awarenessRef.current
+
+  // Initialize awareness
+  useEffect(() => {
+    if (!awareness) return
+
+    let cancelled = false
+
+    awareness.init().then(() => {
+      if (!cancelled) {
+        setInitialized(true)
+      }
+    }).catch((error) => {
+      console.error('Failed to initialize awareness:', error)
+    })
+
+    return () => {
+      cancelled = true
+    }
+  }, [awareness])
+
+  // Memoized setLocalState
+  const setLocalState = useCallback(
+    (state: Record<string, unknown>) => {
+      if (!awareness || !initialized) {
+        return Promise.reject(new Error('Awareness not initialized'))
+      }
+      return awareness.setLocalState(state)
+    },
+    [awareness, initialized]
+  )
+
+  return [initialized ? awareness : null, { setLocalState }]
+}
+
+/**
+ * Hook for managing local user presence state for a specific document
+ * Automatically updates awareness with provided state
+ * Returns [localState, setLocalState]
+ *
+ * @param documentId - The document ID to track presence for
+ * @param initialState - Initial presence state
+ *
+ * @example
+ * ```tsx
+ * function Cursor() {
+ *   const [presence, setPresence] = usePresence('doc-123', {
+ *     user: { name: 'Alice', color: '#FF6B6B' }
+ *   })
+ *
+ *   const handleMouseMove = (e: React.MouseEvent) => {
+ *     setPresence({
+ *       ...presence,
+ *       cursor: { x: e.clientX, y: e.clientY }
+ *     })
+ *   }
+ *
+ *   return <div onMouseMove={handleMouseMove}>Move your mouse</div>
+ * }
+ * ```
+ */
+export function usePresence(
+  documentId: string,
+  initialState?: Record<string, unknown>
+): [
+  Record<string, unknown> | undefined,
+  (state: Record<string, unknown>) => Promise<void>
+] {
+  const synckit = useSyncKit()
+  const [awareness, { setLocalState }] = useAwareness(documentId)
+  const [localState, setLocalStateValue] = useState<Record<string, unknown> | undefined>(initialState)
+  const [subscribed, setSubscribed] = useState(false)
+
+  // Set initial state on mount
+  useEffect(() => {
+    if (!awareness || !initialState) return
+
+    setLocalState(initialState).catch((error) => {
+      console.error('Failed to set initial presence state:', error)
+    })
+  }, [awareness, initialState, setLocalState])
+
+  // Subscribe to awareness changes to track local state updates
+  useEffect(() => {
+    if (!awareness || subscribed) return
+
+    const unsubscribe = awareness.subscribe(({ updated }) => {
+      const clientId = awareness.getClientId()
+      if (updated.includes(clientId)) {
+        const state = awareness.getLocalState()
+        if (state) {
+          setLocalStateValue(state.state)
+        }
+      }
+    })
+
+    setSubscribed(true)
+
+    return () => {
+      unsubscribe()
+      setSubscribed(false)
+    }
+  }, [awareness, subscribed])
+
+  // Cleanup: Send leave message on unmount
+  useEffect(() => {
+    if (!awareness) return
+
+    return () => {
+      // Send leave update to notify other clients
+      const syncManager = (synckit as any).syncManager
+      if (syncManager) {
+        try {
+          syncManager.sendAwarenessLeave(documentId).catch((error: Error) => {
+            console.error(`Failed to send leave update for ${documentId}:`, error)
+          })
+        } catch (error) {
+          console.error(`Failed to send leave update for ${documentId}:`, error)
+        }
+      }
+    }
+  }, [awareness, documentId, synckit])
+
+  // Memoized setter that updates both awareness and local state
+  const updatePresence = useCallback(
+    async (state: Record<string, unknown>) => {
+      await setLocalState(state)
+      setLocalStateValue(state)
+    },
+    [setLocalState]
+  )
+
+  return [localState, updatePresence]
+}
+
+/**
+ * Hook for tracking other online users (excluding self) for a specific document
+ * Returns array of other client states
+ *
+ * @param documentId - The document ID to track users for
+ *
+ * @example
+ * ```tsx
+ * function OnlineUsers() {
+ *   const others = useOthers('doc-123')
+ *
+ *   return (
+ *     <div>
+ *       <h3>{others.length} others online</h3>
+ *       {others.map(user => (
+ *         <div key={user.client_id}>
+ *           {user.state.user?.name || 'Anonymous'}
+ *         </div>
+ *       ))}
+ *     </div>
+ *   )
+ * }
+ * ```
+ */
+export function useOthers(documentId: string): import('../awareness').AwarenessState[] {
+  const [awareness] = useAwareness(documentId)
+  const [others, setOthers] = useState<import('../awareness').AwarenessState[]>([])
+
+  useEffect(() => {
+    if (!awareness) return
+
+    const updateOthers = () => {
+      const allStates = awareness.getStates()
+      const clientId = awareness.getClientId()
+      const otherStates = Array.from(allStates.values()).filter(
+        (state) => state.client_id !== clientId
+      )
+      setOthers(otherStates)
+    }
+
+    // Set initial others
+    updateOthers()
+
+    // Subscribe to changes
+    const unsubscribe = awareness.subscribe(() => {
+      updateOthers()
+    })
+
+    return unsubscribe
+  }, [awareness])
+
+  return others
+}
+
+/**
+ * Hook for tracking local user state for a specific document
+ * Returns local client's awareness state
+ *
+ * @param documentId - The document ID to track state for
+ *
+ * @example
+ * ```tsx
+ * function MyPresence() {
+ *   const self = useSelf('doc-123')
+ *
+ *   if (!self) {
+ *     return <p>Not initialized</p>
+ *   }
+ *
+ *   return (
+ *     <div>
+ *       <p>You: {self.state.user?.name}</p>
+ *       <p>Cursor: {JSON.stringify(self.state.cursor)}</p>
+ *     </div>
+ *   )
+ * }
+ * ```
+ */
+export function useSelf(documentId: string): import('../awareness').AwarenessState | undefined {
+  const [awareness] = useAwareness(documentId)
+  const [self, setSelf] = useState<import('../awareness').AwarenessState | undefined>()
+
+  useEffect(() => {
+    if (!awareness) return
+
+    const updateSelf = () => {
+      const localState = awareness.getLocalState()
+      setSelf(localState)
+    }
+
+    // Set initial self
+    updateSelf()
+
+    // Subscribe to changes
+    const unsubscribe = awareness.subscribe(({ updated }) => {
+      const clientId = awareness.getClientId()
+      if (updated.includes(clientId)) {
+        updateSelf()
+      }
+    })
+
+    return unsubscribe
+  }, [awareness])
+
+  return self
+}

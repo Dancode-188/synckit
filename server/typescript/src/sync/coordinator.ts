@@ -14,6 +14,25 @@ export interface DocumentState {
 }
 
 /**
+ * Awareness Client - tracks awareness state for a single client
+ */
+export interface AwarenessClient {
+  clientId: string;
+  state: Record<string, unknown> | null;
+  clock: number;
+  lastUpdated: number; // timestamp for stale detection
+}
+
+/**
+ * Awareness Document State - tracks awareness for a document
+ */
+export interface AwarenessDocumentState {
+  documentId: string;
+  clients: Map<string, AwarenessClient>; // clientId -> awareness state
+  subscribers: Set<string>; // Connection IDs subscribed to awareness updates
+}
+
+/**
  * Sync Coordinator - manages document synchronization
  * 
  * This is the core sync engine that:
@@ -27,6 +46,7 @@ export interface DocumentState {
  */
 export class SyncCoordinator {
   private documents: Map<string, DocumentState> = new Map();
+  private awarenessStates: Map<string, AwarenessDocumentState> = new Map();
   private storage?: StorageAdapter;
   private pubsub?: RedisPubSub;
   private serverId: string;
@@ -66,7 +86,7 @@ export class SyncCoordinator {
   /**
    * Handle broadcast events from other servers
    */
-  private handleBroadcastEvent(event: string, data: any) {
+  private handleBroadcastEvent(_event: string, _data: any) {
     // Handle cross-server events here
     // For example: invalidate cache, update metrics, etc.
   }
@@ -283,26 +303,6 @@ export class SyncCoordinator {
   }
 
   /**
-   * Get maximum clock value across all clients (for Lamport clock implementation)
-   */
-  private getMaxClock(vectorClock: any): bigint {
-    try {
-      const clockJson = vectorClock.toJSON();
-      const clocks = JSON.parse(clockJson);
-      let max = 0n;
-      for (const value of Object.values(clocks)) {
-        const clockValue = BigInt(value as number);
-        if (clockValue > max) {
-          max = clockValue;
-        }
-      }
-      return max;
-    } catch (error) {
-      return 0n;
-    }
-  }
-
-  /**
    * Set field value in document (with persistence)
    * Returns the authoritative value after LWW conflict resolution
    */
@@ -323,9 +323,13 @@ export class SyncCoordinator {
     // Use provided timestamp or current time for LWW
     const writeTimestamp = timestamp || Date.now();
 
-    // Set field - returns authoritative value after LWW (works with both WASM and mock)
-    const authoritativeValue = state.wasmDoc.setField(path, JSON.stringify(value), newClock, clientId, writeTimestamp);
+    // Set field with LWW conflict resolution
+    state.wasmDoc.setField(path, JSON.stringify(value), newClock, clientId);
     state.lastModified = writeTimestamp;
+
+    // Get the authoritative value after LWW resolution
+    const fieldValue = state.wasmDoc.getField(path);
+    const authoritativeValue = fieldValue ? JSON.parse(fieldValue) : value;
 
     // Persist to storage if available
     if (this.storage) {
@@ -374,21 +378,23 @@ export class SyncCoordinator {
     const writeTimestamp = timestamp || Date.now();
 
     // Delete using LWW - set field to a special tombstone value
-    // The mock's setField will handle LWW comparison
     const tombstone = { __deleted: true };
-    const authoritativeValue = state.wasmDoc.setField(
+    state.wasmDoc.setField(
       path,
       JSON.stringify(tombstone),
       newClock,
-      clientId,
-      writeTimestamp
+      clientId
     );
     state.lastModified = writeTimestamp;
+
+    // Get the authoritative value after LWW resolution
+    const fieldValue = state.wasmDoc.getField(path);
+    const authoritativeValue = fieldValue ? JSON.parse(fieldValue) : null;
 
     let result: any;
 
     // If LWW determined the delete wins, actually remove from fields and return null
-    if (authoritativeValue && authoritativeValue.__deleted === true) {
+    if (authoritativeValue && typeof authoritativeValue === 'object' && authoritativeValue.__deleted === true) {
       if ('fields' in state.wasmDoc && state.wasmDoc.fields instanceof Map) {
         state.wasmDoc.fields.delete(path);
       }
@@ -529,26 +535,6 @@ export class SyncCoordinator {
   }
 
   /**
-   * Clone document (for delta computation)
-   * 
-   * Note: Currently creates empty document for delta computation.
-   * In production, would need proper field-by-field cloning.
-   */
-  private cloneDocument(doc: WasmDocument): WasmDocument {
-    // Get document JSON for cloning
-    const jsonStr = doc.toJSON();
-    const data = JSON.parse(jsonStr);
-    
-    // Create new document with same ID for delta computation
-    const clone = new WasmDocument(data.id || 'temp-clone');
-    
-    // TODO: Restore all fields from original document
-    // For now, using empty document which works for basic delta computation
-    
-    return clone;
-  }
-
-  /**
    * Get stats
    */
   getStats() {
@@ -576,6 +562,134 @@ export class SyncCoordinator {
     this.documents.clear();
   }
 
+  // ===================
+  // Awareness Management
+  // ===================
+
+  /**
+   * Get or create awareness state for a document
+   */
+  private getAwarenessState(documentId: string): AwarenessDocumentState {
+    let state = this.awarenessStates.get(documentId);
+
+    if (!state) {
+      state = {
+        documentId,
+        clients: new Map(),
+        subscribers: new Set(),
+      };
+      this.awarenessStates.set(documentId, state);
+    }
+
+    return state;
+  }
+
+  /**
+   * Set awareness state for a client
+   */
+  setAwarenessState(
+    documentId: string,
+    clientId: string,
+    state: Record<string, unknown> | null,
+    clock: number
+  ): void {
+    const awarenessState = this.getAwarenessState(documentId);
+
+    if (state === null) {
+      // Client is leaving
+      awarenessState.clients.delete(clientId);
+    } else {
+      // Update or create client state
+      awarenessState.clients.set(clientId, {
+        clientId,
+        state,
+        clock,
+        lastUpdated: Date.now(),
+      });
+    }
+  }
+
+  /**
+   * Get all awareness states for a document
+   */
+  getAwarenessStates(documentId: string): AwarenessClient[] {
+    const awarenessState = this.awarenessStates.get(documentId);
+    if (!awarenessState) {
+      return [];
+    }
+
+    return Array.from(awarenessState.clients.values());
+  }
+
+  /**
+   * Get awareness state for a specific client
+   */
+  getAwarenessClient(documentId: string, clientId: string): AwarenessClient | undefined {
+    const awarenessState = this.awarenessStates.get(documentId);
+    return awarenessState?.clients.get(clientId);
+  }
+
+  /**
+   * Remove stale awareness clients (haven't updated within timeout)
+   */
+  removeStaleAwarenessClients(documentId: string, timeoutMs: number = 30000): string[] {
+    const awarenessState = this.awarenessStates.get(documentId);
+    if (!awarenessState) {
+      return [];
+    }
+
+    const now = Date.now();
+    const removedClients: string[] = [];
+
+    for (const [clientId, client] of awarenessState.clients.entries()) {
+      if (now - client.lastUpdated > timeoutMs) {
+        awarenessState.clients.delete(clientId);
+        removedClients.push(clientId);
+      }
+    }
+
+    return removedClients;
+  }
+
+  /**
+   * Subscribe connection to awareness updates for a document
+   */
+  subscribeToAwareness(documentId: string, connectionId: string): void {
+    const awarenessState = this.getAwarenessState(documentId);
+    awarenessState.subscribers.add(connectionId);
+  }
+
+  /**
+   * Unsubscribe connection from awareness updates
+   */
+  unsubscribeFromAwareness(documentId: string, connectionId: string): void {
+    const awarenessState = this.awarenessStates.get(documentId);
+    if (awarenessState) {
+      awarenessState.subscribers.delete(connectionId);
+    }
+  }
+
+  /**
+   * Get all subscribers to awareness updates for a document
+   */
+  getAwarenessSubscribers(documentId: string): string[] {
+    const awarenessState = this.awarenessStates.get(documentId);
+    if (!awarenessState) {
+      return [];
+    }
+
+    return Array.from(awarenessState.subscribers);
+  }
+
+  /**
+   * Clear awareness state for a specific client across all documents
+   */
+  clearClientAwareness(clientId: string): void {
+    for (const awarenessState of this.awarenessStates.values()) {
+      awarenessState.clients.delete(clientId);
+    }
+  }
+
   /**
    * Cleanup - dispose all WASM resources and connections
    */
@@ -595,6 +709,9 @@ export class SyncCoordinator {
       state.vectorClock.free();
     }
     this.documents.clear();
+
+    // Clear awareness states
+    this.awarenessStates.clear();
 
     // Close storage connection
     if (this.storage) {

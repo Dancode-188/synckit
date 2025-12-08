@@ -10,6 +10,8 @@
 import type { StorageAdapter, Unsubscribe } from '../types'
 import type { WebSocketClient } from '../websocket/client'
 import type { OfflineQueue, Operation, VectorClock } from './queue'
+import { AwarenessManager } from './awareness-manager'
+import type { Awareness } from '../awareness'
 
 // Re-export types from queue for easier importing
 export type { Operation, VectorClock } from './queue'
@@ -27,9 +29,6 @@ export interface SyncManagerConfig {
 
   /** Offline queue instance */
   offlineQueue: OfflineQueue
-
-  /** Client ID for this client */
-  clientId: string
 }
 
 // ====================
@@ -73,6 +72,7 @@ export interface SyncableDocument {
 export class SyncManager {
   private websocket: WebSocketClient
   private offlineQueue: OfflineQueue
+  private awarenessManager: AwarenessManager
 
   // Document subscriptions
   private subscriptions = new Set<string>()
@@ -95,6 +95,11 @@ export class SyncManager {
   constructor(config: SyncManagerConfig) {
     this.websocket = config.websocket
     this.offlineQueue = config.offlineQueue
+
+    // Initialize awareness manager
+    this.awarenessManager = new AwarenessManager({
+      websocket: this.websocket,
+    })
 
     this.setupMessageHandlers()
     this.setupConnectionHandlers()
@@ -749,5 +754,58 @@ export class SyncManager {
     const timestamp = Date.now().toString(36)
     const random = Math.random().toString(36).substring(2, 15)
     return `msg-${timestamp}-${random}`
+  }
+
+  // ====================
+  // Awareness Methods
+  // ====================
+
+  /**
+   * Register awareness instance for a document
+   */
+  registerAwareness(documentId: string, awareness: Awareness): void {
+    this.awarenessManager.registerAwareness(documentId, awareness)
+
+    // Set up onChange callback to automatically broadcast updates to server
+    awareness.setOnChange((update) => {
+      this.websocket.send({
+        type: 'awareness_update',
+        payload: {
+          documentId,
+          clientId: update.client_id,
+          state: update.state,
+          clock: update.clock,
+        },
+        timestamp: Date.now(),
+      })
+    })
+  }
+
+  /**
+   * Subscribe to awareness for a document
+   */
+  async subscribeToAwareness(documentId: string): Promise<void> {
+    await this.awarenessManager.subscribeToAwareness(documentId)
+  }
+
+  /**
+   * Broadcast local awareness state to other clients
+   */
+  async broadcastAwarenessState(documentId: string, state: Record<string, unknown>): Promise<void> {
+    await this.awarenessManager.broadcastLocalState(documentId, state)
+  }
+
+  /**
+   * Send leave update when disconnecting
+   */
+  async sendAwarenessLeave(documentId: string): Promise<void> {
+    await this.awarenessManager.sendLeaveUpdate(documentId)
+  }
+
+  /**
+   * Get awareness manager instance
+   */
+  getAwarenessManager(): AwarenessManager {
+    return this.awarenessManager
   }
 }

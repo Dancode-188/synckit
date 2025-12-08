@@ -1,0 +1,36 @@
+/* tslint:disable */
+/* eslint-disable */
+export const memory: WebAssembly.Memory;
+export const __wbg_wasmdocument_free: (a: number, b: number) => void;
+export const wasmdocument_new: (a: number, b: number) => number;
+export const wasmdocument_setField: (a: number, b: number, c: number, d: number, e: number, f: number, g: bigint, h: number, i: number) => void;
+export const wasmdocument_getField: (a: number, b: number, c: number, d: number) => void;
+export const wasmdocument_deleteField: (a: number, b: number, c: number) => void;
+export const wasmdocument_getId: (a: number, b: number) => void;
+export const wasmdocument_toJSON: (a: number, b: number) => void;
+export const wasmdocument_merge: (a: number, b: number) => void;
+export const __wbg_wasmvectorclock_free: (a: number, b: number) => void;
+export const wasmvectorclock_new: () => number;
+export const wasmvectorclock_tick: (a: number, b: number, c: number) => void;
+export const wasmvectorclock_update: (a: number, b: number, c: number, d: bigint) => void;
+export const wasmvectorclock_get: (a: number, b: number, c: number) => bigint;
+export const wasmvectorclock_merge: (a: number, b: number) => void;
+export const wasmvectorclock_toJSON: (a: number, b: number) => void;
+export const __wbg_wasmawareness_free: (a: number, b: number) => void;
+export const wasmawareness_new: (a: number, b: number) => number;
+export const wasmawareness_getClientId: (a: number, b: number) => void;
+export const wasmawareness_setLocalState: (a: number, b: number, c: number, d: number) => void;
+export const wasmawareness_applyUpdate: (a: number, b: number, c: number, d: number) => void;
+export const wasmawareness_getStates: (a: number, b: number) => void;
+export const wasmawareness_getState: (a: number, b: number, c: number, d: number) => void;
+export const wasmawareness_getLocalState: (a: number, b: number) => void;
+export const wasmawareness_removeStaleClients: (a: number, b: number, c: bigint) => void;
+export const wasmawareness_createLeaveUpdate: (a: number, b: number) => void;
+export const wasmawareness_clientCount: (a: number) => number;
+export const wasmawareness_otherClientCount: (a: number) => number;
+export const wasmdocument_fieldCount: (a: number) => number;
+export const init_panic_hook: () => void;
+export const __wbindgen_export: (a: number, b: number, c: number) => void;
+export const __wbindgen_export2: (a: number, b: number) => number;
+export const __wbindgen_export3: (a: number, b: number, c: number, d: number) => number;
+export const __wbindgen_add_to_stack_pointer: (a: number) => number;

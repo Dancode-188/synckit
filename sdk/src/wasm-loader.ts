@@ -17,6 +17,9 @@ export interface WASMModule {
   WasmDelta: {
     compute(from: WasmDocument, to: WasmDocument): WasmDelta
   }
+  WasmAwareness: {
+    new (clientId: string): any // WasmAwareness instance
+  }
   init_panic_hook(): void
 }
 
