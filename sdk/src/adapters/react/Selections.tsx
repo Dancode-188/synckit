@@ -65,11 +65,9 @@ export function Selections({
   opacity = 0.2,
   users = []
 }: SelectionsProps): ReactNode {
-  // Filter users based on showSelf
-  // Note: In real usage, users array should come from usePresence hook
-  // and filtering should happen there, but we keep it simple for now
-
-  const usersWithSelections = users.filter(u => u.selection && u.selection.rects.length > 0)
+  // Filter users to only those with selections
+  // Selection component handles deserialization and validation internally
+  const usersWithSelections = users.filter(u => u.selection != null)
 
   return (
     <>

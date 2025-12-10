@@ -5,8 +5,8 @@
 
 import { useCallback, useEffect, useRef, type RefObject } from 'react'
 import { usePresence, useSyncKit } from '../react'
-import { getSelectionFromDOM, isSelectionEmpty } from '../../cursor'
-import type { SelectionRange, CursorMode } from '../../cursor/types'
+import { getSerializedSelectionFromDOM } from '../../cursor'
+import type { SerializedRange } from '../../cursor/types'
 
 /**
  * Options for useSelection hook
@@ -18,15 +18,9 @@ export interface UseSelectionOptions {
   documentId: string
 
   /**
-   * Container ref for selection tracking (required for container mode)
+   * Container ref for selection tracking (optional, used for filtering selections to container)
    */
   containerRef?: RefObject<HTMLElement>
-
-  /**
-   * Positioning mode (viewport or container)
-   * @default 'viewport'
-   */
-  mode?: CursorMode
 
   /**
    * Whether to track selection automatically
@@ -54,14 +48,14 @@ export interface UseSelectionReturn {
   }
 
   /**
-   * Current selection range (local user)
+   * Current selection (local user) - semantic representation
    */
-  selection: SelectionRange | null
+  selection: SerializedRange | null
 
   /**
    * Manually set selection (useful for programmatic selection)
    */
-  setSelection: (selection: SelectionRange | null) => void
+  setSelection: (selection: SerializedRange | null) => void
 
   /**
    * Clear current selection
@@ -101,7 +95,6 @@ export function useSelection(options: UseSelectionOptions): UseSelectionReturn {
   const {
     documentId,
     containerRef: externalContainerRef,
-    mode = 'viewport',
     enabled = true,
     throttleMs = 100
   } = options
@@ -110,7 +103,7 @@ export function useSelection(options: UseSelectionOptions): UseSelectionReturn {
   const internalContainerRef = useRef<HTMLElement>(null)
   const containerRef = externalContainerRef || internalContainerRef
   const [presence, setPresence] = usePresence(documentId, {
-    selection: null as SelectionRange | null
+    selection: null as SerializedRange | null
   })
 
   // Get awareness instance to read current state before updating
@@ -121,13 +114,13 @@ export function useSelection(options: UseSelectionOptions): UseSelectionReturn {
   }
 
   const throttleTimeoutRef = useRef<NodeJS.Timeout | null>(null)
-  const pendingSelectionRef = useRef<SelectionRange | null>(null)
+  const pendingSelectionRef = useRef<SerializedRange | null>(null)
 
   /**
    * Update selection in presence state (throttled)
    */
   const updateSelection = useCallback(
-    (selection: SelectionRange | null) => {
+    (selection: SerializedRange | null) => {
       // Store pending selection
       pendingSelectionRef.current = selection
 
@@ -147,7 +140,7 @@ export function useSelection(options: UseSelectionOptions): UseSelectionReturn {
           ...currentState,  // Preserve cursor, name, color
           selection: sel
         }
-        console.log('[useSelection] 📡 Sending to server:', newState)
+        console.log('[useSelection] 📡 Sending semantic selection:', newState)
         setPresence(newState)
 
         throttleTimeoutRef.current = null
@@ -164,11 +157,6 @@ export function useSelection(options: UseSelectionOptions): UseSelectionReturn {
       return
     }
 
-    if (mode === 'container' && !containerRef.current) {
-      console.warn('[useSelection] Container mode requires containerRef')
-      return
-    }
-
     const browserSelection = window.getSelection()
 
     // No selection or collapsed selection (just cursor, no range)
@@ -177,8 +165,8 @@ export function useSelection(options: UseSelectionOptions): UseSelectionReturn {
       return
     }
 
-    // For container mode, check if selection is within our container
-    if (mode === 'container' && containerRef.current) {
+    // If containerRef provided, check if selection is within our container
+    if (containerRef.current) {
       const range = browserSelection.getRangeAt(0)
       if (!containerRef.current.contains(range.commonAncestorContainer)) {
         updateSelection(null)
@@ -186,20 +174,17 @@ export function useSelection(options: UseSelectionOptions): UseSelectionReturn {
       }
     }
 
-    // Convert DOM selection to our SelectionRange format
-    const selectionRange = getSelectionFromDOM(
-      mode,
-      containerRef.current || undefined
-    )
+    // Serialize DOM selection to semantic format (XPath + offsets)
+    const serializedSelection = getSerializedSelectionFromDOM()
 
-    if (!selectionRange || isSelectionEmpty(selectionRange)) {
+    if (!serializedSelection) {
       updateSelection(null)
       return
     }
 
     // Update selection
-    updateSelection(selectionRange)
-  }, [enabled, mode, containerRef, updateSelection])
+    updateSelection(serializedSelection)
+  }, [enabled, containerRef, updateSelection])
 
   /**
    * Set up selection change listener
@@ -210,22 +195,6 @@ export function useSelection(options: UseSelectionOptions): UseSelectionReturn {
     // Listen to global selectionchange event
     document.addEventListener('selectionchange', handleSelectionChange)
 
-    // For container mode, also update on scroll (selection coords change when scrolling)
-    if (mode === 'container' && containerRef.current) {
-      const container = containerRef.current
-      container.addEventListener('scroll', handleSelectionChange, { passive: true })
-
-      return () => {
-        document.removeEventListener('selectionchange', handleSelectionChange)
-        container.removeEventListener('scroll', handleSelectionChange)
-
-        // Clear throttle timeout
-        if (throttleTimeoutRef.current) {
-          clearTimeout(throttleTimeoutRef.current)
-        }
-      }
-    }
-
     return () => {
       document.removeEventListener('selectionchange', handleSelectionChange)
 
@@ -234,13 +203,13 @@ export function useSelection(options: UseSelectionOptions): UseSelectionReturn {
         clearTimeout(throttleTimeoutRef.current)
       }
     }
-  }, [enabled, mode, containerRef, handleSelectionChange])
+  }, [enabled, handleSelectionChange])
 
   /**
    * Manually set selection (programmatic)
    */
   const setSelection = useCallback(
-    (selection: SelectionRange | null) => {
+    (selection: SerializedRange | null) => {
       updateSelection(selection)
     },
     [updateSelection]
@@ -274,7 +243,7 @@ export function useSelection(options: UseSelectionOptions): UseSelectionReturn {
 
   return {
     bind,
-    selection: (presence?.selection as SelectionRange | null) || null,
+    selection: (presence?.selection as SerializedRange | null) || null,
     setSelection,
     clearSelection
   }

@@ -3,8 +3,27 @@
  * @module adapters/react/Selection
  */
 
-import type { ReactNode } from 'react'
-import type { SelectionRange, CursorMode } from '../../cursor/types'
+import { useMemo, type ReactNode } from 'react'
+import { deserializeRange } from '../../cursor/selection'
+import type { SerializedRange, SelectionRange, CursorMode } from '../../cursor/types'
+
+/**
+ * Type guard to check if selection is in new serialized format
+ */
+function isSerializedRange(selection: any): selection is SerializedRange {
+  return selection &&
+         typeof selection.startXPath === 'string' &&
+         typeof selection.startOffset === 'number' &&
+         typeof selection.endXPath === 'string' &&
+         typeof selection.endOffset === 'number'
+}
+
+/**
+ * Type guard to check if selection is in old visual format
+ */
+function isVisualRange(selection: any): selection is SelectionRange {
+  return selection && Array.isArray(selection.rects)
+}
 
 /**
  * User with selection data
@@ -16,8 +35,12 @@ export interface SelectionUser {
   name?: string
   /** User color (for highlight) */
   color?: string
-  /** Selection range (multiple rectangles for multi-line) */
-  selection?: SelectionRange | null
+  /**
+   * Selection range - supports both formats for backward compatibility:
+   * - SerializedRange (new): Semantic, layout-independent (recommended)
+   * - SelectionRange (old): Visual coordinates (deprecated, use for migration only)
+   */
+  selection?: SerializedRange | SelectionRange | null
 }
 
 /**
@@ -62,8 +85,35 @@ export function Selection({
   containerRef,
   opacity = 0.2
 }: SelectionProps): ReactNode {
-  // Don't render if no selection
-  if (!user.selection || user.selection.rects.length === 0) {
+  // Convert selection to visual format
+  // Supports both new semantic format and old visual format for backward compatibility
+  const visualSelection = useMemo(() => {
+    if (!user.selection) return null
+
+    // New format (SerializedRange): Deserialize to visual coordinates
+    if (isSerializedRange(user.selection)) {
+      return deserializeRange(
+        user.selection,
+        mode,
+        containerRef?.current || undefined
+      )
+    }
+
+    // Old format (SelectionRange): Use directly
+    // This path provides backward compatibility for existing implementations
+    if (isVisualRange(user.selection)) {
+      console.warn(
+        '[Selection] Received deprecated visual selection format. ' +
+        'Please upgrade to semantic selection for cross-layout compatibility.'
+      )
+      return user.selection
+    }
+
+    return null
+  }, [user.selection, mode, containerRef?.current])
+
+  // Don't render if conversion failed or no rectangles
+  if (!visualSelection || visualSelection.rects.length === 0) {
     return null
   }
 
@@ -77,7 +127,7 @@ export function Selection({
 
   return (
     <>
-      {user.selection.rects.map((rect, index) => (
+      {visualSelection.rects.map((rect, index) => (
         <div
           key={`${user.id}-rect-${index}`}
           data-selection-id={user.id}

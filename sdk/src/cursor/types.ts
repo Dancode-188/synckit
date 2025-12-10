@@ -75,6 +75,38 @@ export interface SelectionRange {
 }
 
 /**
+ * Serialized selection range (semantic)
+ * Represents WHAT is selected using XPath + character offsets
+ * This is what gets shared via awareness protocol for cross-client selection sharing
+ *
+ * Unlike SelectionRange (visual coords), this is layout-independent and works
+ * across different window sizes, scroll positions, and zoom levels.
+ *
+ * @example
+ * ```ts
+ * {
+ *   startXPath: "/html/body/div[2]/p[1]/text()[1]",
+ *   startOffset: 15,
+ *   endXPath: "/html/body/div[2]/p[1]/text()[1]",
+ *   endOffset: 26
+ * }
+ * // Represents: characters 15-26 in the first text node of the first paragraph
+ * ```
+ */
+export interface SerializedRange {
+  /** XPath to start container node */
+  startXPath: string
+  /** Character offset within start container */
+  startOffset: number
+  /** XPath to end container node */
+  endXPath: string
+  /** Character offset within end container */
+  endOffset: number
+  /** Optional timestamp for tracking selection age */
+  timestamp?: number
+}
+
+/**
  * Throttle configuration
  */
 export interface ThrottleConfig {
