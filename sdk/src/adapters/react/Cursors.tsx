@@ -5,10 +5,11 @@
  * @module adapters/react/Cursors
  */
 
-import { useEffect, type ReactNode } from 'react'
+import { useEffect, useMemo, useState, type ReactNode } from 'react'
 import { useOthers, useSelf } from '../react'
 import { Cursor, type CursorUser } from './Cursor'
-import type { SpringConfig } from '../../cursor/types'
+import { CollisionDetector } from '../../cursor/collision'
+import type { SpringConfig, CollisionConfig } from '../../cursor/types'
 import type { AwarenessState } from '../../awareness'
 
 export interface CursorsProps {
@@ -30,6 +31,12 @@ export interface CursorsProps {
    * Container ref (required when mode='container')
    */
   containerRef?: React.RefObject<HTMLElement>
+
+  /**
+   * Collision detection configuration (default: enabled with 50px threshold, 20px stack offset)
+   * Set to false to disable collision detection
+   */
+  collision?: Partial<CollisionConfig> | false
 
   // Future props
   /** Custom cursor renderer */
@@ -116,7 +123,8 @@ export function Cursors({
   showSelf = false,
   showLabels = true,
   mode = 'viewport',
-  containerRef
+  containerRef,
+  collision
 }: CursorsProps): ReactNode {
   // Get other users' awareness states
   const others = useOthers(documentId)
@@ -135,6 +143,43 @@ export function Cursors({
     ...otherCursors,
     ...(selfCursor && selfCursor.cursor ? [selfCursor] : [])
   ]
+
+  // Collision detector (memoized, created only if collision detection is enabled)
+  const collisionDetector = useMemo(() => {
+    if (collision === false) return null
+    return new CollisionDetector(collision || {})
+  }, [collision])
+
+  // Calculate stack offsets for colliding cursors
+  const [stackOffsets, setStackOffsets] = useState<Map<string, number>>(new Map())
+
+  useEffect(() => {
+    if (!collisionDetector) {
+      setStackOffsets(new Map())
+      return
+    }
+
+    // Clear and rebuild collision detector
+    collisionDetector.clear()
+
+    // Add all cursors to detector
+    allCursors.forEach(user => {
+      if (user.cursor) {
+        collisionDetector.addCursor(user.id, user.cursor)
+      }
+    })
+
+    // Calculate offsets for all cursors
+    const offsets = new Map<string, number>()
+    allCursors.forEach(user => {
+      if (user.cursor) {
+        const offset = collisionDetector.getStackOffset(user.id)
+        offsets.set(user.id, offset)
+      }
+    })
+
+    setStackOffsets(offsets)
+  }, [allCursors, collisionDetector])
 
   // Debug: Log cursor data received from awareness
   useEffect(() => {
@@ -157,6 +202,7 @@ export function Cursors({
           showLabel={showLabels}
           mode={mode}
           containerRef={containerRef}
+          stackOffset={stackOffsets.get(user.id) || 0}
         />
       ))}
     </>

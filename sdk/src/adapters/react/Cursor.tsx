@@ -6,7 +6,8 @@
 import { useEffect, useState, useRef } from 'react'
 import { SpringAnimation } from '../../cursor/animation'
 import { isPositionInViewport } from '../../cursor/coordinates'
-import type { CursorPosition, SpringConfig, CursorMode } from '../../cursor/types'
+import { InactivityTracker } from '../../cursor/inactive'
+import type { CursorPosition, SpringConfig, CursorMode, InactivityConfig } from '../../cursor/types'
 
 // User interface for backward compatibility
 export interface CursorUser {
@@ -49,8 +50,19 @@ export interface CursorProps {
    */
   containerRef?: React.RefObject<HTMLElement>
 
-  // Future props
+  /**
+   * Inactivity configuration (default: 5s timeout, 300ms fade)
+   * Set to false to disable inactivity hiding
+   */
+  inactivity?: Partial<InactivityConfig> | false
+
+  /**
+   * Vertical stack offset for collision detection (default: 0)
+   * Applied when multiple cursors overlap
+   */
   stackOffset?: number
+
+  // Future props
   render?: unknown
 }
 
@@ -81,7 +93,9 @@ export function Cursor({
   animated = true,
   spring,
   mode = 'viewport',
-  containerRef
+  containerRef,
+  inactivity,
+  stackOffset = 0
 }: CursorProps) {
   // Don't render if no cursor position
   if (!user.cursor) {
@@ -111,6 +125,12 @@ export function Cursor({
   // Visibility state (for container mode)
   const [isVisible, setIsVisible] = useState(true)
 
+  // Opacity state (for inactivity fade)
+  const [opacity, setOpacity] = useState(1)
+
+  // Inactivity tracker reference
+  const inactivityRef = useRef<InactivityTracker | null>(null)
+
   // Initialize spring animation (only once)
   useEffect(() => {
     if (!animated) return
@@ -136,10 +156,34 @@ export function Cursor({
     }
   }, [animated, spring, mode])  // Don't include user.cursor - we update via setTarget instead
 
+  // Initialize inactivity tracker (only if enabled)
+  useEffect(() => {
+    if (inactivity === false) return
+
+    const tracker = new InactivityTracker(
+      inactivity || {},  // Use defaults if not provided
+      (inactive) => {
+        setOpacity(inactive ? 0 : 1)
+      }
+    )
+
+    inactivityRef.current = tracker
+
+    return () => {
+      tracker.dispose()
+      inactivityRef.current = null
+    }
+  }, [inactivity])
+
   // Update display position when cursor moves or scroll changes
   useEffect(() => {
     const updateDisplayPosition = () => {
       if (!user.cursor) return
+
+      // Record activity for inactivity tracking
+      if (inactivityRef.current) {
+        inactivityRef.current.recordActivity()
+      }
 
       if (mode === 'container' && containerRef?.current) {
         // Container mode: Use container coords directly with position: absolute
@@ -194,10 +238,12 @@ export function Cursor({
         position: mode === 'container' ? 'absolute' : 'fixed',
         left: 0,
         top: 0,
-        transform: `translate(${displayPosition.x}px, ${displayPosition.y}px)`,
+        transform: `translate(${displayPosition.x}px, ${displayPosition.y + stackOffset}px)`,
+        opacity,
+        transition: 'opacity 300ms ease-out, transform 150ms ease-out',
         pointerEvents: 'none',
         zIndex: 9999,
-        willChange: 'transform'
+        willChange: 'transform, opacity'
       }}
     >
       {/* Cursor pointer */}
