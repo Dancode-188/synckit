@@ -5,7 +5,7 @@
  * @module cursor/collision
  */
 
-import type { CollisionConfig, AbsolutePosition } from './types'
+import type { CollisionConfig, CursorPosition } from './types'
 
 /**
  * Default collision configuration
@@ -26,7 +26,7 @@ interface SpatialHashGrid {
   /** Grid map: cell key -> Set of cursor IDs */
   cells: Map<string, Set<string>>
   /** Cursor positions: cursor ID -> position */
-  positions: Map<string, AbsolutePosition>
+  positions: Map<string, CursorPosition>
 }
 
 /**
@@ -122,7 +122,7 @@ export class CollisionDetector {
    * @param p2 - Second position
    * @returns Distance in pixels
    */
-  private distance(p1: AbsolutePosition, p2: AbsolutePosition): number {
+  private distance(p1: CursorPosition, p2: CursorPosition): number {
     const dx = p2.x - p1.x
     const dy = p2.y - p1.y
     return Math.sqrt(dx * dx + dy * dy)
@@ -135,7 +135,7 @@ export class CollisionDetector {
    * @param id - Cursor ID
    * @param position - Cursor position in absolute coordinates
    */
-  addCursor(id: string, position: AbsolutePosition): void {
+  addCursor(id: string, position: CursorPosition): void {
     // Remove from old cell if exists
     this.removeCursor(id)
 

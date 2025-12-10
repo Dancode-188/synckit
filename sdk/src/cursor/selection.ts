@@ -11,9 +11,9 @@ import type { CursorPosition } from './types'
  * Phase 3: To be implemented with absolute pixel coordinates
  */
 export function getSelectionBounds(
-  anchor: CursorPosition,
-  head: CursorPosition,
-  container: HTMLElement
+  _anchor: CursorPosition,
+  _head: CursorPosition,
+  _container: HTMLElement
 ): SelectionBounds {
   // Stub for Phase 1 - will implement in Phase 3
   return {
@@ -29,8 +29,8 @@ export function getSelectionBounds(
  * Phase 3: To be implemented with absolute pixel coordinates
  */
 export function selectionFromRange(
-  range: Range,
-  container: HTMLElement
+  _range: Range,
+  _container: HTMLElement
 ): SelectionRange | null {
   // Stub for Phase 1 - will implement in Phase 3
   return null
@@ -40,8 +40,8 @@ export function selectionFromRange(
  * Check if two selection ranges overlap
  */
 export function selectionsOverlap(
-  a: SelectionRange,
-  b: SelectionRange
+  _a: SelectionRange,
+  _b: SelectionRange
 ): boolean {
   // Stub for Phase 1
   return false
@@ -50,7 +50,7 @@ export function selectionsOverlap(
 /**
  * Check if selection is empty
  */
-export function isSelectionEmpty(selection: SelectionRange | null): boolean {
+export function isSelectionEmpty(_selection: SelectionRange | null): boolean {
   // Stub for Phase 1
   return true
 }
