@@ -5,8 +5,8 @@
 
 import { useCallback, useEffect, useRef, type RefObject } from 'react'
 import { usePresence, useSyncKit } from '../react'
-import { selectionFromRange, isSelectionEmpty } from '../../cursor'
-import type { SelectionRange } from '../../cursor/types'
+import { getSelectionFromDOM, isSelectionEmpty } from '../../cursor'
+import type { SelectionRange, CursorMode } from '../../cursor/types'
 
 /**
  * Options for useSelection hook
@@ -18,9 +18,15 @@ export interface UseSelectionOptions {
   documentId: string
 
   /**
-   * Container ref for selection tracking (auto-detects if not provided)
+   * Container ref for selection tracking (required for container mode)
    */
   containerRef?: RefObject<HTMLElement>
+
+  /**
+   * Positioning mode (viewport or container)
+   * @default 'viewport'
+   */
+  mode?: CursorMode
 
   /**
    * Whether to track selection automatically
@@ -29,14 +35,8 @@ export interface UseSelectionOptions {
   enabled?: boolean
 
   /**
-   * Minimum selection area to broadcast (filter out tiny selections)
-   * @default 0.0001 (0.01% of container area)
-   */
-  minArea?: number
-
-  /**
    * Throttle delay for selection updates in ms
-   * @default 50
+   * @default 100
    */
   throttleMs?: number
 }
@@ -101,9 +101,9 @@ export function useSelection(options: UseSelectionOptions): UseSelectionReturn {
   const {
     documentId,
     containerRef: externalContainerRef,
+    mode = 'viewport',
     enabled = true,
-    minArea = 0.0001,
-    throttleMs = 50
+    throttleMs = 100
   } = options
 
   // Internal container ref (used if external ref not provided)
@@ -160,55 +160,46 @@ export function useSelection(options: UseSelectionOptions): UseSelectionReturn {
    * Handle browser selection change
    */
   const handleSelectionChange = useCallback(() => {
-    if (!enabled || !containerRef.current) {
+    if (!enabled) {
       return
     }
 
-    const selection = window.getSelection()
+    if (mode === 'container' && !containerRef.current) {
+      console.warn('[useSelection] Container mode requires containerRef')
+      return
+    }
+
+    const browserSelection = window.getSelection()
 
     // No selection or collapsed selection (just cursor, no range)
-    if (!selection || selection.rangeCount === 0 || selection.isCollapsed) {
+    if (!browserSelection || browserSelection.rangeCount === 0 || browserSelection.isCollapsed) {
       updateSelection(null)
       return
     }
 
-    const range = selection.getRangeAt(0)
-    const container = containerRef.current
+    // For container mode, check if selection is within our container
+    if (mode === 'container' && containerRef.current) {
+      const range = browserSelection.getRangeAt(0)
+      if (!containerRef.current.contains(range.commonAncestorContainer)) {
+        updateSelection(null)
+        return
+      }
+    }
 
-    // Check if selection is within our container
-    if (!container.contains(range.commonAncestorContainer)) {
+    // Convert DOM selection to our SelectionRange format
+    const selectionRange = getSelectionFromDOM(
+      mode,
+      containerRef.current || undefined
+    )
+
+    if (!selectionRange || isSelectionEmpty(selectionRange)) {
       updateSelection(null)
       return
     }
 
-    // Convert range to our SelectionRange format
-    const selectionRange = selectionFromRange(range, container)
-
-    if (!selectionRange) {
-      updateSelection(null)
-      return
-    }
-
-    // Filter out empty or very small selections
-    if (isSelectionEmpty(selectionRange)) {
-      updateSelection(null)
-      return
-    }
-
-    // Calculate selection area and filter if too small
-    const width = Math.abs(selectionRange.head.x - selectionRange.anchor.x)
-    const height = Math.abs(selectionRange.head.y - selectionRange.anchor.y)
-    const area = width * height
-
-    if (area < minArea) {
-      updateSelection(null)
-      return
-    }
-
-    // Update selection - LOG ONLY THIS IMPORTANT EVENT
-    console.log('[useSelection] ✅ Selection captured:', selectionRange)
+    // Update selection
     updateSelection(selectionRange)
-  }, [enabled, updateSelection, minArea])
+  }, [enabled, mode, containerRef, updateSelection])
 
   /**
    * Set up selection change listener
@@ -216,10 +207,24 @@ export function useSelection(options: UseSelectionOptions): UseSelectionReturn {
   useEffect(() => {
     if (!enabled) return
 
-    console.log('[useSelection] ✅ Setting up selectionchange listener, containerRef:', containerRef.current)
-
     // Listen to global selectionchange event
     document.addEventListener('selectionchange', handleSelectionChange)
+
+    // For container mode, also update on scroll (selection coords change when scrolling)
+    if (mode === 'container' && containerRef.current) {
+      const container = containerRef.current
+      container.addEventListener('scroll', handleSelectionChange, { passive: true })
+
+      return () => {
+        document.removeEventListener('selectionchange', handleSelectionChange)
+        container.removeEventListener('scroll', handleSelectionChange)
+
+        // Clear throttle timeout
+        if (throttleTimeoutRef.current) {
+          clearTimeout(throttleTimeoutRef.current)
+        }
+      }
+    }
 
     return () => {
       document.removeEventListener('selectionchange', handleSelectionChange)
@@ -229,7 +234,7 @@ export function useSelection(options: UseSelectionOptions): UseSelectionReturn {
         clearTimeout(throttleTimeoutRef.current)
       }
     }
-  }, [enabled, handleSelectionChange])
+  }, [enabled, mode, containerRef, handleSelectionChange])
 
   /**
    * Manually set selection (programmatic)

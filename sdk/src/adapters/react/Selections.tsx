@@ -3,9 +3,9 @@
  * @module adapters/react/Selections
  */
 
-import { useRef, useEffect, type CSSProperties, type RefObject } from 'react'
-import { useOthers, useSelf } from '../react'
+import { type ReactNode } from 'react'
 import { Selection, type SelectionUser } from './Selection'
+import type { CursorMode } from '../../cursor/types'
 
 /**
  * Props for Selections component
@@ -14,185 +14,74 @@ export interface SelectionsProps {
   /** Document ID for awareness protocol */
   documentId: string
 
-  /** Container element for coordinate conversion (optional, auto-detected if not provided) */
-  containerRef?: RefObject<HTMLElement>
+  /** Container element (required for container mode) */
+  containerRef?: React.RefObject<HTMLElement>
+
+  /** Positioning mode (viewport or container) */
+  mode?: CursorMode
 
   /** Show local user's selection (default: false) */
   showSelf?: boolean
 
-  /** Custom render function for each selection (optional) */
-  renderSelection?: (user: SelectionUser, bounds: {
-    left: number
-    top: number
-    width: number
-    height: number
-  }) => React.ReactNode
-
-  /** Additional CSS class for selections */
-  className?: string
-
-  /** Additional inline styles for selections */
-  style?: CSSProperties
-
   /** Selection box opacity (default: 0.2) */
   opacity?: number
 
-  /** Show user labels next to selections (default: true) */
-  showLabels?: boolean
+  /** Users with selection data (from awareness) */
+  users?: SelectionUser[]
 }
 
 /**
- * Convert awareness user to SelectionUser format
- */
-function toSelectionUser(awarenessUser: any): SelectionUser | null {
-  if (!awarenessUser || !awarenessUser.state) return null
-
-  const state = awarenessUser.state
-
-  return {
-    id: awarenessUser.client_id,
-    name: state.name || state.user?.name || 'Anonymous',
-    color: state.color || state.user?.color || '#ccc',
-    selection: state.selection || null
-  }
-}
-
-/**
- * Selections component - zero-config multi-user selection visualization
+ * Selections component - renders all users' text selections
  *
  * Automatically renders all remote users' text selections as highlight boxes,
- * similar to Google Docs collaborative editing. Integrates with the awareness
- * protocol to sync selections in real-time.
+ * similar to Google Docs collaborative editing.
  *
  * @param props - Component props
  * @returns React element
  *
  * @example
  * ```tsx
- * // Zero-config usage
- * function CollaborativeEditor() {
- *   const editorRef = useRef(null)
- *   const selection = useSelection({ documentId: 'my-doc' })
- *
- *   return (
- *     <div {...selection.bind()} contentEditable>
- *       <Selections documentId="my-doc" containerRef={editorRef} />
- *       {/* Editor content *\/}
- *     </div>
- *   )
- * }
- *
- * // Custom styling
+ * // Viewport mode
  * <Selections
- *   documentId="my-doc"
- *   opacity={0.3}
- *   showLabels={false}
- *   className="my-selections"
+ *   documentId="doc-123"
+ *   users={allUsers}
  * />
  *
- * // Custom renderer
+ * // Container mode
+ * const containerRef = useRef<HTMLDivElement>(null)
  * <Selections
- *   documentId="my-doc"
- *   renderSelection={(user, bounds) => (
- *     <div
- *       style={{
- *         position: 'absolute',
- *         ...bounds,
- *         border: `2px solid ${user.color}`,
- *         backgroundColor: 'transparent'
- *       }}
- *     />
- *   )}
+ *   documentId="doc-123"
+ *   users={allUsers}
+ *   mode="container"
+ *   containerRef={containerRef}
  * />
  * ```
  */
 export function Selections({
-  documentId,
-  containerRef: externalContainerRef,
-  showSelf = false,
-  renderSelection,
-  className,
-  style,
+  documentId: _documentId,
+  containerRef,
+  mode = 'viewport',
+  showSelf: _showSelf = false,
   opacity = 0.2,
-  showLabels = true
-}: SelectionsProps): React.ReactNode {
-  // Auto-create container ref if not provided
-  const autoContainerRef = useRef<HTMLDivElement>(null)
-  const containerRef = externalContainerRef || autoContainerRef
+  users = []
+}: SelectionsProps): ReactNode {
+  // Filter users based on showSelf
+  // Note: In real usage, users array should come from usePresence hook
+  // and filtering should happen there, but we keep it simple for now
 
-  // Get all other users from awareness
-  const others = useOthers(documentId)
-  const self = useSelf(documentId)
-
-  // Convert to SelectionUser format and filter for users with selections
-  const otherSelections: SelectionUser[] = others
-    .map(toSelectionUser)
-    .filter((user): user is SelectionUser =>
-      user !== null && user.selection !== null
-    )
-
-  // Log only when selections change
-  useEffect(() => {
-    if (otherSelections.length > 0) {
-      console.log('[Selections] 🎯 FOUND SELECTIONS:', otherSelections)
-    }
-  }, [otherSelections.length])
-
-  // Optionally include self
-  let allSelections = otherSelections
-  if (showSelf && self) {
-    const selfUser = toSelectionUser(self)
-    if (selfUser && selfUser.selection) {
-      allSelections = [selfUser, ...otherSelections]
-    }
-  }
+  const usersWithSelections = users.filter(u => u.selection && u.selection.rects.length > 0)
 
   return (
     <>
-      {allSelections.map((user) => (
+      {usersWithSelections.map((user) => (
         <Selection
           key={user.id}
           user={user}
+          mode={mode}
           containerRef={containerRef}
-          render={renderSelection}
-          className={className}
-          style={style}
           opacity={opacity}
-          showLabel={showLabels}
         />
       ))}
     </>
-  )
-}
-
-/**
- * Selections component with auto-detected container
- * Wraps content and auto-provides container ref
- *
- * @example
- * ```tsx
- * <SelectionsWithContainer documentId="my-doc">
- *   <div contentEditable>
- *     {/* Editor content *\/}
- *   </div>
- * </SelectionsWithContainer>
- * ```
- */
-export function SelectionsWithContainer({
-  documentId,
-  children,
-  ...props
-}: SelectionsProps & { children: React.ReactNode }): React.ReactNode {
-  const containerRef = useRef<HTMLDivElement>(null)
-
-  return (
-    <div ref={containerRef} style={{ position: 'relative' }}>
-      {children}
-      <Selections
-        documentId={documentId}
-        containerRef={containerRef}
-        {...props}
-      />
-    </div>
   )
 }

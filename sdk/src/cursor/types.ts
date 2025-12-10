@@ -43,16 +43,35 @@ export interface CursorPosition {
 }
 
 /**
- * Selection range (text selection visualization)
- * Represents a text selection with anchor (start) and head (end) points
+ * Text selection rectangle
+ * Represents one line/box of a potentially multi-line selection
+ * Coordinates interpretation depends on mode (viewport or container)
+ */
+export interface SelectionRect {
+  /** Left edge in pixels */
+  x: number
+  /** Top edge in pixels */
+  y: number
+  /** Width in pixels */
+  width: number
+  /** Height in pixels */
+  height: number
+}
+
+/**
+ * Text selection range (visualization)
+ * Represents a text selection as rectangles (one per line for multi-line)
  * Like Google Docs blue highlight boxes
- * Uses viewport pixel coordinates
+ *
+ * Coordinates interpretation:
+ * - viewport mode: Pixels from viewport edges
+ * - container mode: Pixels from container content edges (with scroll offset)
  */
 export interface SelectionRange {
-  /** Selection start point (viewport pixels) */
-  anchor: CursorPosition
-  /** Selection end point (viewport pixels) */
-  head: CursorPosition
+  /** Array of rectangles (one per line for multi-line selections) */
+  rects: SelectionRect[]
+  /** Optional timestamp for tracking selection age */
+  timestamp?: number
 }
 
 /**

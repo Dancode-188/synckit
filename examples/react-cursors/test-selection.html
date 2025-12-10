@@ -1,0 +1,488 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Text Selection Test - SyncKit</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+      background: #f5f5f5;
+      padding: 20px;
+    }
+
+    .header {
+      text-align: center;
+      margin-bottom: 30px;
+    }
+
+    .header h1 {
+      font-size: 28px;
+      color: #333;
+      margin-bottom: 8px;
+    }
+
+    .header p {
+      color: #666;
+      font-size: 14px;
+    }
+
+    .instructions {
+      background: #fff;
+      border: 1px solid #e0e0e0;
+      border-radius: 8px;
+      padding: 20px;
+      margin-bottom: 20px;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+    }
+
+    .instructions h2 {
+      font-size: 18px;
+      margin-bottom: 12px;
+      color: #333;
+    }
+
+    .instructions ol {
+      margin-left: 20px;
+      color: #555;
+    }
+
+    .instructions li {
+      margin-bottom: 8px;
+      line-height: 1.6;
+    }
+
+    .test-container {
+      display: flex;
+      gap: 20px;
+      margin-bottom: 20px;
+    }
+
+    .test-panel {
+      flex: 1;
+      background: #fff;
+      border: 1px solid #e0e0e0;
+      border-radius: 8px;
+      overflow: hidden;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+    }
+
+    .panel-header {
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      color: white;
+      padding: 12px 16px;
+      font-weight: 600;
+      font-size: 14px;
+    }
+
+    .panel-content {
+      padding: 20px;
+      height: 400px;
+      overflow: auto;
+      position: relative;
+      user-select: text;
+      -webkit-user-select: text;
+      -moz-user-select: text;
+      -ms-user-select: text;
+    }
+
+    .editable-content {
+      line-height: 1.8;
+      color: #333;
+    }
+
+    .editable-content p {
+      margin-bottom: 16px;
+    }
+
+    .editable-content strong {
+      color: #667eea;
+    }
+
+    .debug-info {
+      background: #f8f9fa;
+      border: 1px solid #dee2e6;
+      border-radius: 6px;
+      padding: 12px;
+      font-family: 'Courier New', monospace;
+      font-size: 12px;
+      max-height: 150px;
+      overflow: auto;
+    }
+
+    .debug-info h3 {
+      font-size: 13px;
+      margin-bottom: 8px;
+      color: #495057;
+      font-weight: 600;
+    }
+
+    .debug-item {
+      padding: 4px 0;
+      color: #212529;
+    }
+
+    .badge {
+      display: inline-block;
+      padding: 3px 8px;
+      border-radius: 4px;
+      font-size: 11px;
+      font-weight: 600;
+      margin-left: 8px;
+    }
+
+    .badge-primary {
+      background: #667eea;
+      color: white;
+    }
+
+    .badge-success {
+      background: #10b981;
+      color: white;
+    }
+
+    .selection-rect {
+      background: rgba(59, 130, 246, 0.2);
+      position: absolute;
+      pointer-events: none;
+      border-radius: 2px;
+      transition: opacity 0.2s ease;
+    }
+  </style>
+</head>
+<body>
+  <div class="header">
+    <h1>🖍️ Text Selection Visualization Test</h1>
+    <p>Testing real-time text selection sharing in viewport and container modes</p>
+  </div>
+
+  <div class="instructions">
+    <h2>📋 Test Instructions</h2>
+    <ol>
+      <li><strong>Open this file in TWO browser tabs</strong> side by side</li>
+      <li><strong>Select text</strong> in either panel (left = Viewport Mode, right = Container Mode)</li>
+      <li><strong>Watch the other tab</strong> - you should see your selection highlighted in blue</li>
+      <li><strong>Try multi-line selections</strong> - select text across multiple lines</li>
+      <li><strong>Scroll the container mode panel</strong> - selections should update correctly</li>
+      <li><strong>Check the debug info</strong> below each panel to see rectangle data</li>
+    </ol>
+  </div>
+
+  <div class="test-container">
+    <!-- Viewport Mode -->
+    <div class="test-panel">
+      <div class="panel-header">
+        Viewport Mode (Fixed Positioning)
+        <span class="badge badge-primary">position: fixed</span>
+      </div>
+      <div id="viewport-content" class="panel-content">
+        <div class="editable-content">
+          <p><strong>This is viewport mode.</strong> Selections use fixed positioning, so they stay in place relative to the viewport, not the content.</p>
+          <p>Lorem ipsum dolor sit amet, consectetur adipiscing elit. Sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris.</p>
+          <p>Duis aute irure dolor in reprehenderit in voluptate velit esse cillum dolore eu fugiat nulla pariatur. Excepteur sint occaecat cupidatat non proident, sunt in culpa qui officia deserunt mollit anim id est laborum.</p>
+          <p>Select some text in this panel and watch it appear in the other browser tab!</p>
+          <p>Try selecting across multiple lines to see how multi-line selections are rendered as separate rectangles.</p>
+        </div>
+      </div>
+      <div class="debug-info">
+        <h3>Debug Info</h3>
+        <div id="viewport-debug">No selection</div>
+      </div>
+    </div>
+
+    <!-- Container Mode -->
+    <div class="test-panel">
+      <div class="panel-header">
+        Container Mode (Scrollable Content)
+        <span class="badge badge-success">position: absolute</span>
+      </div>
+      <div id="container-content" class="panel-content" style="height: 400px; overflow: auto;">
+        <div class="editable-content">
+          <p><strong>This is container mode.</strong> Selections use absolute positioning and scroll with the content, like Google Docs.</p>
+          <p>Lorem ipsum dolor sit amet, consectetur adipiscing elit. Sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris.</p>
+          <p>Duis aute irure dolor in reprehenderit in voluptate velit esse cillum dolore eu fugiat nulla pariatur. Excepteur sint occaecat cupidatat non proident, sunt in culpa qui officia deserunt mollit anim id est laborum.</p>
+          <p>Scroll this panel and watch how selections update their positions correctly!</p>
+          <p>The coordinates include scroll offset, so selections "stick" to the content.</p>
+          <p>Extra content for scrolling...</p>
+          <p>More content here...</p>
+          <p>Keep scrolling...</p>
+          <p>Even more content!</p>
+          <p>Last paragraph with some final text to enable scrolling behavior testing.</p>
+        </div>
+      </div>
+      <div class="debug-info">
+        <h3>Debug Info</h3>
+        <div id="container-debug">No selection</div>
+      </div>
+    </div>
+  </div>
+
+  <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+  <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+  <script crossorigin src="https://unpkg.com/@babel/standalone@7/babel.min.js"></script>
+
+  <script type="text/babel">
+    const { useState, useEffect, useRef, useCallback } = React;
+
+    console.log('✅ Script loaded successfully');
+
+    // BroadcastChannel for cross-tab communication
+    const channel = new BroadcastChannel('synckit-selection-test');
+    console.log('✅ BroadcastChannel created');
+
+    /**
+     * Get current text selection from DOM
+     */
+    function getSelectionFromDOM(mode, container) {
+      const selection = window.getSelection();
+
+      // No selection or collapsed (just cursor, no text selected)
+      if (!selection || selection.rangeCount === 0 || selection.isCollapsed) {
+        return null;
+      }
+
+      const range = selection.getRangeAt(0);
+      const domRects = range.getClientRects();
+
+      if (domRects.length === 0) {
+        return null;
+      }
+
+      const rects = [];
+
+      for (let i = 0; i < domRects.length; i++) {
+        const domRect = domRects[i];
+
+        // Skip zero-width or zero-height rectangles
+        if (domRect.width === 0 || domRect.height === 0) {
+          continue;
+        }
+
+        if (mode === 'container' && container) {
+          // Container mode: add scroll offset
+          const containerRect = container.getBoundingClientRect();
+          rects.push({
+            x: Math.round(domRect.left - containerRect.left + container.scrollLeft),
+            y: Math.round(domRect.top - containerRect.top + container.scrollTop),
+            width: Math.round(domRect.width),
+            height: Math.round(domRect.height)
+          });
+        } else {
+          // Viewport mode: use directly
+          rects.push({
+            x: Math.round(domRect.left),
+            y: Math.round(domRect.top),
+            width: Math.round(domRect.width),
+            height: Math.round(domRect.height)
+          });
+        }
+      }
+
+      if (rects.length === 0) {
+        return null;
+      }
+
+      return {
+        rects,
+        timestamp: Date.now()
+      };
+    }
+
+    /**
+     * Selection renderer component
+     */
+    function Selection({ selection, mode }) {
+      console.log('🎨 Selection component render:', { mode, selection });
+
+      if (!selection || !selection.rects || selection.rects.length === 0) {
+        console.log('⚠️ No selection to render');
+        return null;
+      }
+
+      console.log('✅ Rendering', selection.rects.length, 'rectangles for mode:', mode);
+
+      return (
+        <>
+          {selection.rects.map((rect, index) => {
+            console.log(`  📦 Rect ${index}:`, rect, `position: ${mode === 'container' ? 'absolute' : 'fixed'}`);
+            return (
+              <div
+                key={`rect-${index}`}
+                className="selection-rect"
+                style={{
+                  position: mode === 'container' ? 'absolute' : 'fixed',
+                  left: 0,
+                  top: 0,
+                  transform: `translate(${rect.x}px, ${rect.y}px)`,
+                  width: `${rect.width}px`,
+                  height: `${rect.height}px`,
+                  zIndex: 9998
+                }}
+              />
+            );
+          })}
+        </>
+      );
+    }
+
+    /**
+     * Test panel component
+     */
+    function TestPanel({ mode, contentId, debugId }) {
+      console.log('✅ TestPanel mounted for mode:', mode);
+
+      const containerRef = useRef(null);
+      const [remoteSelection, setRemoteSelection] = useState(null);
+      const [localSelection, setLocalSelection] = useState(null);
+      const [portalContainer, setPortalContainer] = useState(null);
+
+      // Get reference to the DOM element and create portal container
+      useEffect(() => {
+        containerRef.current = document.getElementById(contentId);
+        console.log('✅ Container ref set for', mode, ':', containerRef.current);
+
+        // Create a portal container inside the panel for selections
+        if (containerRef.current) {
+          const portal = document.createElement('div');
+          portal.style.cssText = 'position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; z-index: 9998;';
+          containerRef.current.style.position = 'relative'; // Ensure parent is positioned
+          containerRef.current.appendChild(portal);
+          setPortalContainer(portal);
+
+          return () => {
+            if (containerRef.current && portal.parentNode) {
+              containerRef.current.removeChild(portal);
+            }
+          };
+        }
+      }, [contentId, mode]);
+
+      // Handle selection change
+      const handleSelectionChange = useCallback(() => {
+        console.log('🔍 Selection change detected, mode:', mode);
+        const container = containerRef.current;
+        if (!container) {
+          console.log('⚠️ No container ref for mode:', mode);
+          return;
+        }
+
+        // Check if selection is within our container
+        const browserSelection = window.getSelection();
+        if (!browserSelection || browserSelection.rangeCount === 0 || browserSelection.isCollapsed) {
+          setLocalSelection(null);
+          channel.postMessage({ mode, selection: null });
+          return;
+        }
+
+        const range = browserSelection.getRangeAt(0);
+        if (!container.contains(range.commonAncestorContainer)) {
+          return; // Selection is in another panel
+        }
+
+        // Get selection
+        const selection = getSelectionFromDOM(mode, mode === 'container' ? container : null);
+        setLocalSelection(selection);
+
+        // Broadcast to other tabs
+        console.log('[Broadcasting]', mode, 'selection:', selection);
+        channel.postMessage({ mode, selection });
+      }, [mode]);
+
+      // Listen to selectionchange event
+      useEffect(() => {
+        document.addEventListener('selectionchange', handleSelectionChange);
+
+        // For container mode, also update on scroll
+        if (mode === 'container' && containerRef.current) {
+          const container = containerRef.current;
+          container.addEventListener('scroll', handleSelectionChange, { passive: true });
+
+          return () => {
+            document.removeEventListener('selectionchange', handleSelectionChange);
+            container.removeEventListener('scroll', handleSelectionChange);
+          };
+        }
+
+        return () => {
+          document.removeEventListener('selectionchange', handleSelectionChange);
+        };
+      }, [handleSelectionChange, mode]);
+
+      // Listen to broadcast messages
+      useEffect(() => {
+        const handleMessage = (event) => {
+          console.log('[Received message]', 'mode:', mode, 'data:', event.data);
+          if (event.data.mode === mode) {
+            console.log('[Setting remote selection]', mode, event.data.selection);
+            setRemoteSelection(event.data.selection);
+          }
+        };
+
+        channel.addEventListener('message', handleMessage);
+        return () => channel.removeEventListener('message', handleMessage);
+      }, [mode]);
+
+      // Update debug info
+      useEffect(() => {
+        const debugEl = document.getElementById(debugId);
+        if (!debugEl) return;
+
+        const selection = localSelection || remoteSelection;
+        if (!selection) {
+          debugEl.textContent = 'No selection';
+          return;
+        }
+
+        debugEl.innerHTML = `
+          <div class="debug-item"><strong>Rectangles:</strong> ${selection.rects.length}</div>
+          ${selection.rects.map((rect, i) => `
+            <div class="debug-item">Rect ${i + 1}: x=${rect.x}, y=${rect.y}, w=${rect.width}, h=${rect.height}</div>
+          `).join('')}
+        `;
+      }, [localSelection, remoteSelection, debugId]);
+
+      return (
+        <Selection selection={remoteSelection} mode={mode} />
+      );
+    }
+
+    /**
+     * Main app
+     */
+    function App() {
+      const viewportRef = useRef(null);
+      const containerRef = useRef(null);
+
+      useEffect(() => {
+        console.log('✅ React App mounted');
+        // Attach refs to DOM elements
+        viewportRef.current = document.getElementById('viewport-content');
+        containerRef.current = document.getElementById('container-content');
+      }, []);
+
+      return (
+        <>
+          <TestPanel mode="viewport" contentId="viewport-content" debugId="viewport-debug" />
+          <TestPanel mode="container" contentId="container-content" debugId="container-debug" />
+        </>
+      );
+    }
+
+    // Create a container for React selections (invisible, just for rendering)
+    const reactContainer = document.createElement('div');
+    reactContainer.id = 'react-selections';
+    reactContainer.style.cssText = 'position: fixed; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; z-index: 9998;';
+    document.body.appendChild(reactContainer);
+
+    // Render React app
+    const root = ReactDOM.createRoot(reactContainer);
+    root.render(<App />);
+  </script>
+</body>
+</html>
