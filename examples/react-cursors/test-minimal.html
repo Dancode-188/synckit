@@ -1,0 +1,121 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Minimal Cursor Test</title>
+    <style>
+        body { margin: 0; padding: 20px; font-family: monospace; }
+
+        .container {
+            position: relative;
+            width: 600px;
+            height: 400px;
+            background: #f0f0f0;
+            border: 2px solid #333;
+            padding: 40px;
+            overflow: auto;
+        }
+
+        .content {
+            width: 1000px;
+            height: 1000px;
+            background: repeating-linear-gradient(
+                45deg,
+                #fff,
+                #fff 10px,
+                #e0e0e0 10px,
+                #e0e0e0 20px
+            );
+        }
+
+        .cursor {
+            position: absolute;
+            left: 0;
+            top: 0;
+            pointer-events: none;
+            z-index: 9999;
+        }
+
+        .cursor-svg {
+            filter: drop-shadow(0 2px 4px rgba(0,0,0,0.2));
+        }
+
+        .info {
+            margin-bottom: 20px;
+            padding: 10px;
+            background: #fff;
+            border: 1px solid #ccc;
+        }
+    </style>
+</head>
+<body>
+    <div class="info">
+        <h2>Minimal Cursor Position Test</h2>
+        <p>Click anywhere in the gray box. A cursor should appear at that exact position.</p>
+        <div id="debug"></div>
+    </div>
+
+    <div class="container" id="container">
+        <div class="content"></div>
+    </div>
+
+    <script>
+        const container = document.getElementById('container');
+        const debug = document.getElementById('debug');
+
+        container.addEventListener('click', (e) => {
+            // Clear previous cursors
+            document.querySelectorAll('.cursor').forEach(el => el.remove());
+
+            // Get container rect
+            const rect = container.getBoundingClientRect();
+
+            // Calculate document position (absolute pixels from padding edge)
+            const scrollX = container.scrollLeft;
+            const scrollY = container.scrollTop;
+
+            const docX = e.clientX - rect.left + scrollX;
+            const docY = e.clientY - rect.top + scrollY;
+
+            // Calculate viewport position (for rendering)
+            const viewportX = docX - scrollX;
+            const viewportY = docY - scrollY;
+
+            // Create cursor element
+            const cursor = document.createElement('div');
+            cursor.className = 'cursor';
+            cursor.style.transform = `translate3d(${viewportX}px, ${viewportY}px, 0)`;
+            cursor.innerHTML = `
+                <svg class="cursor-svg" width="24" height="24" viewBox="0 0 24 24">
+                    <path d="M5 3L19 12L12 13L9 19L5 3Z" fill="red" stroke="white" stroke-width="1.5"/>
+                </svg>
+            `;
+            container.appendChild(cursor);
+
+            // Show debug info
+            debug.innerHTML = `
+                <strong>Click at:</strong> (${e.clientX}, ${e.clientY})<br>
+                <strong>Container rect:</strong> left=${rect.left.toFixed(2)}, top=${rect.top.toFixed(2)}<br>
+                <strong>Scroll:</strong> (${scrollX}, ${scrollY})<br>
+                <strong>Document pos:</strong> (${docX.toFixed(2)}, ${docY.toFixed(2)})<br>
+                <strong>Viewport pos:</strong> (${viewportX.toFixed(2)}, ${viewportY.toFixed(2)})<br>
+                <strong>Formula:</strong> docX = ${e.clientX} - ${rect.left.toFixed(2)} + ${scrollX} = ${docX.toFixed(2)}
+            `;
+        });
+
+        // Update cursor position on scroll
+        container.addEventListener('scroll', () => {
+            const cursor = container.querySelector('.cursor');
+            if (!cursor) return;
+
+            // Re-calculate viewport position based on new scroll
+            const transform = cursor.style.transform;
+            const match = transform.match(/translate3d\(([^,]+)px,\s*([^,]+)px/);
+            if (!match) return;
+
+            // For this simple test, we're not storing docPos, so just remove cursor on scroll
+            cursor.remove();
+            debug.innerHTML += '<br><strong style="color: red;">Scrolled! Click again to place cursor.</strong>';
+        });
+    </script>
+</body>
+</html>

@@ -724,14 +724,26 @@ export function usePresence(
   const [localState, setLocalStateValue] = useState<Record<string, unknown> | undefined>(initialState)
   const [subscribed, setSubscribed] = useState(false)
 
-  // Set initial state on mount
+  // Track if initial state has been set (only set once on mount)
+  // IMPORTANT: We use a ref here to prevent re-setting initial state when
+  // the initialState object reference changes. Without this, passing an
+  // inline object like { cursor: null } would cause the presence to reset
+  // on every render, overwriting any cursor updates made via setPresence.
+  const initialStateSetRef = useRef(false)
+
+  // Set initial state on mount (only once)
+  // Note: initialState is intentionally NOT in dependencies to prevent
+  // re-running this effect when the object reference changes
   useEffect(() => {
-    if (!awareness || !initialState) return
+    if (!awareness || !initialState || initialStateSetRef.current) return
 
     setLocalState(initialState).catch((error) => {
       console.error('Failed to set initial presence state:', error)
     })
-  }, [awareness, initialState, setLocalState])
+
+    initialStateSetRef.current = true
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [awareness, setLocalState])
 
   // Subscribe to awareness changes to track local state updates
   useEffect(() => {
@@ -891,4 +903,77 @@ export function useSelf(documentId: string): import('../awareness').AwarenessSta
   }, [awareness])
 
   return self
+}
+
+// ====================
+// Cursor Tracking & Selection
+// ====================
+
+import { useCursorTracking } from './react/useCursor'
+import type { CursorPosition } from '../cursor/types'
+
+export * from './react/Cursor'
+export * from './react/Cursors'
+export * from './react/useSelection'
+export * from './react/Selection'
+export * from './react/Selections'
+
+/**
+ * High-level cursor tracking hook with awareness integration
+ *
+ * @param documentId - Document ID to broadcast cursor position to
+ * @param options - Configuration options
+ * @returns Object with bind() method to attach to container
+ *
+ * @example
+ * ```tsx
+ * const cursor = useCursor('my-doc', {
+ *   metadata: { name: 'Alice', color: '#FF6B6B' }
+ * })
+ *
+ * return <div {...cursor.bind()}>...</div>
+ * ```
+ */
+export function useCursor(
+  documentId: string,
+  options: {
+    /** @deprecated No longer needed - viewport-relative coordinates are used */
+    containerRef?: React.RefObject<HTMLElement>
+    metadata?: Record<string, unknown>
+    enabled?: boolean
+  } = {}
+) {
+  const { metadata = {}, enabled = true } = options
+  const [, updatePresence] = usePresence(documentId)
+
+  // Update awareness when cursor moves
+  const handleCursorUpdate = useCallback(
+    (position: CursorPosition) => {
+      if (!updatePresence) return
+
+      console.log('[useCursor] Broadcasting cursor position', {
+        documentId,
+        position,
+        metadata
+      })
+
+      // Broadcast cursor position along with metadata
+      updatePresence({
+        cursor: position,
+        ...metadata
+      })
+    },
+    [updatePresence, metadata, documentId]
+  )
+
+  // Use low-level cursor tracking (viewport-relative, no container needed)
+  const handlers = useCursorTracking({
+    enabled,
+    onUpdate: handleCursorUpdate
+  })
+
+  // Return bind() method for easy spreading
+  return {
+    bind: () => handlers
+  }
 }

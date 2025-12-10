@@ -104,6 +104,10 @@ DIRECTORY_TREE.txt
 .notes/
 analysis/
 
+# Debug/test files
+debug-*.html
+sdk/src/cursor-archive/
+
 # Test environment
 tests/bun.lock
 tests/node_modules/

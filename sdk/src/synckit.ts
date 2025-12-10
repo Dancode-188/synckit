@@ -281,13 +281,18 @@ export class SyncKit {
     const awareness = new Awareness(this.clientId)
     this.awarenessInstances.set(documentId, awareness)
 
+    // Register with sync manager IMMEDIATELY (before init)
+    if (this.syncManager) {
+      this.syncManager.registerAwareness(documentId, awareness)
+
+      // Subscribe to awareness updates from server (critical for receiving other clients' cursor updates)
+      this.syncManager.subscribeToAwareness(documentId).catch(error => {
+        console.error(`Failed to subscribe to awareness for ${documentId}:`, error)
+      })
+    }
+
     // Initialize awareness asynchronously
-    awareness.init().then(() => {
-      // Register with sync manager if available
-      if (this.syncManager) {
-        this.syncManager.registerAwareness(documentId, awareness)
-      }
-    }).catch(error => {
+    awareness.init().catch(error => {
       console.error(`Failed to initialize awareness for ${documentId}:`, error)
     })
 
