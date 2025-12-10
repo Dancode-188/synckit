@@ -36,6 +36,91 @@ export function getCursorPosition(event: MouseEvent | PointerEvent): CursorPosit
 }
 
 /**
+ * Get cursor position relative to container (document coordinates)
+ *
+ * For scrollable content where cursors should stick to the content
+ * (like Google Docs). Includes scroll offset so position is relative
+ * to the content, not the viewport.
+ *
+ * @param event - Mouse or pointer event
+ * @param container - Container element
+ * @returns Position relative to container content (includes scroll offset)
+ *
+ * @example
+ * ```ts
+ * const handleMove = (e: PointerEvent, containerEl) => {
+ *   const pos = getCursorPositionInContainer(e, containerEl)
+ *   // pos = { x: 450, y: 2300 } - content pixels (may be scrolled off screen)
+ *   updatePresence({ cursor: pos })
+ * }
+ * ```
+ */
+export function getCursorPositionInContainer(
+  event: MouseEvent | PointerEvent,
+  container: HTMLElement
+): CursorPosition {
+  const rect = container.getBoundingClientRect()
+
+  return {
+    x: Math.round(event.clientX - rect.left + container.scrollLeft),
+    y: Math.round(event.clientY - rect.top + container.scrollTop)
+  }
+}
+
+/**
+ * Transform container-relative position to viewport position for rendering
+ *
+ * Takes a position stored in container coordinates and converts it to
+ * viewport coordinates for rendering with position: absolute.
+ *
+ * @param containerPos - Position in container coordinates
+ * @param container - Container element
+ * @returns Position in viewport coordinates (for rendering)
+ *
+ * @example
+ * ```ts
+ * const viewportPos = containerToViewport(
+ *   { x: 450, y: 2300 },  // Content position
+ *   containerEl
+ * )
+ * // viewportPos = { x: 450, y: 100 } - viewport position after scroll
+ * ```
+ */
+export function containerToViewport(
+  containerPos: CursorPosition,
+  container: HTMLElement
+): CursorPosition {
+  const rect = container.getBoundingClientRect()
+
+  return {
+    x: containerPos.x - container.scrollLeft + rect.left,
+    y: containerPos.y - container.scrollTop + rect.top
+  }
+}
+
+/**
+ * Check if a container-relative position is currently visible in viewport
+ *
+ * @param containerPos - Position in container coordinates
+ * @param container - Container element
+ * @returns True if position is currently visible
+ */
+export function isPositionInViewport(
+  containerPos: CursorPosition,
+  container: HTMLElement
+): boolean {
+  const viewportPos = containerToViewport(containerPos, container)
+  const rect = container.getBoundingClientRect()
+
+  return (
+    viewportPos.x >= rect.left &&
+    viewportPos.x <= rect.right &&
+    viewportPos.y >= rect.top &&
+    viewportPos.y <= rect.bottom
+  )
+}
+
+/**
  * Check if two cursor positions are close enough to be considered "same"
  * Used for throttling - don't broadcast if cursor barely moved
  *

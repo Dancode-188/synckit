@@ -21,14 +21,24 @@ export interface SpringConfig {
 }
 
 /**
- * Cursor position in viewport coordinates
- * Simple clientX/clientY values - no transformations needed
- * Following the Liveblocks pattern for maximum simplicity
+ * Cursor positioning mode
+ */
+export type CursorMode = 'viewport' | 'container'
+
+/**
+ * Cursor position coordinates
+ *
+ * Interpretation depends on mode:
+ * - viewport mode: Pixels from viewport edges (clientX/clientY)
+ * - container mode: Pixels from container content edges (with scroll offset)
+ *
+ * Note: Stored coordinates match the mode they were captured in.
+ * Container mode coords are transformed to viewport coords for rendering.
  */
 export interface CursorPosition {
-  /** X coordinate in pixels from viewport left edge */
+  /** X coordinate in pixels */
   x: number
-  /** Y coordinate in pixels from viewport top edge */
+  /** Y coordinate in pixels */
   y: number
 }
 

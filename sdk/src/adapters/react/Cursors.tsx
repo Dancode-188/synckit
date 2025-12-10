@@ -19,14 +19,26 @@ export interface CursorsProps {
   /** Show cursor labels (default: true) */
   showLabels?: boolean
 
-  // Phase 5+ props (not yet implemented)
-  /** Custom cursor renderer (Phase 5) */
+  /**
+   * Positioning mode (default: 'viewport')
+   * - viewport: Cursors fixed to screen
+   * - container: Cursors scroll with content (like Google Docs)
+   */
+  mode?: 'viewport' | 'container'
+
+  /**
+   * Container ref (required when mode='container')
+   */
+  containerRef?: React.RefObject<HTMLElement>
+
+  // Future props
+  /** Custom cursor renderer */
   renderCursor?: (user: CursorUser) => ReactNode
-  /** Spring animation config (Phase 5) */
+  /** Spring animation config */
   spring?: Partial<SpringConfig>
-  /** Custom className (Phase 5) */
+  /** Custom className */
   className?: string
-  /** Custom styles (Phase 5) */
+  /** Custom styles */
   style?: React.CSSProperties
 }
 
@@ -102,7 +114,9 @@ function toCursorUser(state: AwarenessState): CursorUser | null {
 export function Cursors({
   documentId,
   showSelf = false,
-  showLabels = true
+  showLabels = true,
+  mode = 'viewport',
+  containerRef
 }: CursorsProps): ReactNode {
   // Get other users' awareness states
   const others = useOthers(documentId)
@@ -133,7 +147,7 @@ export function Cursors({
     }
   }, [otherCursors])
 
-  // Render cursors directly - position: fixed handles everything
+  // Render cursors with appropriate mode
   return (
     <>
       {allCursors.map((user) => (
@@ -141,6 +155,8 @@ export function Cursors({
           key={user.id}
           user={user}
           showLabel={showLabels}
+          mode={mode}
+          containerRef={containerRef}
         />
       ))}
     </>

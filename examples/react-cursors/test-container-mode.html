@@ -1,0 +1,533 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>SyncKit Cursors - Container Mode Test</title>
+  <script crossorigin src="https://unpkg.com/react@18/umd/react.development.js"></script>
+  <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: #f5f5f5;
+      padding: 20px;
+    }
+
+    .header {
+      background: white;
+      padding: 20px;
+      border-radius: 8px;
+      margin-bottom: 20px;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    }
+
+    h1 {
+      font-size: 24px;
+      margin-bottom: 10px;
+    }
+
+    .comparison {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 20px;
+      margin-top: 20px;
+    }
+
+    .mode-section {
+      background: white;
+      border-radius: 8px;
+      padding: 20px;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    }
+
+    .mode-title {
+      font-size: 18px;
+      font-weight: 600;
+      margin-bottom: 10px;
+      padding-bottom: 10px;
+      border-bottom: 2px solid #e5e7eb;
+    }
+
+    .mode-description {
+      font-size: 14px;
+      color: #6b7280;
+      margin-bottom: 15px;
+    }
+
+    .scroll-container {
+      position: relative;
+      height: 400px;
+      overflow: auto;
+      border: 2px solid #e5e7eb;
+      border-radius: 6px;
+      background: #fafafa;
+    }
+
+    .scroll-content {
+      min-height: 1200px;
+      padding: 20px;
+    }
+
+    .content-marker {
+      padding: 10px;
+      margin: 10px 0;
+      background: white;
+      border-left: 3px solid #3b82f6;
+      font-size: 14px;
+      color: #1f2937;
+    }
+
+    .instructions {
+      background: #eff6ff;
+      border: 1px solid #bfdbfe;
+      padding: 15px;
+      border-radius: 6px;
+      margin-bottom: 20px;
+    }
+
+    .instructions h3 {
+      color: #1e40af;
+      margin-bottom: 10px;
+      font-size: 16px;
+    }
+
+    .instructions ol {
+      margin-left: 20px;
+      font-size: 14px;
+    }
+
+    .instructions li {
+      margin-bottom: 5px;
+    }
+
+    .status {
+      font-family: monospace;
+      background: #f0f0f0;
+      padding: 10px;
+      border-radius: 4px;
+      margin-top: 10px;
+      font-size: 12px;
+    }
+
+    .highlight {
+      background: #fef3c7;
+      padding: 2px 6px;
+      border-radius: 3px;
+      font-weight: 600;
+    }
+  </style>
+</head>
+<body>
+  <div id="root"></div>
+
+  <script type="text/babel">
+    const { useState, useEffect, useCallback, useRef } = React;
+
+    /**
+     * Spring animation class (from Phase 5)
+     */
+    class SpringAnimation {
+      constructor(config = {}) {
+        this.config = {
+          damping: 45,
+          stiffness: 400,
+          mass: 1,
+          restDelta: 0.001,
+          ...config
+        };
+        this.spring = {
+          x: { position: 0, velocity: 0, target: 0 },
+          y: { position: 0, velocity: 0, target: 0 }
+        };
+        this.rafId = null;
+        this.lastTime = 0;
+        this.onUpdate = null;
+      }
+
+      setTarget(target) {
+        this.spring.x.target = target.x;
+        this.spring.y.target = target.y;
+        if (this.rafId === null) {
+          this.lastTime = performance.now();
+          this.animate();
+        }
+      }
+
+      setPosition(position) {
+        this.spring.x.position = position.x;
+        this.spring.x.velocity = 0;
+        this.spring.y.position = position.y;
+        this.spring.y.velocity = 0;
+      }
+
+      subscribe(callback) {
+        this.onUpdate = callback;
+        return () => { this.onUpdate = null; };
+      }
+
+      animate = () => {
+        const now = performance.now();
+        const dt = Math.min((now - this.lastTime) / 1000, 0.1);
+        this.lastTime = now;
+
+        const [newX, newVx] = this.animateAxis(
+          this.spring.x.position, this.spring.x.velocity, this.spring.x.target, dt
+        );
+        const [newY, newVy] = this.animateAxis(
+          this.spring.y.position, this.spring.y.velocity, this.spring.y.target, dt
+        );
+
+        this.spring.x.position = newX;
+        this.spring.x.velocity = newVx;
+        this.spring.y.position = newY;
+        this.spring.y.velocity = newVy;
+
+        if (this.onUpdate) {
+          this.onUpdate({ x: this.spring.x.position, y: this.spring.y.position });
+        }
+
+        const xAtRest = this.isAtRest(this.spring.x.position, this.spring.x.velocity, this.spring.x.target);
+        const yAtRest = this.isAtRest(this.spring.y.position, this.spring.y.velocity, this.spring.y.target);
+
+        if (!xAtRest || !yAtRest) {
+          this.rafId = requestAnimationFrame(this.animate);
+        } else {
+          this.spring.x.position = this.spring.x.target;
+          this.spring.x.velocity = 0;
+          this.spring.y.position = this.spring.y.target;
+          this.spring.y.velocity = 0;
+          if (this.onUpdate) {
+            this.onUpdate({ x: this.spring.x.position, y: this.spring.y.position });
+          }
+          this.rafId = null;
+        }
+      };
+
+      animateAxis(position, velocity, target, dt) {
+        const { stiffness, damping, mass } = this.config;
+        const springForce = -stiffness * (position - target);
+        const dampingForce = -damping * velocity;
+        const force = springForce + dampingForce;
+        const acceleration = force / mass;
+        const newVelocity = velocity + acceleration * dt;
+        const newPosition = position + newVelocity * dt;
+        return [newPosition, newVelocity];
+      }
+
+      isAtRest(position, velocity, target) {
+        return Math.abs(position - target) < this.config.restDelta &&
+               Math.abs(velocity) < this.config.restDelta;
+      }
+
+      destroy() {
+        if (this.rafId !== null) {
+          cancelAnimationFrame(this.rafId);
+          this.rafId = null;
+        }
+        this.onUpdate = null;
+      }
+    }
+
+    /**
+     * Coordinate functions
+     */
+    function getCursorPosition(event) {
+      return {
+        x: Math.round(event.clientX),
+        y: Math.round(event.clientY)
+      };
+    }
+
+    function getCursorPositionInContainer(event, container) {
+      const rect = container.getBoundingClientRect();
+      return {
+        x: Math.round(event.clientX - rect.left + container.scrollLeft),
+        y: Math.round(event.clientY - rect.top + container.scrollTop)
+      };
+    }
+
+    function containerToViewport(containerPos, container) {
+      const rect = container.getBoundingClientRect();
+      return {
+        x: containerPos.x - container.scrollLeft + rect.left,
+        y: containerPos.y - container.scrollTop + rect.top
+      };
+    }
+
+    function isPositionInViewport(containerPos, container) {
+      const viewportPos = containerToViewport(containerPos, container);
+      const rect = container.getBoundingClientRect();
+      return (
+        viewportPos.x >= rect.left &&
+        viewportPos.x <= rect.right &&
+        viewportPos.y >= rect.top &&
+        viewportPos.y <= rect.bottom
+      );
+    }
+
+    /**
+     * Cursor component supporting both modes
+     */
+    function Cursor({ user, mode, containerRef }) {
+      if (!user.cursor) return null;
+
+      const springRef = useRef(null);
+      const [displayPosition, setDisplayPosition] = useState(user.cursor);
+      const [isVisible, setIsVisible] = useState(true);
+
+      // Initialize spring (only once)
+      useEffect(() => {
+        const spring = new SpringAnimation();
+
+        // Set initial position if cursor exists
+        if (user.cursor) {
+          // In container mode, use container coords directly (position: absolute)
+          // In viewport mode, use viewport coords (position: fixed)
+          spring.setPosition(user.cursor);
+        }
+
+        spring.subscribe((pos) => setDisplayPosition(pos));
+        springRef.current = spring;
+        return () => spring.destroy();
+      }, [mode]);  // Don't include user.cursor - we update via setTarget instead
+
+      // Update display position
+      useEffect(() => {
+        const updateDisplayPosition = () => {
+          if (!user.cursor) return;
+
+          if (mode === 'container' && containerRef?.current) {
+            // In container mode: use container coords directly with position: absolute
+            const visible = isPositionInViewport(user.cursor, containerRef.current);
+            setIsVisible(visible);
+            if (springRef.current) {
+              springRef.current.setTarget(user.cursor);
+            }
+          } else {
+            // In viewport mode: use viewport coords with position: fixed
+            setIsVisible(true);
+            if (springRef.current) {
+              springRef.current.setTarget(user.cursor);
+            }
+          }
+        };
+
+        updateDisplayPosition();
+
+        if (mode === 'container' && containerRef?.current) {
+          const container = containerRef.current;
+          container.addEventListener('scroll', updateDisplayPosition, { passive: true });
+          return () => container.removeEventListener('scroll', updateDisplayPosition);
+        }
+      }, [user.cursor, mode, containerRef]);
+
+      if (!isVisible) return null;
+
+      return (
+        <div
+          style={{
+            position: mode === 'container' ? 'absolute' : 'fixed',
+            left: 0,
+            top: 0,
+            transform: `translate(${displayPosition.x}px, ${displayPosition.y}px)`,
+            pointerEvents: 'none',
+            zIndex: 9999,
+            willChange: 'transform'
+          }}
+        >
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none"
+               style={{ filter: 'drop-shadow(0 2px 4px rgba(0,0,0,0.2))' }}>
+            <path d="M5 3L19 12L12 13L9 19L5 3Z"
+                  fill={user.color}
+                  stroke="white"
+                  strokeWidth="1.5" />
+          </svg>
+          <div style={{
+            position: 'absolute',
+            left: '20px',
+            top: '0px',
+            backgroundColor: user.color,
+            color: 'white',
+            padding: '2px 8px',
+            borderRadius: '4px',
+            fontSize: '12px',
+            fontWeight: 500,
+            whiteSpace: 'nowrap',
+            boxShadow: '0 2px 4px rgba(0,0,0,0.2)'
+          }}>
+            {user.name}
+          </div>
+        </div>
+      );
+    }
+
+    /**
+     * Mode comparison component
+     */
+    function ModeTest({ mode, title, description }) {
+      const containerRef = useRef(null);
+      const [localCursor, setLocalCursor] = useState(null);
+      const [remoteCursor, setRemoteCursor] = useState(null);
+      const [scrollPos, setScrollPos] = useState({ top: 0, left: 0 });
+
+      const userColor = `hsl(${Math.floor(Math.random() * 360)}, 70%, 50%)`;
+
+      useEffect(() => {
+        const bc = new BroadcastChannel(`synckit_${mode}`);
+
+        bc.onmessage = (event) => {
+          if (event.data.type === 'CURSOR_UPDATE') {
+            setRemoteCursor({
+              id: event.data.userId,
+              name: event.data.name,
+              color: event.data.color,
+              cursor: event.data.cursor
+            });
+          }
+        };
+
+        return () => bc.close();
+      }, [mode]);
+
+      const handleMouseMove = useCallback((e) => {
+        let cursor;
+        if (mode === 'container' && containerRef.current) {
+          cursor = getCursorPositionInContainer(e, containerRef.current);
+        } else {
+          cursor = getCursorPosition(e);
+        }
+
+        setLocalCursor(cursor);
+
+        const bc = new BroadcastChannel(`synckit_${mode}`);
+        bc.postMessage({
+          type: 'CURSOR_UPDATE',
+          userId: 'local',
+          name: 'You',
+          color: userColor,
+          cursor
+        });
+        bc.close();
+      }, [mode, userColor]);
+
+      const handleScroll = useCallback((e) => {
+        if (containerRef.current) {
+          setScrollPos({
+            top: containerRef.current.scrollTop,
+            left: containerRef.current.scrollLeft
+          });
+        }
+      }, []);
+
+      return (
+        <div className="mode-section">
+          <div className="mode-title">{title}</div>
+          <div className="mode-description">{description}</div>
+
+          <div
+            ref={containerRef}
+            className="scroll-container"
+            onMouseMove={handleMouseMove}
+            onScroll={handleScroll}
+          >
+            <div className="scroll-content">
+              <div className="content-marker">
+                📍 Top of scrollable content (y=0)
+              </div>
+
+              <div className="content-marker" style={{ marginTop: '100px' }}>
+                Scroll position: {scrollPos.top}px
+              </div>
+
+              <div className="content-marker" style={{ marginTop: '100px' }}>
+                Move your cursor here and scroll
+              </div>
+
+              <div className="content-marker" style={{ marginTop: '100px' }}>
+                {mode === 'viewport' ? (
+                  <span className="highlight">Viewport mode: Cursor stays fixed to screen</span>
+                ) : (
+                  <span className="highlight">Container mode: Cursor scrolls with content</span>
+                )}
+              </div>
+
+              <div className="content-marker" style={{ marginTop: '100px' }}>
+                More scrollable content...
+              </div>
+
+              <div className="content-marker" style={{ marginTop: '100px' }}>
+                Keep scrolling...
+              </div>
+
+              <div className="content-marker" style={{ marginTop: '100px' }}>
+                📍 Bottom of scrollable content
+              </div>
+            </div>
+
+            {/* Render cursors */}
+            {remoteCursor && (
+              <Cursor
+                user={remoteCursor}
+                mode={mode}
+                containerRef={containerRef}
+              />
+            )}
+          </div>
+
+          <div className="status">
+            Local: {localCursor ? `x=${localCursor.x}, y=${localCursor.y}` : 'Move mouse'}
+            <br />
+            Remote: {remoteCursor ? 'Connected' : 'Waiting for other tab...'}
+          </div>
+        </div>
+      );
+    }
+
+    function App() {
+      return (
+        <div>
+          <div className="header">
+            <h1>🎯 SyncKit Cursors - Container Mode Test</h1>
+            <p>Testing both viewport-fixed and container-relative cursor positioning</p>
+          </div>
+
+          <div className="instructions">
+            <h3>How to test:</h3>
+            <ol>
+              <li>Open this file in <strong>two browser tabs</strong> side by side</li>
+              <li>In <strong>Viewport Mode (left)</strong>: Move your cursor and scroll - cursor stays fixed to screen</li>
+              <li>In <strong>Container Mode (right)</strong>: Move your cursor and scroll - cursor scrolls with content</li>
+              <li>Notice how container mode cursors disappear when scrolled off-screen (correct behavior)</li>
+              <li>Scroll back up - cursors reappear at their content positions (like Google Docs)</li>
+            </ol>
+          </div>
+
+          <div className="comparison">
+            <ModeTest
+              mode="viewport"
+              title="🔹 Viewport Mode (Default)"
+              description="Cursors fixed to screen - perfect for dashboards, infinite canvas apps"
+            />
+
+            <ModeTest
+              mode="container"
+              title="🔸 Container Mode"
+              description="Cursors scroll with content - perfect for documents, text editors (Google Docs style)"
+            />
+          </div>
+        </div>
+      );
+    }
+
+    const root = ReactDOM.createRoot(document.getElementById('root'));
+    root.render(<App />);
+  </script>
+</body>
+</html>

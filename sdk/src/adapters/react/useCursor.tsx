@@ -1,12 +1,12 @@
 /**
  * React hook for automatic cursor position tracking
- * Simple viewport-relative approach following Liveblocks pattern
+ * Supports both viewport and container-relative modes
  * @module adapters/react/useCursor
  */
 
 import { useCallback } from 'react'
-import type { CursorPosition } from '../../cursor/types'
-import { getCursorPosition } from '../../cursor/coordinates'
+import type { CursorPosition, CursorMode } from '../../cursor/types'
+import { getCursorPosition, getCursorPositionInContainer } from '../../cursor/coordinates'
 
 export interface UseCursorOptions {
   /**
@@ -19,15 +19,27 @@ export interface UseCursorOptions {
    * Update callback - called when cursor position changes
    */
   onUpdate: (position: CursorPosition) => void
+
+  /**
+   * Positioning mode (default: 'viewport')
+   * - viewport: Capture viewport coordinates (clientX/clientY)
+   * - container: Capture container coordinates (with scroll offset)
+   */
+  mode?: CursorMode
+
+  /**
+   * Container ref (required when mode='container')
+   */
+  containerRef?: React.RefObject<HTMLElement>
 }
 
 /**
- * Hook for tracking cursor/mouse position in viewport coordinates
- * Captures simple clientX/clientY values - no transformations needed
+ * Hook for tracking cursor/mouse position
+ * Supports both viewport-relative and container-relative modes
  *
  * @param options - Configuration options
  *
- * @example
+ * @example Viewport mode (default)
  * ```tsx
  * const cursorProps = useCursorTracking({
  *   onUpdate: (pos) => {
@@ -38,17 +50,42 @@ export interface UseCursorOptions {
  *
  * return <div {...cursorProps}>...</div>
  * ```
+ *
+ * @example Container mode
+ * ```tsx
+ * const containerRef = useRef<HTMLDivElement>(null)
+ *
+ * const cursorProps = useCursorTracking({
+ *   mode: 'container',
+ *   containerRef,
+ *   onUpdate: (pos) => {
+ *     // pos = { x: 245, y: 2350 } - container pixels (includes scroll)
+ *     awareness.setLocalCursor(pos)
+ *   }
+ * })
+ *
+ * return <div ref={containerRef} {...cursorProps}>...</div>
+ * ```
  */
 export function useCursorTracking(options: UseCursorOptions) {
-  const { enabled = true, onUpdate } = options
+  const { enabled = true, onUpdate, mode = 'viewport', containerRef } = options
 
-  // Mouse move handler - simple viewport coordinates
+  // Mouse move handler
   const handleMouseMove = useCallback(
     (e: React.MouseEvent) => {
-      const position = getCursorPosition(e.nativeEvent)
-      onUpdate(position)
+      if (mode === 'container') {
+        if (!containerRef?.current) {
+          console.warn('[useCursorTracking] Container mode requires containerRef')
+          return
+        }
+        const position = getCursorPositionInContainer(e.nativeEvent, containerRef.current)
+        onUpdate(position)
+      } else {
+        const position = getCursorPosition(e.nativeEvent)
+        onUpdate(position)
+      }
     },
-    [onUpdate]
+    [onUpdate, mode, containerRef]
   )
 
   // Mouse leave handler - clear cursor when leaving
@@ -65,15 +102,26 @@ export function useCursorTracking(options: UseCursorOptions) {
       const touch = e.touches[0]
       if (!touch) return
 
-      // Simple viewport coordinates
-      const position: CursorPosition = {
-        x: Math.round(touch.clientX),
-        y: Math.round(touch.clientY)
-      }
+      if (mode === 'container' && containerRef?.current) {
+        const container = containerRef.current
+        const rect = container.getBoundingClientRect()
 
-      onUpdate(position)
+        const position: CursorPosition = {
+          x: Math.round(touch.clientX - rect.left + container.scrollLeft),
+          y: Math.round(touch.clientY - rect.top + container.scrollTop)
+        }
+
+        onUpdate(position)
+      } else {
+        const position: CursorPosition = {
+          x: Math.round(touch.clientX),
+          y: Math.round(touch.clientY)
+        }
+
+        onUpdate(position)
+      }
     },
-    [onUpdate]
+    [onUpdate, mode, containerRef]
   )
 
   const handleTouchMove = useCallback(
@@ -85,15 +133,26 @@ export function useCursorTracking(options: UseCursorOptions) {
       const touch = e.touches[0]
       if (!touch) return
 
-      // Simple viewport coordinates
-      const position: CursorPosition = {
-        x: Math.round(touch.clientX),
-        y: Math.round(touch.clientY)
-      }
+      if (mode === 'container' && containerRef?.current) {
+        const container = containerRef.current
+        const rect = container.getBoundingClientRect()
 
-      onUpdate(position)
+        const position: CursorPosition = {
+          x: Math.round(touch.clientX - rect.left + container.scrollLeft),
+          y: Math.round(touch.clientY - rect.top + container.scrollTop)
+        }
+
+        onUpdate(position)
+      } else {
+        const position: CursorPosition = {
+          x: Math.round(touch.clientX),
+          y: Math.round(touch.clientY)
+        }
+
+        onUpdate(position)
+      }
     },
-    [onUpdate]
+    [onUpdate, mode, containerRef]
   )
 
   return {

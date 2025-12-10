@@ -1,12 +1,12 @@
 /**
- * Individual cursor component - Smooth animated cursors
- * Phase 5: Using custom spring physics animation
+ * Individual cursor component - Supports both viewport and container modes
  * @module adapters/react/Cursor
  */
 
 import { useEffect, useState, useRef } from 'react'
 import { SpringAnimation } from '../../cursor/animation'
-import type { CursorPosition, SpringConfig } from '../../cursor/types'
+import { isPositionInViewport } from '../../cursor/coordinates'
+import type { CursorPosition, SpringConfig, CursorMode } from '../../cursor/types'
 
 // User interface for backward compatibility
 export interface CursorUser {
@@ -18,7 +18,7 @@ export interface CursorUser {
 }
 
 export interface CursorProps {
-  /** User data with cursor position (viewport coordinates) */
+  /** User data with cursor position */
   user: CursorUser
 
   /** Custom cursor label (defaults to user name) */
@@ -36,23 +36,40 @@ export interface CursorProps {
   /** Spring animation configuration */
   spring?: Partial<SpringConfig>
 
-  // Phase 6 props (for future use)
+  /**
+   * Positioning mode (default: 'viewport')
+   * - viewport: Cursors fixed to screen (current default)
+   * - container: Cursors scroll with content (like Google Docs)
+   */
+  mode?: CursorMode
+
+  /**
+   * Container ref (required when mode='container')
+   * Not needed for viewport mode
+   */
+  containerRef?: React.RefObject<HTMLElement>
+
+  // Future props
   stackOffset?: number
   render?: unknown
 }
 
 /**
  * Renders an individual user's cursor with smooth animation
- * Uses custom spring physics for buttery smooth movement
+ * Supports both viewport-fixed and container-relative positioning
  *
- * @example
+ * @example Viewport mode (default)
  * ```tsx
+ * <Cursor user={{ id: '1', name: 'Alice', cursor: { x: 250, y: 400 } }} />
+ * ```
+ *
+ * @example Container mode
+ * ```tsx
+ * const containerRef = useRef<HTMLDivElement>(null)
  * <Cursor
- *   user={{
- *     id: 'user123',
- *     name: 'Alice',
- *     cursor: { x: 250, y: 400 }
- *   }}
+ *   user={{ id: '1', name: 'Alice', cursor: { x: 250, y: 2400 } }}
+ *   mode="container"
+ *   containerRef={containerRef}
  * />
  * ```
  */
@@ -62,10 +79,25 @@ export function Cursor({
   color,
   showLabel = true,
   animated = true,
-  spring
+  spring,
+  mode = 'viewport',
+  containerRef
 }: CursorProps) {
   // Don't render if no cursor position
-  if (!user.cursor) return null
+  if (!user.cursor) {
+    return null
+  }
+
+  // Validate container ref for container mode
+  if (mode === 'container' && !containerRef) {
+    console.warn('[Cursor] Container mode requires containerRef prop')
+    return null
+  }
+
+  if (mode === 'container' && !containerRef?.current) {
+    console.warn('[Cursor] Container mode: containerRef.current is null')
+    return null
+  }
 
   const cursorColor = color || user.color || `hsl(${hashCode(user.id) % 360}, 70%, 50%)`
   const cursorLabel = label || user.name || user.id.slice(-8)
@@ -73,17 +105,27 @@ export function Cursor({
   // Spring animation instance (one per cursor)
   const springRef = useRef<SpringAnimation | null>(null)
 
-  // Animated position state
-  const [animatedPosition, setAnimatedPosition] = useState<CursorPosition>(user.cursor)
+  // Display position (viewport coordinates for rendering)
+  const [displayPosition, setDisplayPosition] = useState<CursorPosition>(user.cursor)
 
-  // Initialize spring animation
+  // Visibility state (for container mode)
+  const [isVisible, setIsVisible] = useState(true)
+
+  // Initialize spring animation (only once)
   useEffect(() => {
-    if (!animated || !user.cursor) return
+    if (!animated) return
 
     const springAnim = new SpringAnimation(spring)
-    springAnim.setPosition(user.cursor)
+
+    // Set initial position if cursor exists
+    if (user.cursor) {
+      // In container mode: use container coords directly (position: absolute)
+      // In viewport mode: use viewport coords (position: fixed)
+      springAnim.setPosition(user.cursor)
+    }
+
     springAnim.subscribe((pos) => {
-      setAnimatedPosition(pos)
+      setDisplayPosition(pos)
     })
 
     springRef.current = springAnim
@@ -92,25 +134,64 @@ export function Cursor({
       springAnim.destroy()
       springRef.current = null
     }
-  }, [animated, spring, user.cursor])
+  }, [animated, spring, mode])  // Don't include user.cursor - we update via setTarget instead
 
-  // Update target when cursor moves
+  // Update display position when cursor moves or scroll changes
   useEffect(() => {
-    if (animated && springRef.current && user.cursor) {
-      springRef.current.setTarget(user.cursor)
-    } else if (!animated && user.cursor) {
-      setAnimatedPosition(user.cursor)
-    }
-  }, [user.cursor, animated])
+    const updateDisplayPosition = () => {
+      if (!user.cursor) return
 
-  // Use animated position if enabled, otherwise use raw position
-  const displayPosition = animated ? animatedPosition : user.cursor
+      if (mode === 'container' && containerRef?.current) {
+        // Container mode: Use container coords directly with position: absolute
+        const visible = isPositionInViewport(user.cursor, containerRef.current)
+
+        setIsVisible(visible)
+
+        if (animated && springRef.current) {
+          springRef.current.setTarget(user.cursor)
+        } else {
+          setDisplayPosition(user.cursor)
+        }
+      } else {
+        // Viewport mode: Use viewport coords with position: fixed
+        setIsVisible(true)
+
+        if (animated && springRef.current) {
+          springRef.current.setTarget(user.cursor)
+        } else {
+          setDisplayPosition(user.cursor)
+        }
+      }
+    }
+
+    updateDisplayPosition()
+
+    // Listen to scroll events in container mode
+    if (mode === 'container' && containerRef?.current) {
+      const container = containerRef.current
+
+      container.addEventListener('scroll', updateDisplayPosition, { passive: true })
+      window.addEventListener('scroll', updateDisplayPosition, { passive: true })
+      window.addEventListener('resize', updateDisplayPosition, { passive: true })
+
+      return () => {
+        container.removeEventListener('scroll', updateDisplayPosition)
+        window.removeEventListener('scroll', updateDisplayPosition)
+        window.removeEventListener('resize', updateDisplayPosition)
+      }
+    }
+  }, [user.cursor, animated, mode, containerRef])
+
+  // Don't render if off-screen in container mode
+  if (!isVisible) {
+    return null
+  }
 
   return (
     <div
       data-cursor-id={user.id}
       style={{
-        position: 'fixed',
+        position: mode === 'container' ? 'absolute' : 'fixed',
         left: 0,
         top: 0,
         transform: `translate(${displayPosition.x}px, ${displayPosition.y}px)`,
