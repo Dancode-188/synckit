@@ -74,11 +74,10 @@
   "devDependencies": {
     "@types/node": "^20.10.0",
     "@types/react": "^18.2.0",
+    "@vitest/ui": "^1.0.0",
     "react": "^18.2.0",
     "tsup": "^8.0.0",
     "typescript": "^5.3.0",
-    "vitest": "^1.0.0",
-    "@vitest/ui": "^1.0.0"
-  },
-  "dependencies": {}
+    "vitest": "^1.0.0"
+  }
 }

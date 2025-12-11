@@ -1,0 +1,632 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Semantic Selection Test - SyncKit</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+      background: #f5f5f5;
+      padding: 20px;
+    }
+
+    .header {
+      text-align: center;
+      margin-bottom: 30px;
+    }
+
+    .header h1 {
+      font-size: 28px;
+      color: #333;
+      margin-bottom: 8px;
+    }
+
+    .header .badge {
+      display: inline-block;
+      padding: 4px 12px;
+      border-radius: 12px;
+      font-size: 12px;
+      font-weight: 600;
+      margin-left: 8px;
+    }
+
+    .badge-new {
+      background: #10b981;
+      color: white;
+    }
+
+    .header p {
+      color: #666;
+      font-size: 14px;
+      max-width: 800px;
+      margin: 8px auto 0;
+      line-height: 1.6;
+    }
+
+    .instructions {
+      background: #fff;
+      border: 1px solid #e0e0e0;
+      border-radius: 8px;
+      padding: 20px;
+      margin-bottom: 20px;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+    }
+
+    .instructions h2 {
+      font-size: 18px;
+      margin-bottom: 12px;
+      color: #333;
+    }
+
+    .instructions ol {
+      margin-left: 20px;
+      color: #555;
+    }
+
+    .instructions li {
+      margin-bottom: 8px;
+      line-height: 1.6;
+    }
+
+    .instructions strong {
+      color: #10b981;
+    }
+
+    .test-container {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 20px;
+      margin-bottom: 20px;
+    }
+
+    .test-panel {
+      background: #fff;
+      border: 1px solid #e0e0e0;
+      border-radius: 8px;
+      overflow: hidden;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+    }
+
+    .panel-header {
+      background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+      color: white;
+      padding: 12px 16px;
+      font-weight: 600;
+      font-size: 14px;
+    }
+
+    .panel-content {
+      padding: 20px;
+      user-select: text;
+    }
+
+    .editable-content {
+      line-height: 1.8;
+      color: #333;
+    }
+
+    .editable-content p {
+      margin-bottom: 16px;
+    }
+
+    .editable-content strong {
+      color: #10b981;
+      font-weight: 600;
+    }
+
+    .debug-info {
+      background: #f9fafb;
+      border-top: 1px solid #e0e0e0;
+      padding: 16px;
+      font-family: 'Monaco', 'Courier New', monospace;
+      font-size: 11px;
+    }
+
+    .debug-info h3 {
+      font-size: 12px;
+      font-weight: 600;
+      color: #374151;
+      margin-bottom: 8px;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto;
+    }
+
+    .debug-info pre {
+      background: #fff;
+      padding: 8px;
+      border-radius: 4px;
+      overflow-x: auto;
+      color: #1f2937;
+      border: 1px solid #e5e7eb;
+      max-height: 200px;
+      overflow-y: auto;
+    }
+
+    .selection-rect {
+      position: fixed;
+      pointer-events: none;
+      background: rgba(59, 130, 246, 0.3);
+      border-radius: 2px;
+      z-index: 9998;
+      transition: opacity 0.2s ease;
+    }
+
+    .highlight-box {
+      background: #fef3c7;
+      padding: 12px;
+      border-left: 3px solid #f59e0b;
+      margin: 16px 0;
+      border-radius: 4px;
+    }
+
+    .highlight-box p {
+      margin: 0 !important;
+      color: #78350f;
+      font-size: 13px;
+      line-height: 1.6;
+    }
+
+    .controls {
+      background: #fff;
+      border: 1px solid #e0e0e0;
+      border-radius: 8px;
+      padding: 16px;
+      margin-bottom: 20px;
+      display: flex;
+      gap: 12px;
+      align-items: center;
+    }
+
+    .controls button {
+      padding: 8px 16px;
+      background: #10b981;
+      color: white;
+      border: none;
+      border-radius: 6px;
+      cursor: pointer;
+      font-weight: 500;
+      font-size: 14px;
+      transition: background 0.2s;
+    }
+
+    .controls button:hover {
+      background: #059669;
+    }
+
+    .controls button:active {
+      transform: scale(0.98);
+    }
+
+    .controls .info {
+      color: #6b7280;
+      font-size: 13px;
+      flex: 1;
+    }
+  </style>
+</head>
+<body>
+  <div class="header">
+    <h1>
+      🎯 Semantic Selection Test
+      <span class="badge badge-new">XPath-Based</span>
+    </h1>
+    <p>
+      Test the new semantic selection sharing that works across different layouts, window sizes, and scroll positions.
+      Open this page in TWO BROWSER TABS side by side to see cross-tab selection sharing in action!
+    </p>
+  </div>
+
+  <div class="instructions">
+    <h2>📋 How to Test</h2>
+    <ol>
+      <li><strong>Open this page in TWO browser tabs</strong> (Ctrl+Click the file or duplicate the tab)</li>
+      <li><strong>Arrange tabs side-by-side</strong> so you can see both at once</li>
+      <li><strong>Select text in Tab 1</strong> - watch it appear in Tab 2!</li>
+      <li><strong>Try different window sizes</strong> - resize one tab, selections still work!</li>
+      <li><strong>Scroll to different positions</strong> - selections highlight the correct text regardless of scroll</li>
+      <li>Check the <strong>Debug Info</strong> to see the XPath + character offsets being shared</li>
+    </ol>
+  </div>
+
+  <div class="controls">
+    <button onclick="clearAllSelections()">Clear All Selections</button>
+    <button onclick="resizeWindow()">Resize Window (Test Compatibility)</button>
+    <div class="info">
+      Tab ID: <strong id="tab-id">Loading...</strong>
+    </div>
+  </div>
+
+  <div class="highlight-box">
+    <p>
+      <strong>🎨 What makes this special:</strong> Unlike the old visual selection that shared pixel coordinates,
+      this shares WHAT is selected (XPath to DOM nodes + character offsets). Each tab computes its own visual
+      rendering, so selections work even with different layouts!
+    </p>
+  </div>
+
+  <div class="test-container">
+    <div class="test-panel">
+      <div class="panel-header">
+        Tab 1 - Select Text Here
+      </div>
+      <div class="panel-content">
+        <div class="editable-content">
+          <p><strong>This is semantic selection!</strong> Try selecting this text and watch it appear in the other tab.</p>
+          <p>Lorem ipsum dolor sit amet, consectetur adipiscing elit. Sed do eiusmod tempor incididunt ut labore et dolore magna aliqua.</p>
+          <p>The key difference: we're sharing XPath + character offsets, not pixel coordinates. This means selections work across different window sizes!</p>
+          <p>Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat.</p>
+          <p>Duis aute irure dolor in reprehenderit in voluptate velit esse cillum dolore eu fugiat nulla pariatur.</p>
+        </div>
+      </div>
+      <div class="debug-info">
+        <h3>Sent Selection (Semantic)</h3>
+        <pre id="sent-debug">No selection</pre>
+      </div>
+    </div>
+
+    <div class="test-panel">
+      <div class="panel-header">
+        Tab 2 - Remote Selection Renders Here
+      </div>
+      <div class="panel-content">
+        <div class="editable-content">
+          <p><strong>This is semantic selection!</strong> Try selecting this text and watch it appear in the other tab.</p>
+          <p>Lorem ipsum dolor sit amet, consectetur adipiscing elit. Sed do eiusmod tempor incididunt ut labore et dolore magna aliqua.</p>
+          <p>The key difference: we're sharing XPath + character offsets, not pixel coordinates. This means selections work across different window sizes!</p>
+          <p>Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat.</p>
+          <p>Duis aute irure dolor in reprehenderit in voluptate velit esse cillum dolore eu fugiat nulla pariatur.</p>
+        </div>
+        <div id="remote-selections"></div>
+      </div>
+      <div class="debug-info">
+        <h3>Received Selection (Deserialized)</h3>
+        <pre id="received-debug">No selection</pre>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // Generate unique tab ID
+    const tabId = 'tab-' + Math.random().toString(36).substr(2, 9);
+    document.getElementById('tab-id').textContent = tabId;
+
+    // BroadcastChannel for cross-tab communication
+    const channel = new BroadcastChannel('synckit-semantic-selection-test');
+    console.log('✅ BroadcastChannel created for tab:', tabId);
+
+    // Remote selections from other tabs
+    const remoteSelections = new Map();
+
+    // ============================================================================
+    // XPath Utilities (from SDK)
+    // ============================================================================
+
+    function getXPathForElement(element) {
+      if (element.id) {
+        return `//*[@id="${element.id}"]`;
+      }
+
+      const segments = [];
+      let currentNode = element;
+
+      while (currentNode && currentNode.nodeType === Node.ELEMENT_NODE) {
+        let index = 1;
+        let sibling = currentNode.previousSibling;
+
+        while (sibling) {
+          if (sibling.nodeType === Node.ELEMENT_NODE && sibling.nodeName === currentNode.nodeName) {
+            index++;
+          }
+          sibling = sibling.previousSibling;
+        }
+
+        const tagName = currentNode.nodeName.toLowerCase();
+        const segment = index > 1 ? `${tagName}[${index}]` : tagName;
+        segments.unshift(segment);
+
+        currentNode = currentNode.parentElement;
+      }
+
+      return '/' + segments.join('/');
+    }
+
+    function getXPathForTextNode(textNode) {
+      const parent = textNode.parentElement;
+      if (!parent) {
+        throw new Error('Text node has no parent element');
+      }
+
+      const parentXPath = getXPathForElement(parent);
+
+      let index = 1;
+      let sibling = textNode.previousSibling;
+
+      while (sibling) {
+        if (sibling.nodeType === Node.TEXT_NODE) {
+          index++;
+        }
+        sibling = sibling.previousSibling;
+      }
+
+      return `${parentXPath}/text()[${index}]`;
+    }
+
+    function getXPathForNode(node) {
+      if (node.nodeType === Node.ELEMENT_NODE) {
+        return getXPathForElement(node);
+      } else if (node.nodeType === Node.TEXT_NODE) {
+        return getXPathForTextNode(node);
+      } else {
+        throw new Error(`Unsupported node type: ${node.nodeType}`);
+      }
+    }
+
+    function getNodeFromXPath(xpath, doc = document) {
+      try {
+        const result = doc.evaluate(
+          xpath,
+          doc,
+          null,
+          XPathResult.FIRST_ORDERED_NODE_TYPE,
+          null
+        );
+        return result.singleNodeValue;
+      } catch (error) {
+        console.warn('[XPath] Failed to evaluate:', xpath, error);
+        return null;
+      }
+    }
+
+    // ============================================================================
+    // Selection Serialization (from SDK)
+    // ============================================================================
+
+    function serializeRange(range) {
+      try {
+        const { startContainer, startOffset, endContainer, endOffset } = range;
+
+        return {
+          startXPath: getXPathForNode(startContainer),
+          startOffset,
+          endXPath: getXPathForNode(endContainer),
+          endOffset,
+          timestamp: Date.now()
+        };
+      } catch (error) {
+        console.warn('[Selection] Failed to serialize range:', error);
+        return null;
+      }
+    }
+
+    function deserializeToRange(data, doc = document) {
+      try {
+        const startContainer = getNodeFromXPath(data.startXPath, doc);
+        const endContainer = getNodeFromXPath(data.endXPath, doc);
+
+        if (!startContainer || !endContainer) {
+          console.warn('[Selection] Failed to find nodes from XPath');
+          return null;
+        }
+
+        const range = doc.createRange();
+        range.setStart(startContainer, data.startOffset);
+        range.setEnd(endContainer, data.endOffset);
+
+        return range;
+      } catch (error) {
+        console.warn('[Selection] Failed to deserialize range:', error);
+        return null;
+      }
+    }
+
+    function rangeToVisualRects(range) {
+      try {
+        const domRects = range.getClientRects();
+        const rects = [];
+
+        for (let i = 0; i < domRects.length; i++) {
+          const domRect = domRects[i];
+          if (!domRect) continue;
+
+          if (domRect.width === 0 || domRect.height === 0) {
+            continue;
+          }
+
+          rects.push({
+            x: Math.round(domRect.left),
+            y: Math.round(domRect.top),
+            width: Math.round(domRect.width),
+            height: Math.round(domRect.height)
+          });
+        }
+
+        return rects;
+      } catch (error) {
+        console.warn('[Selection] Failed to convert range to rects:', error);
+        return [];
+      }
+    }
+
+    function getSerializedSelectionFromDOM() {
+      const selection = window.getSelection();
+
+      if (!selection || selection.rangeCount === 0 || selection.isCollapsed) {
+        return null;
+      }
+
+      const range = selection.getRangeAt(0);
+      return serializeRange(range);
+    }
+
+    // ============================================================================
+    // Selection Tracking
+    // ============================================================================
+
+    let throttleTimeout = null;
+
+    function handleSelectionChange() {
+      if (throttleTimeout) {
+        clearTimeout(throttleTimeout);
+      }
+
+      throttleTimeout = setTimeout(() => {
+        const serialized = getSerializedSelectionFromDOM();
+
+        if (serialized) {
+          // Show in debug panel
+          document.getElementById('sent-debug').textContent = JSON.stringify(serialized, null, 2);
+
+          // Broadcast to other tabs
+          channel.postMessage({
+            type: 'selection',
+            tabId,
+            selection: serialized
+          });
+
+          console.log('📡 Sent semantic selection:', serialized);
+        } else {
+          document.getElementById('sent-debug').textContent = 'No selection';
+
+          // Clear selection in other tabs
+          channel.postMessage({
+            type: 'selection',
+            tabId,
+            selection: null
+          });
+        }
+      }, 100);
+    }
+
+    // Listen for selection changes
+    document.addEventListener('selectionchange', handleSelectionChange);
+
+    // Listen for scroll events to update remote selection positions
+    let scrollThrottle = null;
+    window.addEventListener('scroll', () => {
+      if (scrollThrottle) {
+        clearTimeout(scrollThrottle);
+      }
+      scrollThrottle = setTimeout(() => {
+        renderRemoteSelections();
+      }, 16); // ~60fps
+    }, { passive: true });
+
+    // Also listen for scroll on any scrollable containers
+    document.querySelectorAll('.panel-content').forEach(container => {
+      container.addEventListener('scroll', () => {
+        if (scrollThrottle) {
+          clearTimeout(scrollThrottle);
+        }
+        scrollThrottle = setTimeout(() => {
+          renderRemoteSelections();
+        }, 16);
+      }, { passive: true });
+    });
+
+    // ============================================================================
+    // Remote Selection Rendering
+    // ============================================================================
+
+    function renderRemoteSelections() {
+      const container = document.getElementById('remote-selections');
+      container.innerHTML = '';
+
+      remoteSelections.forEach((serialized, fromTabId) => {
+        if (!serialized) return;
+
+        // Deserialize to DOM Range
+        const range = deserializeToRange(serialized);
+        if (!range) {
+          console.warn('Failed to deserialize selection from', fromTabId);
+          return;
+        }
+
+        // Convert to visual rectangles
+        const rects = rangeToVisualRects(range);
+
+        // Render each rectangle
+        rects.forEach((rect, index) => {
+          const div = document.createElement('div');
+          div.className = 'selection-rect';
+          div.style.left = `${rect.x}px`;
+          div.style.top = `${rect.y}px`;
+          div.style.width = `${rect.width}px`;
+          div.style.height = `${rect.height}px`;
+          div.dataset.tabId = fromTabId;
+          container.appendChild(div);
+        });
+
+        // Show in debug panel
+        document.getElementById('received-debug').textContent =
+          `From: ${fromTabId}\n\n` +
+          `Serialized:\n${JSON.stringify(serialized, null, 2)}\n\n` +
+          `Rendered: ${rects.length} rectangles`;
+      });
+
+      if (remoteSelections.size === 0) {
+        document.getElementById('received-debug').textContent = 'No remote selection';
+      }
+    }
+
+    // Listen for remote selections
+    channel.onmessage = (event) => {
+      const { type, tabId: fromTabId, selection } = event.data;
+
+      if (fromTabId === tabId) {
+        return; // Ignore our own messages
+      }
+
+      if (type === 'selection') {
+        if (selection) {
+          remoteSelections.set(fromTabId, selection);
+          console.log('📥 Received semantic selection from', fromTabId, selection);
+        } else {
+          remoteSelections.delete(fromTabId);
+        }
+
+        renderRemoteSelections();
+      }
+    };
+
+    // ============================================================================
+    // Controls
+    // ============================================================================
+
+    function clearAllSelections() {
+      window.getSelection().removeAllRanges();
+      remoteSelections.clear();
+      renderRemoteSelections();
+      document.getElementById('sent-debug').textContent = 'No selection';
+
+      // Tell other tabs to clear
+      channel.postMessage({
+        type: 'clear-all',
+        tabId
+      });
+    }
+
+    function resizeWindow() {
+      const currentWidth = window.innerWidth;
+      const newWidth = currentWidth > 800 ? 600 : 1200;
+      window.resizeTo(newWidth, window.innerHeight);
+      console.log(`📐 Resized window to ${newWidth}px`);
+    }
+
+    // Listen for clear-all from other tabs
+    channel.addEventListener('message', (event) => {
+      if (event.data.type === 'clear-all' && event.data.tabId !== tabId) {
+        window.getSelection().removeAllRanges();
+      }
+    });
+
+    console.log('✅ Semantic selection test ready!');
+    console.log('📝 Open this page in another tab to test cross-tab selection sharing');
+  </script>
+</body>
+</html>

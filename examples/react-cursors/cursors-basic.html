@@ -1,0 +1,512 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SyncKit React Cursors - Zero Config Demo</title>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <script type="importmap">
+    {
+        "imports": {
+            "react": "https://esm.sh/react@18.2.0",
+            "react-dom/client": "https://esm.sh/react-dom@18.2.0/client",
+            "react/jsx-runtime": "https://esm.sh/react@18.2.0/jsx-runtime"
+        }
+    }
+    </script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+        }
+
+        .container {
+            background: white;
+            border-radius: 16px;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+            max-width: 1400px;
+            width: 100%;
+            overflow: hidden;
+        }
+
+        .header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 30px;
+            text-align: center;
+        }
+
+        .header h1 {
+            font-size: 32px;
+            font-weight: 700;
+            margin-bottom: 10px;
+        }
+
+        .header p {
+            font-size: 16px;
+            opacity: 0.9;
+        }
+
+        .badge {
+            display: inline-block;
+            background: rgba(255, 255, 255, 0.2);
+            padding: 4px 12px;
+            border-radius: 12px;
+            font-size: 12px;
+            font-weight: 600;
+            margin-top: 10px;
+        }
+
+        .content {
+            display: flex;
+            height: 700px;
+        }
+
+        .canvas-area {
+            flex: 1;
+            position: relative;
+            background: #f8f9fa;
+            cursor: crosshair;
+            overflow: hidden;
+        }
+
+        .sidebar {
+            width: 350px;
+            background: white;
+            border-left: 1px solid #e9ecef;
+            padding: 20px;
+            overflow-y: auto;
+        }
+
+        .sidebar h2 {
+            font-size: 18px;
+            margin-bottom: 15px;
+            color: #495057;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .user-card {
+            background: #f8f9fa;
+            border-radius: 8px;
+            padding: 12px;
+            margin-bottom: 10px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            transition: transform 0.2s;
+        }
+
+        .user-card:hover {
+            transform: translateX(4px);
+        }
+
+        .user-avatar {
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: 600;
+            color: white;
+            font-size: 16px;
+        }
+
+        .user-info {
+            flex: 1;
+        }
+
+        .user-name {
+            font-weight: 600;
+            color: #212529;
+            font-size: 14px;
+        }
+
+        .user-status {
+            font-size: 12px;
+            color: #6c757d;
+        }
+
+        .controls {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            background: white;
+            border-radius: 8px;
+            padding: 15px;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+            z-index: 100;
+        }
+
+        .control-group {
+            margin-bottom: 10px;
+        }
+
+        .control-group:last-child {
+            margin-bottom: 0;
+        }
+
+        label {
+            display: block;
+            font-size: 12px;
+            color: #6c757d;
+            margin-bottom: 5px;
+            font-weight: 500;
+        }
+
+        input[type="text"] {
+            width: 200px;
+            padding: 8px 12px;
+            border: 1px solid #dee2e6;
+            border-radius: 4px;
+            font-size: 14px;
+        }
+
+        input[type="color"] {
+            width: 200px;
+            height: 36px;
+            padding: 2px;
+            border: 1px solid #dee2e6;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+
+        .status {
+            position: absolute;
+            bottom: 20px;
+            right: 20px;
+            background: white;
+            border-radius: 8px;
+            padding: 10px 15px;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 14px;
+            z-index: 100;
+        }
+
+        .status-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: #28a745;
+            animation: pulse 2s infinite;
+        }
+
+        @keyframes pulse {
+            0%, 100% {
+                opacity: 1;
+            }
+            50% {
+                opacity: 0.5;
+            }
+        }
+
+        .instructions {
+            text-align: center;
+            color: #6c757d;
+            font-size: 14px;
+            padding: 20px;
+        }
+
+        .stats {
+            background: #e7f5ff;
+            border-radius: 8px;
+            padding: 15px;
+            margin-top: 20px;
+        }
+
+        .stat-row {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 8px;
+            font-size: 14px;
+        }
+
+        .stat-row:last-child {
+            margin-bottom: 0;
+        }
+
+        .stat-label {
+            color: #495057;
+        }
+
+        .stat-value {
+            font-weight: 600;
+            color: #0c8599;
+        }
+
+        .feature-box {
+            background: #d1f2eb;
+            border-radius: 8px;
+            padding: 15px;
+            margin-top: 20px;
+        }
+
+        .feature-box h3 {
+            font-size: 14px;
+            color: #0c8599;
+            margin-bottom: 10px;
+        }
+
+        .feature-list {
+            list-style: none;
+            font-size: 13px;
+            color: #495057;
+        }
+
+        .feature-list li {
+            padding: 4px 0;
+        }
+
+        .feature-list li:before {
+            content: "✓ ";
+            color: #0c8599;
+            font-weight: bold;
+            margin-right: 8px;
+        }
+
+        .code-preview {
+            background: #1e1e1e;
+            color: #d4d4d4;
+            border-radius: 8px;
+            padding: 15px;
+            margin-top: 20px;
+            font-family: 'Courier New', monospace;
+            font-size: 12px;
+            overflow-x: auto;
+        }
+
+        .code-preview code {
+            display: block;
+            white-space: pre;
+        }
+    </style>
+</head>
+<body>
+    <div id="root"></div>
+
+    <script type="text/babel" data-type="module">
+        import React, { useState, useRef, useEffect, useCallback } from 'react'
+        import { createRoot } from 'react-dom/client'
+        import { SyncKit } from '../../sdk/dist/index.mjs'
+        import { SyncProvider, usePresence, useOthers, useCursor, Cursors } from '../../sdk/dist/adapters/react.mjs'
+
+        // Generate a random username
+        const adjectives = ['Happy', 'Clever', 'Brave', 'Swift', 'Calm', 'Bold', 'Wise', 'Kind']
+        const nouns = ['Panda', 'Fox', 'Eagle', 'Dolphin', 'Wolf', 'Owl', 'Tiger', 'Bear']
+        const randomUsername = `${adjectives[Math.floor(Math.random() * adjectives.length)]} ${nouns[Math.floor(Math.random() * nouns.length)]}`
+
+        const colors = ['#FF6B6B', '#4ECDC4', '#45B7D1', '#FFA07A', '#98D8C8', '#F7DC6F', '#BB8FCE', '#85C1E9']
+        const randomColor = colors[Math.floor(Math.random() * colors.length)]
+
+        // Initialize SyncKit
+        const synckit = new SyncKit({
+            serverUrl: 'ws://127.0.0.1:8080/ws'
+        })
+        await synckit.init()
+
+        // Note: Awareness subscription now happens automatically when using hooks!
+
+        function CursorDemo() {
+            const [userName, setUserName] = useState(randomUsername)
+            const [userColor, setUserColor] = useState(randomColor)
+            const containerRef = useRef(null)
+
+            // Use presence directly for cursor tracking
+            // Note: usePresence hook now properly handles initial state internally
+            const [presence, setPresence] = usePresence('react-cursors-demo', {
+                name: userName,
+                color: userColor,
+                cursor: null
+            })
+
+            // Get other users
+            const others = useOthers('react-cursors-demo')
+
+            // Manual cursor tracking
+            const handleMouseMove = useCallback((e) => {
+                if (!containerRef.current) return
+
+                const rect = containerRef.current.getBoundingClientRect()
+                const x = (e.clientX - rect.left) / rect.width
+                const y = (e.clientY - rect.top) / rect.height
+
+                console.log('[Demo] 🖱️ handleMouseMove:', { x: x.toFixed(3), y: y.toFixed(3) })
+                setPresence({
+                    name: userName,
+                    color: userColor,
+                    cursor: { x, y }
+                })
+            }, [setPresence, userName, userColor])
+
+            const handleMouseLeave = useCallback(() => {
+                console.log('[Demo] 🚪 handleMouseLeave - setting cursor to null')
+                setPresence({
+                    name: userName,
+                    color: userColor,
+                    cursor: null
+                })
+            }, [setPresence, userName, userColor])
+
+            return (
+                <div className="container">
+                    <div className="header">
+                        <h1>⚡ Zero-Config React Cursors</h1>
+                        <p>Butter-smooth spring animations with one line of code</p>
+                        <div className="badge">Phase 4: Cursor Sharing ✨</div>
+                    </div>
+                    <div className="content">
+                        <div
+                            className="canvas-area"
+                            ref={containerRef}
+                            onMouseMove={handleMouseMove}
+                            onMouseLeave={handleMouseLeave}
+                        >
+                            {/* THE MAGIC: One component with new polish features! */}
+                            <Cursors
+                                documentId="react-cursors-demo"
+                                containerRef={containerRef}
+                                inactivity={{ timeout: 5000, fadeOutDuration: 300 }}
+                                collision={{ threshold: 50, stackOffset: 20 }}
+                            />
+
+                            <div className="controls">
+                                <div className="control-group">
+                                    <label htmlFor="username">Your Name</label>
+                                    <input
+                                        type="text"
+                                        id="username"
+                                        value={userName}
+                                        onChange={(e) => setUserName(e.target.value)}
+                                        placeholder="Enter your name"
+                                    />
+                                </div>
+                                <div className="control-group">
+                                    <label htmlFor="color">Your Color</label>
+                                    <input
+                                        type="color"
+                                        id="color"
+                                        value={userColor}
+                                        onChange={(e) => setUserColor(e.target.value)}
+                                    />
+                                </div>
+                            </div>
+
+                            <div className="status">
+                                <div className="status-dot"></div>
+                                <span>Connected</span>
+                            </div>
+
+                            <div className="instructions">
+                                Move your mouse to see your cursor with spring physics! Open in multiple tabs to see the magic ✨
+                            </div>
+                        </div>
+
+                        <Sidebar others={others} userName={userName} userColor={userColor} />
+                    </div>
+                </div>
+            )
+        }
+
+        function Sidebar({ others, userName, userColor }) {
+            const allUsers = [
+                { id: 'you', name: userName, color: userColor },
+                ...others.map(other => ({
+                    id: other.client_id,
+                    name: other.state?.user?.name || other.state?.name || 'Anonymous',
+                    color: other.state?.user?.color || other.state?.color || '#ccc',
+                    cursor: other.state?.cursor
+                }))
+            ]
+
+            return (
+                <div className="sidebar">
+                    <h2>👥 Online Users ({allUsers.length})</h2>
+
+                    {allUsers.map(user => (
+                        <div key={user.id} className="user-card">
+                            <div className="user-avatar" style={{ backgroundColor: user.color }}>
+                                {user.name[0].toUpperCase()}
+                            </div>
+                            <div className="user-info">
+                                <div className="user-name">
+                                    {user.name} {user.id === 'you' && '(You)'}
+                                </div>
+                                <div className="user-status">
+                                    {user.cursor
+                                        ? `Cursor: (${Math.round((user.cursor.x || 0) * 100)}%, ${Math.round((user.cursor.y || 0) * 100)}%)`
+                                        : 'No cursor'
+                                    }
+                                </div>
+                            </div>
+                        </div>
+                    ))}
+
+                    <div className="feature-box">
+                        <h3>🚀 What makes this special?</h3>
+                        <ul className="feature-list">
+                            <li>Spring physics (45 damping, 400 stiffness)</li>
+                            <li>Adaptive throttling (auto-adjusts)</li>
+                            <li>Relative coordinates (0-1 range)</li>
+                            <li>GPU acceleration (translate3d)</li>
+                            <li>Zero configuration required</li>
+                        </ul>
+                    </div>
+
+                    <div className="stats">
+                        <div className="stat-row">
+                            <span className="stat-label">Document ID:</span>
+                            <span className="stat-value">react-cursors-demo</span>
+                        </div>
+                        <div className="stat-row">
+                            <span className="stat-label">Spring Config:</span>
+                            <span className="stat-value">damping: 45, stiffness: 400</span>
+                        </div>
+                        <div className="stat-row">
+                            <span className="stat-label">Throttle:</span>
+                            <span className="stat-value">Adaptive (auto)</span>
+                        </div>
+                    </div>
+
+                    <div className="code-preview">
+                        <code>{`// That's it! Zero config:
+<Cursors documentId="my-doc" />
+
+// With hook for tracking:
+const cursor = useCursor('my-doc')
+<div {...cursor.bind()}>
+  <Cursors documentId="my-doc" />
+</div>`}</code>
+                    </div>
+                </div>
+            )
+        }
+
+        function App() {
+            return (
+                <SyncProvider synckit={synckit}>
+                    <CursorDemo />
+                </SyncProvider>
+            )
+        }
+
+        const root = createRoot(document.getElementById('root'))
+        root.render(<App />)
+    </script>
+</body>
+</html>
