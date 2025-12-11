@@ -32,6 +32,11 @@ export { useSyncDocument } from './composables/useSyncDocument'
 export { useSyncField } from './composables/useSyncField'
 export { useNetworkStatus } from './composables/useNetworkStatus'
 
+// Awareness composables
+export { usePresence } from './composables/usePresence'
+export { useOthers } from './composables/useOthers'
+export { useSelf } from './composables/useSelf'
+
 // Types
 export type {
   MaybeRefOrGetter,
@@ -44,6 +49,13 @@ export type {
   UseSyncStatusOptions,
   UseSyncStatusReturn
 } from './types'
+
+// Awareness types
+export type { UsePresenceOptions, UsePresenceReturn } from './composables/usePresence'
+export type { UseSelfOptions, UseSelfReturn } from './composables/useSelf'
+
+// Re-export core awareness types
+export type { AwarenessState, AwarenessUpdate } from '../../awareness'
 
 // Utilities (advanced users)
 export { toValue } from './utils/refs'
