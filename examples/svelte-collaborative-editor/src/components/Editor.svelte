@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { onMount } from 'svelte';
   import { untrack } from 'svelte';
   import { getSyncKitContext, syncDocument } from '@synckit-js/sdk/svelte';
 
@@ -11,22 +12,47 @@
   // Get SyncKit instance from context
   const synckit = getSyncKitContext();
 
-  // Get document store with Svelte 5 rune properties for reactive display
+  // Get document store for reactive display using Svelte 4 subscription pattern
   // Use untrack() since documentId won't change after mount
   const store = untrack(() => syncDocument(synckit, documentId));
 
   // Get document instance for mutations
   const doc = untrack(() => synckit.document(documentId));
 
+  // Track if document is ready
+  let docReady = $state(false);
+
+  // Reactive document data using store subscription
+  let documentData = $state<Record<string, unknown>>({});
+  let loading = $state(true);
+
+  // Subscribe to store changes
+  onMount(async () => {
+    try {
+      await doc.init();
+      docReady = true;
+    } catch (err) {
+      console.error('Failed to initialize document:', err);
+    }
+
+    // Subscribe to document changes
+    const unsubscribe = store.subscribe((data) => {
+      documentData = data || {};
+      loading = store.loading;
+    });
+
+    return unsubscribe;
+  });
+
   // Local editing state
   let isEditing = $state(false);
   let editTitle = $state('');
   let editContent = $state('');
 
-  // Derived state
-  const hasContent = $derived((store.data?.title || store.data?.content) as boolean);
-  const title = $derived((store.data?.title as string) || '');
-  const content = $derived((store.data?.content as string) || '');
+  // Derived state from reactive documentData
+  const hasContent = $derived((documentData?.title || documentData?.content) as boolean);
+  const title = $derived((documentData?.title as string) || '');
+  const content = $derived((documentData?.content as string) || '');
 
   function startEditing() {
     editTitle = title;
@@ -35,12 +61,15 @@
   }
 
   async function saveChanges() {
+    if (!docReady) {
+      console.error('Document not ready yet');
+      return;
+    }
+
     try {
       // Update document data using the document instance
       await doc.set('title', editTitle);
       await doc.set('content', editContent);
-
-      console.log('Document saved successfully');
     } catch (error) {
       console.error('Failed to save document:', error);
     }
@@ -53,7 +82,7 @@
 </script>
 
 <div class="editor">
-  {#if store.loading}
+  {#if loading}
     <div class="loading">
       <div class="spinner"></div>
       <p>Loading document...</p>
