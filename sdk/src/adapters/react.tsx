@@ -977,3 +977,195 @@ export function useCursor(
     bind: () => handlers
   }
 }
+
+// ====================
+// RichText Hook
+// ====================
+
+export interface UseRichTextOptions {
+  /** Auto-initialize the RichText CRDT (default: true) */
+  autoInit?: boolean
+}
+
+export interface UseRichTextResult {
+  /** Current text content */
+  text: string
+  /** Formatted ranges for rendering */
+  ranges: import('../crdt/richtext').FormatRange[]
+  /** Insert text at position */
+  insert: (position: number, text: string) => Promise<void>
+  /** Delete text range */
+  delete: (start: number, length: number) => Promise<void>
+  /** Apply formatting to range */
+  format: (start: number, end: number, attributes: import('../crdt/peritext').FormatAttributes) => Promise<void>
+  /** Remove formatting from range */
+  unformat: (start: number, end: number, attributes: import('../crdt/peritext').FormatAttributes) => Promise<void>
+  /** Get formatting at position */
+  getFormats: (position: number) => import('../crdt/peritext').FormatAttributes
+  /** Export as Quill Delta */
+  toDelta: () => import('../crdt/delta').Delta
+  /** Import from Quill Delta */
+  fromDelta: (delta: import('../crdt/delta').Delta) => Promise<void>
+  /** RichText instance */
+  richText: import('../crdt/richtext').RichText | null
+  /** Loading state */
+  loading: boolean
+}
+
+/**
+ * React hook for collaborative rich text editing
+ *
+ * Provides a reactive interface to RichText CRDT with automatic
+ * synchronization and formatting support.
+ *
+ * @param documentId - Unique document identifier
+ * @param options - Configuration options
+ * @returns RichText state and operations
+ *
+ * @example
+ * ```tsx
+ * function Editor() {
+ *   const { text, ranges, insert, format } = useRichText('doc-123')
+ *
+ *   const handleBold = async () => {
+ *     const selection = getSelection()
+ *     await format(selection.start, selection.end, { bold: true })
+ *   }
+ *
+ *   return (
+ *     <div>
+ *       {ranges.map((range, i) => (
+ *         <span key={i} style={{
+ *           fontWeight: range.attributes.bold ? 'bold' : 'normal',
+ *           fontStyle: range.attributes.italic ? 'italic' : 'normal'
+ *         }}>
+ *           {range.text}
+ *         </span>
+ *       ))}
+ *     </div>
+ *   )
+ * }
+ * ```
+ */
+export function useRichText(
+  documentId: string,
+  options: UseRichTextOptions = {}
+): UseRichTextResult {
+  const { autoInit = true } = options
+  const synckit = useSyncKit()
+
+  const [text, setText] = useState('')
+  const [ranges, setRanges] = useState<import('../crdt/richtext').FormatRange[]>([])
+  const [loading, setLoading] = useState(true)
+  const richTextRef = useRef<import('../crdt/richtext').RichText | null>(null)
+
+  // Initialize RichText instance
+  useEffect(() => {
+    let cancelled = false
+
+    async function initRichText() {
+      try {
+        const rt = await (synckit as any).richText(documentId)
+
+        if (autoInit) {
+          await rt.init()
+        }
+
+        if (!cancelled) {
+          richTextRef.current = rt
+          setText(rt.get())
+          setRanges(rt.getRanges())
+          setLoading(false)
+        }
+      } catch (error) {
+        console.error('Failed to initialize RichText:', error)
+        if (!cancelled) {
+          setLoading(false)
+        }
+      }
+    }
+
+    initRichText()
+
+    return () => {
+      cancelled = true
+    }
+  }, [synckit, documentId, autoInit])
+
+  // Subscribe to text changes
+  useEffect(() => {
+    const richText = richTextRef.current
+    if (!richText) return
+
+    const unsubscribeText = richText.subscribe((newText: string) => {
+      setText(newText)
+    })
+
+    const unsubscribeFormats = richText.subscribeFormats((newRanges: import('../crdt/richtext').FormatRange[]) => {
+      setRanges(newRanges)
+    })
+
+    return () => {
+      unsubscribeText()
+      unsubscribeFormats()
+    }
+  }, [richTextRef.current])
+
+  // Operations
+  const insert = useCallback(async (position: number, insertText: string) => {
+    if (!richTextRef.current) return
+    await richTextRef.current.insert(position, insertText)
+  }, [])
+
+  const deleteText = useCallback(async (start: number, length: number) => {
+    if (!richTextRef.current) return
+    await richTextRef.current.delete(start, length)
+  }, [])
+
+  const format = useCallback(async (
+    start: number,
+    end: number,
+    attributes: import('../crdt/peritext').FormatAttributes
+  ) => {
+    if (!richTextRef.current) return
+    await richTextRef.current.format(start, end, attributes)
+  }, [])
+
+  const unformat = useCallback(async (
+    start: number,
+    end: number,
+    attributes: import('../crdt/peritext').FormatAttributes
+  ) => {
+    if (!richTextRef.current) return
+    await richTextRef.current.unformat(start, end, attributes)
+  }, [])
+
+  const getFormats = useCallback((position: number) => {
+    if (!richTextRef.current) return {}
+    return richTextRef.current.getFormats(position)
+  }, [])
+
+  const toDelta = useCallback(() => {
+    if (!richTextRef.current) return { ops: [] }
+    return richTextRef.current.toDelta()
+  }, [])
+
+  const fromDelta = useCallback(async (delta: import('../crdt/delta').Delta) => {
+    if (!richTextRef.current) return
+    await richTextRef.current.fromDelta(delta)
+  }, [])
+
+  return {
+    text,
+    ranges,
+    insert,
+    delete: deleteText,
+    format,
+    unformat,
+    getFormats,
+    toDelta,
+    fromDelta,
+    richText: richTextRef.current,
+    loading
+  }
+}
