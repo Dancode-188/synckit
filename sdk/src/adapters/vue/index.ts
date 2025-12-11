@@ -37,6 +37,9 @@ export { usePresence } from './composables/usePresence'
 export { useOthers } from './composables/useOthers'
 export { useSelf } from './composables/useSelf'
 
+// Rich text composable
+export { useRichText } from './composables/useRichText'
+
 // Types
 export type {
   MaybeRefOrGetter,
@@ -54,8 +57,13 @@ export type {
 export type { UsePresenceOptions, UsePresenceReturn } from './composables/usePresence'
 export type { UseSelfOptions, UseSelfReturn } from './composables/useSelf'
 
-// Re-export core awareness types
+// Rich text types
+export type { UseRichTextOptions, UseRichTextReturn } from './composables/useRichText'
+
+// Re-export core types
 export type { AwarenessState, AwarenessUpdate } from '../../awareness'
+export type { FormatAttributes } from '../../crdt/peritext'
+export type { RichText, FormatRange } from '../../crdt/richtext'
 
 // Utilities (advanced users)
 export { toValue } from './utils/refs'
