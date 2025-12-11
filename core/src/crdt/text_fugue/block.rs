@@ -113,7 +113,7 @@ impl Default for FugueBlock {
             left_origin: None,
             right_origin: None,
             deleted: false,
-            rope_start: usize::MAX, // Invalid until computed
+            rope_start: usize::MAX,       // Invalid until computed
             cached_start_pos: usize::MAX, // Invalid until computed
         }
     }
@@ -149,7 +149,7 @@ impl FugueBlock {
             left_origin,
             right_origin,
             deleted: false,
-            rope_start: usize::MAX, // Invalid until computed
+            rope_start: usize::MAX,       // Invalid until computed
             cached_start_pos: usize::MAX, // Invalid until computed
         }
     }

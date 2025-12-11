@@ -5,7 +5,6 @@
 /// - Awareness state is ephemeral (no complex merge semantics)
 /// - Last-write-wins at field level is acceptable
 /// - Simpler = faster for high-frequency updates (cursor positions)
-
 use std::sync::atomic::{AtomicU64, Ordering};
 
 /// Thread-safe increasing clock

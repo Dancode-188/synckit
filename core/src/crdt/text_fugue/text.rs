@@ -108,7 +108,11 @@ impl std::fmt::Display for TextError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             TextError::PositionOutOfBounds { position, length } => {
-                write!(f, "Position {} out of bounds (length: {})", position, length)
+                write!(
+                    f,
+                    "Position {} out of bounds (length: {})",
+                    position, length
+                )
             }
             TextError::RangeOutOfBounds { start, end, length } => {
                 write!(
@@ -249,7 +253,7 @@ impl<'de> Deserialize<'de> for FugueText {
             blocks,
             clock: helper.clock,
             client_id: helper.client_id,
-            cache_valid: false, // Cache needs rebuild after deserialization
+            cache_valid: false,        // Cache needs rebuild after deserialization
             cached_blocks: Vec::new(), // Will be rebuilt on first find_origins
         })
     }
@@ -278,7 +282,7 @@ impl FugueText {
             blocks: BTreeMap::new(),
             clock: LamportClock::new(),
             client_id,
-            cache_valid: true, // Empty document has valid (empty) cache
+            cache_valid: true,         // Empty document has valid (empty) cache
             cached_blocks: Vec::new(), // Empty document has empty blocks vector
         }
     }
@@ -518,8 +522,7 @@ impl FugueText {
                 }
                 None => {
                     // New block from remote - insert it
-                    self.blocks
-                        .insert(remote_id.clone(), remote_block.clone());
+                    self.blocks.insert(remote_id.clone(), remote_block.clone());
                 }
             }
         }
@@ -913,7 +916,7 @@ mod tests {
 
         assert_eq!(text.len(), 5);
         assert_eq!(text.to_string(), "Hello");
-        assert_eq!(text.clock(), 1);  // Clock ticked once
+        assert_eq!(text.clock(), 1); // Clock ticked once
     }
 
     #[test]
@@ -924,7 +927,7 @@ mod tests {
         text.insert(6, "World").unwrap();
 
         assert_eq!(text.to_string(), "Hello World");
-        assert_eq!(text.clock(), 3);  // Clock ticked 3 times
+        assert_eq!(text.clock(), 3); // Clock ticked 3 times
     }
 
     #[test]
@@ -1003,7 +1006,7 @@ mod tests {
         let mut text = FugueText::new("client1".to_string());
         text.insert(0, "Hello 👋").unwrap();
 
-        assert_eq!(text.len(), 7);  // 5 chars + space + emoji (1 grapheme)
+        assert_eq!(text.len(), 7); // 5 chars + space + emoji (1 grapheme)
         assert_eq!(text.to_string(), "Hello 👋");
     }
 
@@ -1059,8 +1062,8 @@ mod tests {
     fn test_delete_then_insert_same_position() {
         let mut text = FugueText::new("client1".to_string());
         text.insert(0, "Hello World").unwrap();
-        text.delete(6, 5).unwrap();  // Delete "World"
-        text.insert(6, "Rust").unwrap();  // Insert "Rust"
+        text.delete(6, 5).unwrap(); // Delete "World"
+        text.insert(6, "Rust").unwrap(); // Insert "Rust"
         assert_eq!(text.to_string(), "Hello Rust");
     }
 
@@ -1131,8 +1134,8 @@ mod tests {
         text1.insert(0, "Hello World").unwrap();
         text2.merge(&text1).unwrap();
 
-        text1.delete(6, 5).unwrap();  // Delete "World"
-        text2.insert(11, "!").unwrap();  // Insert "!" at end
+        text1.delete(6, 5).unwrap(); // Delete "World"
+        text2.insert(11, "!").unwrap(); // Insert "!" at end
 
         text1.merge(&text2).unwrap();
         text2.merge(&text1).unwrap();
@@ -1187,7 +1190,7 @@ mod tests {
     #[test]
     fn test_rtl_text() {
         let mut text = FugueText::new("client1".to_string());
-        text.insert(0, "مرحبا").unwrap();  // Arabic "Hello"
+        text.insert(0, "مرحبا").unwrap(); // Arabic "Hello"
         assert_eq!(text.to_string(), "مرحبا");
         assert!(text.len() > 0);
     }
@@ -1195,14 +1198,14 @@ mod tests {
     #[test]
     fn test_combining_characters() {
         let mut text = FugueText::new("client1".to_string());
-        text.insert(0, "é").unwrap();  // e with combining acute accent
-        assert_eq!(text.len(), 1);  // Should count as 1 grapheme
+        text.insert(0, "é").unwrap(); // e with combining acute accent
+        assert_eq!(text.len(), 1); // Should count as 1 grapheme
     }
 
     #[test]
     fn test_mixed_scripts() {
         let mut text = FugueText::new("client1".to_string());
-        text.insert(0, "Hello世界🌍").unwrap();  // English + Chinese + Emoji
+        text.insert(0, "Hello世界🌍").unwrap(); // English + Chinese + Emoji
         assert_eq!(text.to_string(), "Hello世界🌍");
     }
 
@@ -1233,7 +1236,7 @@ mod tests {
     fn test_delete_middle() {
         let mut text = FugueText::new("client1".to_string());
         text.insert(0, "Hello World").unwrap();
-        text.delete(5, 1).unwrap();  // Delete space
+        text.delete(5, 1).unwrap(); // Delete space
         assert_eq!(text.to_string(), "HelloWorld");
     }
 
@@ -1241,7 +1244,7 @@ mod tests {
     fn test_delete_beginning() {
         let mut text = FugueText::new("client1".to_string());
         text.insert(0, "Hello World").unwrap();
-        text.delete(0, 6).unwrap();  // Delete "Hello "
+        text.delete(0, 6).unwrap(); // Delete "Hello "
         assert_eq!(text.to_string(), "World");
     }
 

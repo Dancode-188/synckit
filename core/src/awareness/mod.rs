@@ -1,3 +1,4 @@
+mod clock;
 /// Awareness Protocol - Ephemeral user presence and state
 ///
 /// Unlike CRDTs which persist data, Awareness tracks ephemeral state like:
@@ -11,12 +12,10 @@
 /// - 30-second timeout for offline detection
 /// - Simpler conflict resolution (increasing clock, not vector clocks)
 /// - Separate broadcast channel (doesn't mix with CRDT operations)
-
 mod state;
-mod clock;
 
-pub use state::{Awareness, AwarenessState, AwarenessUpdate};
 pub use clock::IncreasingClock;
+pub use state::{Awareness, AwarenessState, AwarenessUpdate};
 
 use std::time::Duration;
 

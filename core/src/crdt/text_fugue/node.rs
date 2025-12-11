@@ -138,7 +138,10 @@ mod tests {
         let id1 = NodeId::new("client1".to_string(), 1, 0);
         let id2 = NodeId::new("client2".to_string(), 1, 0);
 
-        assert!(id1 < id2, "Lexicographically earlier client_id should come first");
+        assert!(
+            id1 < id2,
+            "Lexicographically earlier client_id should come first"
+        );
     }
 
     #[test]
