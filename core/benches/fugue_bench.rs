@@ -101,7 +101,8 @@ fn bench_merge(c: &mut Criterion) {
                 (text1, text2)
             },
             |(mut text1, text2)| {
-                black_box(text1.merge(&text2).unwrap());
+                text1.merge(&text2).unwrap();
+                black_box(());
             },
             criterion::BatchSize::SmallInput,
         );

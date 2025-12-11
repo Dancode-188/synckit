@@ -233,6 +233,7 @@ impl FugueBlock {
 
     /// Set the cached rope position (private, for internal use)
     #[inline]
+    #[allow(dead_code)]
     pub(crate) fn set_rope_position(&mut self, pos: usize) {
         self.rope_start = pos;
     }
@@ -263,6 +264,7 @@ impl FugueBlock {
 
     /// Invalidate the cached grapheme start position (Phase 1.5 optimization)
     #[inline]
+    #[allow(dead_code)]
     pub(crate) fn invalidate_cached_position(&mut self) {
         self.cached_start_pos = usize::MAX;
     }
@@ -281,7 +283,7 @@ mod tests {
         assert_eq!(block.text, "Hello");
         assert_eq!(block.left_origin, None);
         assert_eq!(block.right_origin, None);
-        assert_eq!(block.is_deleted(), false);
+        assert!(!block.is_deleted());
     }
 
     #[test]
@@ -289,11 +291,11 @@ mod tests {
         let id = NodeId::new("client1".to_string(), 1, 0);
         let mut block = FugueBlock::new(id, "test".to_string(), None, None);
 
-        assert_eq!(block.is_deleted(), false);
+        assert!(!block.is_deleted());
 
         block.mark_deleted();
 
-        assert_eq!(block.is_deleted(), true);
+        assert!(block.is_deleted());
     }
 
     #[test]

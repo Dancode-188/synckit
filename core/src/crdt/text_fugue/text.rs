@@ -324,6 +324,7 @@ impl FugueText {
     ///
     /// assert_eq!(text.to_string(), "Hello");
     /// ```
+    #[allow(clippy::inherent_to_string)]
     pub fn to_string(&self) -> String {
         self.rope.to_string()
     }
@@ -1192,7 +1193,7 @@ mod tests {
         let mut text = FugueText::new("client1".to_string());
         text.insert(0, "مرحبا").unwrap(); // Arabic "Hello"
         assert_eq!(text.to_string(), "مرحبا");
-        assert!(text.len() > 0);
+        assert!(!text.is_empty());
     }
 
     #[test]

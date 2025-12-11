@@ -238,6 +238,7 @@ impl WasmFugueText {
 
     /// Get the text content as a string
     #[wasm_bindgen(js_name = toString)]
+    #[allow(clippy::inherent_to_string)]
     pub fn to_string(&self) -> String {
         self.inner.to_string()
     }
@@ -540,8 +541,9 @@ impl WasmAwareness {
     /// Returns JSON array of removed client IDs
     #[wasm_bindgen(js_name = removeStaleClients)]
     pub fn remove_stale_clients(&mut self, timeout_ms: u64) -> Result<String, JsValue> {
-        // In WASM, the inner method takes u64 directly (time tracking not available)
-        let removed = self.inner.remove_stale_clients(timeout_ms);
+        // Convert milliseconds to Duration for the inner method
+        let timeout = std::time::Duration::from_millis(timeout_ms);
+        let removed = self.inner.remove_stale_clients(timeout);
 
         serde_json::to_string(&removed)
             .map_err(|e| JsValue::from_str(&format!("Serialization failed: {}", e)))
