@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { untrack } from 'svelte';
   import { getSyncKitContext, syncDocument } from '@synckit-js/sdk/svelte';
 
   interface Props {
@@ -11,10 +12,11 @@
   const synckit = getSyncKitContext();
 
   // Get document store with Svelte 5 rune properties for reactive display
-  const store = syncDocument(synckit, documentId);
+  // Use untrack() since documentId won't change after mount
+  const store = untrack(() => syncDocument(synckit, documentId));
 
   // Get document instance for mutations
-  const doc = synckit.document(documentId);
+  const doc = untrack(() => synckit.document(documentId));
 
   // Local editing state
   let isEditing = $state(false);

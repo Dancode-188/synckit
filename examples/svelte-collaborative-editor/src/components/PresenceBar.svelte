@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { untrack } from 'svelte';
   import { getSyncKitContext, presence, self, others } from '@synckit-js/sdk/svelte';
 
   interface Props {
@@ -19,16 +20,17 @@
   const getRandomColor = () => COLORS[Math.floor(Math.random() * COLORS.length)];
 
   // Initialize presence with random name and color
-  const presenceStore = presence(synckit, documentId, {
+  // Use untrack() since documentId won't change after mount
+  const presenceStore = untrack(() => presence(synckit, documentId, {
     user: {
       name: `User ${Math.floor(Math.random() * 1000)}`,
       color: getRandomColor()
     }
-  });
+  }));
 
   // Get self and others stores
-  const selfStore = self(synckit, documentId);
-  const othersStore = others(synckit, documentId);
+  const selfStore = untrack(() => self(synckit, documentId));
+  const othersStore = untrack(() => others(synckit, documentId));
 
   // Local state for name editing
   let isEditingName = $state(false);
@@ -101,7 +103,6 @@
                 placeholder="Your name"
                 class="name-input"
                 onkeydown={handleKeydown}
-                autofocus
               />
               <button onclick={saveName} class="save-name-btn">✓</button>
             </div>
