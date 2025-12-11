@@ -11,7 +11,7 @@ import type { SyncKit } from '../../../synckit'
  * Injection key for SyncKit instance
  * Using Symbol ensures no conflicts with other providers
  */
-const SyncKitSymbol: InjectionKey<SyncKit> = Symbol('synckit')
+export const SyncKitSymbol: InjectionKey<SyncKit> = Symbol('synckit')
 
 /**
  * Provide a SyncKit instance to child components

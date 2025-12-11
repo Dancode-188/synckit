@@ -27,7 +27,7 @@
  */
 
 // Core composables
-export { provideSyncKit, useSyncKit, tryUseSyncKit } from './composables/useSyncKit'
+export { provideSyncKit, useSyncKit, tryUseSyncKit, SyncKitSymbol } from './composables/useSyncKit'
 export { useSyncDocument } from './composables/useSyncDocument'
 export { useSyncField } from './composables/useSyncField'
 export { useNetworkStatus } from './composables/useNetworkStatus'
