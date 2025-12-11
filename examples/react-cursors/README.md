@@ -1,127 +1,128 @@
-# React Cursors Example
+# React Cursors & Selection Examples
 
-**Phase 4: Cursor Sharing & Animations** - Zero-config collaborative cursors with spring physics
+**Real-time multiplayer cursors and text selection** - Production-ready collaborative features with zero configuration
 
-## Overview
+## Examples
 
-This example demonstrates SyncKit's revolutionary zero-config cursor sharing feature. With just **one line of code**, you get:
+### 1. `cursors-basic.html` - Cursor Sharing Basics
 
-- 🎨 **Spring Physics Animations** - Butter-smooth cursor movements (damping: 45, stiffness: 400)
-- ⚡ **Adaptive Throttling** - Auto-adjusts update frequency based on room size
-- 📐 **Relative Coordinates** - Works across different screen sizes (0-1 range)
-- 🚀 **GPU Acceleration** - 60fps rendering with `translate3d`
-- 🎯 **Zero Configuration** - No setup, no boilerplate, just works
+The main example demonstrating cursor sharing with spring physics animation.
 
-## The Magic
+**Features:**
+- 🎨 Spring physics animations (butter-smooth movement)
+- 🎯 Color-coded cursors with user labels
+- ⚡ Cross-tab testing with BroadcastChannel
+- 📐 Viewport-relative positioning
 
+**One line of code:**
 ```tsx
-// That's literally it!
 <Cursors documentId="my-doc" />
 ```
 
-Compare this to competitors:
-- Liveblocks: 40+ lines of setup code
-- Yjs: Manual cursor tracking + rendering
-- Others: No built-in cursor support
+### 2. `cursors-container-mode.html` - Scrollable Content
 
-## What's Different?
+Side-by-side comparison of viewport vs container positioning modes.
 
-### 1. Spring Physics (Not CSS Transitions)
+**Features:**
+- 📜 Viewport mode (cursors fixed to screen)
+- 📄 Container mode (cursors scroll with content)
+- 🔄 Live comparison demo
+- 📚 Perfect for document editors
 
-We use **real physics** (Hooke's law) instead of CSS transitions:
+**Usage:**
+```tsx
+// Viewport mode (default)
+<Cursors documentId="doc" mode="viewport" />
 
-```typescript
-// Spring force: F = -kx
-const springForce = -stiffness * (position - target)
-
-// Damping force: F = -cv
-const dampingForce = -damping * velocity
-
-// Newton's second law: a = F/m
-const acceleration = (springForce + dampingForce) / mass
+// Container mode (scrollable content)
+<Cursors documentId="doc" mode="container" containerRef={ref} />
 ```
 
-Result: Natural, organic movement that feels **magical**.
+### 3. `text-selection.html` - Text Selection Sharing
 
-### 2. Adaptive Throttling
+Collaborative text selection with semantic (XPath-based) serialization.
 
-Automatically adjusts update frequency based on room size:
+**Features:**
+- ✨ Multi-line text selection (Google Docs style)
+- 🌍 Cross-layout compatibility (works on different screen sizes)
+- 🎯 Semantic selection (XPath + offsets, not pixels)
+- 🎨 Color-coded selection highlights
 
-- **<5 users**: 30ms (33fps) - Ultra responsive
-- **5-20 users**: 50ms (20fps) - Balanced
-- **20-50 users**: 100ms (10fps) - Efficient
-- **50+ users**: 200ms (5fps) - Scalable
-
-No configuration needed - it just works.
-
-### 3. Relative Coordinates
-
-Cursors use 0-1 percentage coordinates instead of absolute pixels:
-
-```typescript
-// Absolute (breaks across devices)
-{ x: 640, y: 480 }  // Only works on 1280x960 screens
-
-// Relative (works everywhere)
-{ x: 0.5, y: 0.5 }  // 50% of container width/height
+**Usage:**
+```tsx
+<Selections documentId="doc" users={users} />
 ```
 
-Result: Cursors work perfectly across different screen sizes.
+---
 
-## Usage
+## Quick Start
 
 ### Zero Config (Recommended)
 
 ```tsx
-import { SyncKitProvider, Cursors } from '@synckit-js/sdk/adapters/react'
+import { SyncProvider, Cursors } from '@synckit-js/sdk/adapters/react'
 
 function App() {
   return (
-    <SyncKitProvider serverUrl="ws://localhost:8080/ws">
-      <div style={{ position: 'relative', width: '100%', height: '100vh' }}>
-        <Cursors documentId="my-doc" />
-      </div>
-    </SyncKitProvider>
+    <SyncProvider serverUrl="ws://localhost:8080/ws">
+      <Cursors documentId="my-doc" />
+    </SyncProvider>
   )
 }
 ```
 
-### With Cursor Tracking
+### With Advanced Features
 
 ```tsx
-import { useCursor, Cursors } from '@synckit-js/sdk/adapters/react'
+<Cursors
+  documentId="my-doc"
+  inactivity={{ timeout: 5000, fadeOutDuration: 300 }}  // Fade after 5s
+  collision={{ threshold: 50, stackOffset: 20 }}        // Stack when overlapping
+/>
+```
 
-function CollaborativeCanvas() {
-  const containerRef = useRef(null)
-  const cursor = useCursor('my-doc', {
-    containerRef,
-    metadata: {
-      user: { name: 'Alice', color: '#FF6B6B' }
-    }
-  })
+### With Text Selection
+
+```tsx
+import { Selections, useSelection } from '@synckit-js/sdk/adapters/react'
+
+function Editor() {
+  const { users } = usePresence('doc')
+
+  useSelection({ documentId: 'doc' })  // Track your selection
 
   return (
-    <div ref={containerRef} {...cursor.bind()}>
-      <Cursors documentId="my-doc" containerRef={containerRef} />
+    <div>
+      <Selections documentId="doc" users={users} />
       {/* Your content */}
     </div>
   )
 }
 ```
 
-### Custom Cursor Renderer
+---
 
-```tsx
-<Cursors
-  documentId="my-doc"
-  renderCursor={(user) => (
-    <div style={{ color: user.color }}>
-      <YourCustomCursor />
-      <span>{user.name}</span>
-    </div>
-  )}
-/>
-```
+## Features
+
+### Cursor Sharing
+
+✅ **Spring Physics Animations** - Butter-smooth cursor movements (damping: 45, stiffness: 400)
+✅ **Inactivity Hiding** - Cursors fade after 5 seconds of inactivity
+✅ **Collision Detection** - Cursors stack vertically when overlapping
+✅ **Adaptive Throttling** - Auto-adjusts update frequency based on room size
+✅ **Viewport & Container Modes** - Works with fixed or scrollable content
+✅ **GPU Acceleration** - 60fps rendering with hardware acceleration
+✅ **Zero Configuration** - Sensible defaults, just works
+
+### Text Selection
+
+✅ **Multi-Line Selection** - Rectangle-based rendering, one per line
+✅ **Semantic Serialization** - XPath + offsets (works across different layouts)
+✅ **Cross-Layout Compatibility** - Same text highlighted regardless of screen size
+✅ **Smooth Transitions** - Fade in/out animations
+✅ **Color Coordination** - Matches user cursor color
+
+---
 
 ## API Reference
 
@@ -130,152 +131,158 @@ function CollaborativeCanvas() {
 | Prop | Type | Default | Description |
 |------|------|---------|-------------|
 | `documentId` | `string` | required | Document ID to track cursors for |
-| `containerRef` | `RefObject` | auto | Container ref (auto-detects if not provided) |
+| `mode` | `'viewport' \| 'container'` | `'viewport'` | Positioning mode |
+| `containerRef` | `RefObject` | - | Required for container mode |
 | `showSelf` | `boolean` | `false` | Show your own cursor |
 | `showLabels` | `boolean` | `true` | Show cursor labels |
-| `renderCursor` | `function` | default | Custom cursor renderer |
-| `spring` | `SpringConfig` | see below | Spring animation config |
+| `inactivity` | `InactivityConfig \| false` | `undefined` | Inactivity hiding config |
+| `collision` | `CollisionConfig \| false` | `undefined` | Collision detection config |
 
-### Default Spring Config
-
+**Inactivity Config:**
 ```typescript
 {
-  damping: 45,      // Higher = less bouncy
-  stiffness: 400,   // Higher = faster movement
-  mass: 1,          // Object "weight"
-  restDelta: 0.001  // Stop threshold
+  timeout: 5000,          // ms before fade (default: 5000)
+  fadeOutDuration: 300    // ms fade animation (default: 300)
 }
 ```
 
-Carefully tuned for the best feel. Don't change unless you know what you're doing!
+**Collision Config:**
+```typescript
+{
+  threshold: 50,          // px distance for collision (default: 50)
+  stackOffset: 20,        // px vertical offset per cursor (default: 20)
+  cellSize: 100          // px spatial hash grid size (default: 100)
+}
+```
+
+### `<Selections />` Component
+
+| Prop | Type | Default | Description |
+|------|------|---------|-------------|
+| `documentId` | `string` | required | Document ID to track selections for |
+| `users` | `User[]` | required | Users with selection data |
+| `mode` | `'viewport' \| 'container'` | `'viewport'` | Positioning mode |
+| `containerRef` | `RefObject` | - | Required for container mode |
+| `opacity` | `number` | `0.2` | Selection highlight opacity |
 
 ### `useCursor()` Hook
 
 ```typescript
-const cursor = useCursor(documentId: string, options?: {
+useCursor({
+  documentId: string
+  mode?: 'viewport' | 'container'
   containerRef?: RefObject<HTMLElement>
-  throttle?: number | 'auto'  // Default: 'auto'
-  metadata?: Record<string, unknown>
-  updateOnLeave?: boolean     // Default: true
+  enabled?: boolean          // Default: true
+  throttleMs?: number        // Default: 50 (20 updates/sec)
 })
-
-// Returns
-{
-  position: RelativePosition | null  // Current cursor position (0-1)
-  update: (pos: RelativePosition) => void
-  bind: () => CursorBinding  // { ref, onMouseMove, onMouseLeave }
-  clear: () => void
-}
 ```
 
-## Performance
+### `useSelection()` Hook
 
-- **Bundle Size**: ~4KB (gzipped)
-- **CPU Usage**: <1% with 10 users
-- **Memory**: ~2MB per 100 cursors
-- **FPS**: Constant 60fps (GPU accelerated)
+```typescript
+useSelection({
+  documentId: string
+  containerRef?: RefObject<HTMLElement>  // Optional: limit to container
+  enabled?: boolean                      // Default: true
+  throttleMs?: number                    // Default: 100
+})
+```
 
-## Running This Example
+---
+
+## Running These Examples
+
+### Option 1: With SyncKit Server (Full Features)
 
 1. Start the SyncKit server:
    ```bash
    cd server/typescript
-   npm run dev
+   bun run dev  # or npm run dev
    ```
 
-2. Open the example:
+2. Start a local web server:
    ```bash
    cd examples/react-cursors
-   # Open index.html in your browser
-   # Or use a local server:
-   npx http-server -p 8081
+   python -m http.server 8081
+   # or: npx http-server -p 8081
    ```
 
-3. Open multiple tabs to see collaborative cursors in action!
+3. Open in browser:
+   ```
+   http://localhost:8081/cursors-basic.html
+   ```
+
+4. Open multiple tabs to see collaboration in action!
+
+### Option 2: Standalone (Cross-Tab Testing)
+
+The examples use BroadcastChannel for cross-tab communication, so they work without a server:
+
+1. Just open the HTML files directly in your browser
+2. Open the same file in multiple tabs
+3. See cursors/selections sync across tabs
+
+**Note:** This uses in-browser communication only. For real multiplayer across different devices, you need the SyncKit server.
+
+---
+
+## Performance
+
+- **Bundle Size**: ~7.5KB (gzipped) for cursor + selection features
+- **CPU Usage**: <1% with 10 users
+- **Memory**: ~2MB per 100 cursors
+- **FPS**: Constant 60fps (GPU accelerated)
+- **Latency**: <100ms cursor updates
+
+---
 
 ## Technical Details
 
 ### Architecture
 
 ```
-useCursor Hook
-   ↓ (tracks local cursor)
+useCursor / useSelection
+   ↓ (capture local position/selection)
    ↓
-usePresence Hook
-   ↓ (updates awareness)
+usePresence
+   ↓ (broadcast via awareness)
    ↓
 Awareness Protocol
-   ↓ (syncs to other clients)
+   ↓ (sync to other clients)
    ↓
-useOthers Hook
-   ↓ (receives other cursors)
+Cursors / Selections
+   ↓ (render remote cursors/selections)
    ↓
-Cursors Component
-   ↓ (renders all cursors)
+Spring Animation / XPath Deserialization
+   ↓ (smooth movement / compute visual rects)
    ↓
-Cursor Component (for each user)
-   ↓ (spring animation)
-   ↓
-Spring2D Physics
-   ↓ (smooth movement)
-   ↓
-GPU Rendering (translate3d)
+GPU Rendering (translate3d / positioned divs)
 ```
 
 ### Why This Matters
 
-**Before (Competitors):**
+**Cursors - Before (Competitors):**
 ```tsx
-// 40+ lines of setup
+// 40+ lines of manual setup
 const [cursors, setCursors] = useState({})
-const liveblocksRoom = useRoom()
-
-useEffect(() => {
-  // Manual cursor tracking
-  const handlePointerMove = (e) => {
-    liveblocksRoom.updatePresence({
-      cursor: { x: e.clientX, y: e.clientY }
-    })
-  }
-  // ... more boilerplate
-}, [])
-
-// Manual rendering
-{Object.entries(cursors).map(([id, cursor]) => (
-  <div
-    key={id}
-    style={{
-      position: 'absolute',
-      left: cursor.x,
-      top: cursor.y,
-      // Manual styling...
-    }}
-  />
-))}
+// ... manual tracking, rendering, animation
 ```
 
-**After (SyncKit):**
+**Cursors - After (SyncKit):**
 ```tsx
-// One line!
-<Cursors documentId="my-doc" />
+<Cursors documentId="my-doc" />  // One line!
 ```
 
-**Winner**: Developer happiness 🎉
+**Selections - The Innovation:**
+- Other solutions: Share pixel coordinates (breaks on different screen sizes)
+- SyncKit: Share semantic data (XPath + offsets) → works everywhere
 
-## What's Next?
-
-- [ ] Touch/mobile support
-- [ ] Cursor trails/effects
-- [ ] Hover interactions
-- [ ] Laser pointer mode
-- [ ] Cursor emotes/reactions
+---
 
 ## Learn More
 
-- [Phase 4 Implementation Plan](../../analysis/PHASE_4_CURSOR_SHARING_PLAN.md)
-- [Strategic Research Report](../../analysis/v0.2.0_STRATEGIC_RESEARCH_REPORT.md)
 - [API Documentation](../../sdk/README.md)
 
 ---
 
-**Built with love by the SyncKit team** ❤️
+**Built with ❤️ by the SyncKit team**

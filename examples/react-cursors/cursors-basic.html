@@ -377,8 +377,13 @@
                             onMouseMove={handleMouseMove}
                             onMouseLeave={handleMouseLeave}
                         >
-                            {/* THE MAGIC: One component, zero config! */}
-                            <Cursors documentId="react-cursors-demo" containerRef={containerRef} />
+                            {/* THE MAGIC: One component with new polish features! */}
+                            <Cursors
+                                documentId="react-cursors-demo"
+                                containerRef={containerRef}
+                                inactivity={{ timeout: 5000, fadeOutDuration: 300 }}
+                                collision={{ threshold: 50, stackOffset: 20 }}
+                            />
 
                             <div className="controls">
                                 <div className="control-group">
