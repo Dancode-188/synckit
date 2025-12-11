@@ -27,13 +27,15 @@
   let loading = $state(true);
 
   // Subscribe to store changes
-  onMount(async () => {
-    try {
-      await doc.init();
-      docReady = true;
-    } catch (err) {
-      console.error('Failed to initialize document:', err);
-    }
+  onMount(() => {
+    // Initialize document asynchronously
+    doc.init()
+      .then(() => {
+        docReady = true;
+      })
+      .catch((err) => {
+        console.error('Failed to initialize document:', err);
+      });
 
     // Subscribe to document changes
     const unsubscribe = store.subscribe((data) => {
