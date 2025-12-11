@@ -25,14 +25,19 @@
       "types": "./dist/adapters/vue/index.d.ts",
       "import": "./dist/adapters/vue/index.mjs",
       "require": "./dist/adapters/vue/index.js"
+    },
+    "./svelte": {
+      "types": "./dist/adapters/svelte/index.d.ts",
+      "import": "./dist/adapters/svelte/index.mjs",
+      "require": "./dist/adapters/svelte/index.js"
     }
   },
   "scripts": {
-    "build": "tsup src/index.ts src/index-lite.ts src/adapters/react.tsx src/adapters/vue/index.ts --format cjs,esm --dts --clean && npm run copy-wasm",
+    "build": "tsup src/index.ts src/index-lite.ts src/adapters/react.tsx src/adapters/vue/index.ts src/adapters/svelte/index.ts --format cjs,esm --dts --clean && npm run copy-wasm",
     "copy-wasm": "npm run copy-wasm-variants && npm run copy-wasm-to-dist",
     "copy-wasm-variants": "node scripts/copy-wasm-variants.js",
     "copy-wasm-to-dist": "node scripts/copy-wasm-to-dist.js",
-    "dev": "tsup src/index.ts src/index-lite.ts src/adapters/react.tsx src/adapters/vue/index.ts --format cjs,esm --dts --watch",
+    "dev": "tsup src/index.ts src/index-lite.ts src/adapters/react.tsx src/adapters/vue/index.ts src/adapters/svelte/index.ts --format cjs,esm --dts --watch",
     "test": "vitest",
     "test:ui": "vitest --ui",
     "lint": "tsc --noEmit",
@@ -70,6 +75,7 @@
   },
   "peerDependencies": {
     "react": ">=18.0.0",
+    "svelte": ">=4.0.0 || >=5.0.0",
     "vue": ">=3.3.0"
   },
   "peerDependenciesMeta": {
@@ -77,6 +83,9 @@
       "optional": true
     },
     "vue": {
+      "optional": true
+    },
+    "svelte": {
       "optional": true
     }
   },
@@ -88,6 +97,7 @@
     "@vue/test-utils": "^2.4.6",
     "happy-dom": "^20.0.11",
     "react": "^18.2.0",
+    "svelte": "^5.45.8",
     "tsup": "^8.0.0",
     "typescript": "^5.3.0",
     "vitest": "^1.0.0",

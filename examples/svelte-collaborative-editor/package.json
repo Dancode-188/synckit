@@ -1,0 +1,25 @@
+{
+  "name": "@synckit-examples/svelte-collaborative-editor",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Real-time collaborative editor built with SyncKit and Svelte 5",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview",
+    "check": "svelte-check --tsconfig ./tsconfig.json"
+  },
+  "dependencies": {
+    "@synckit-js/sdk": "*",
+    "svelte": "^5.0.0"
+  },
+  "devDependencies": {
+    "@sveltejs/vite-plugin-svelte": "^5.0.0",
+    "@tsconfig/svelte": "^5.0.0",
+    "svelte-check": "^4.0.0",
+    "tslib": "^2.6.0",
+    "typescript": "^5.2.2",
+    "vite": "^6.0.0"
+  }
+}
