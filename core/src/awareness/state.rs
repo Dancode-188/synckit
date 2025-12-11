@@ -2,7 +2,6 @@
 ///
 /// Tracks ephemeral state for all connected clients.
 /// State is stored as arbitrary JSON and merged at the field level.
-
 use super::clock::IncreasingClock;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
@@ -105,7 +104,8 @@ impl Awareness {
         match update.state {
             Some(state) => {
                 // Client is online with new state
-                let should_update = self.states
+                let should_update = self
+                    .states
                     .get(&update.client_id)
                     .map(|existing| update.clock > existing.clock)
                     .unwrap_or(true);
@@ -176,9 +176,13 @@ impl Awareness {
 
     /// Get number of online clients excluding self
     pub fn other_client_count(&self) -> usize {
-        self.states.len().saturating_sub(
-            if self.states.contains_key(&self.client_id) { 1 } else { 0 }
-        )
+        self.states
+            .len()
+            .saturating_sub(if self.states.contains_key(&self.client_id) {
+                1
+            } else {
+                0
+            })
     }
 }
 
