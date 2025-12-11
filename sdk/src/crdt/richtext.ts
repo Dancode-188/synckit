@@ -20,6 +20,7 @@ import {
   SpanUtils,
   AttributeUtils
 } from './peritext'
+import { DeltaUtils, type Delta } from './delta'
 
 /**
  * Storage data for RichText (extends TextStorageData)
@@ -516,5 +517,116 @@ export class RichText extends SyncText {
       typeof data.content === 'string' &&
       typeof data.clock === 'number'
     )
+  }
+
+  // ====================
+  // Delta Import/Export
+  // ====================
+
+  /**
+   * Export RichText content as Quill Delta
+   *
+   * Converts the current document state to Delta format, which can be used
+   * with Quill editors or for data interchange. The Delta includes text
+   * content and all formatting information.
+   *
+   * @returns Delta representation of document
+   *
+   * @example
+   * ```ts
+   * const delta = richText.toDelta()
+   * console.log(delta)
+   * // { ops: [
+   * //   { insert: "Hello ", attributes: { bold: true } },
+   * //   { insert: "World" }
+   * // ]}
+   * ```
+   */
+  toDelta(): Delta {
+    const ranges = this.getRanges()
+    return DeltaUtils.fromRanges(ranges)
+  }
+
+  /**
+   * Import content from Quill Delta
+   *
+   * Replaces the current document content with content from a Delta.
+   * This clears all existing text and formatting, then applies the Delta.
+   *
+   * Useful for:
+   * - Loading content from external sources
+   * - Importing documents from other editors
+   * - Initializing document state
+   *
+   * @param delta - Delta to import
+   *
+   * @example
+   * ```ts
+   * const delta = {
+   *   ops: [
+   *     { insert: "Hello ", attributes: { bold: true } },
+   *     { insert: "World", attributes: { italic: true } }
+   *   ]
+   * }
+   *
+   * await richText.fromDelta(delta)
+   * // Document now contains "Hello World" with formatting
+   * ```
+   */
+  async fromDelta(delta: Delta): Promise<void> {
+    // Validate Delta structure
+    const error = DeltaUtils.validate(delta)
+    if (error) {
+      throw new Error(`Invalid Delta: ${error}`)
+    }
+
+    // Clear existing content
+    const currentLength = this.length()
+    if (currentLength > 0) {
+      await this.delete(0, currentLength)
+    }
+
+    // Clear existing format spans
+    this.spans.clear()
+
+    // Convert Delta to ranges
+    const ranges = DeltaUtils.toRanges(delta)
+
+    // Insert text and apply formatting
+    let position = 0
+
+    for (const range of ranges) {
+      const { text, attributes } = range
+
+      if (text.length === 0) {
+        continue
+      }
+
+      // Insert text
+      await this.insert(position, text)
+
+      // Apply formatting if present
+      if (Object.keys(attributes).length > 0) {
+        await this.format(position, position + text.length - 1, attributes)
+      }
+
+      position += text.length
+    }
+
+    // Persist and notify
+    await this.persistSpans()
+    this.notifyFormatSubscribers()
+  }
+
+  /**
+   * Convert to plain Delta (text only, no formatting)
+   *
+   * @returns Delta with only insert operations, no attributes
+   */
+  toPlainDelta(): Delta {
+    const text = this.get()
+    return {
+      ops: text.length > 0 ? [{ insert: text }] : []
+    }
   }
 }
