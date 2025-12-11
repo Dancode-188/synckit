@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { onMounted } from 'vue'
+import { ref, onMounted } from 'vue'
 import { SyncKit } from '@synckit-js/sdk'
 import { provideSyncKit } from '@synckit-js/sdk/vue'
 import Editor from './components/Editor.vue'
@@ -9,15 +9,23 @@ import StatusBar from './components/StatusBar.vue'
 // Initialize SyncKit
 const synckit = new SyncKit({
   name: 'vue-collaborative-editor',
-  storage: 'memory' // Use memory storage for demo
+  storage: 'indexeddb' // Use IndexedDB for cross-tab sync
 })
+
+// Track initialization state
+const isInitialized = ref(false)
 
 // Provide SyncKit to all child components
 provideSyncKit(synckit)
 
 onMounted(async () => {
-  await synckit.init()
-  console.log('SyncKit initialized')
+  try {
+    await synckit.init()
+    isInitialized.value = true
+    console.log('SyncKit initialized')
+  } catch (error) {
+    console.error('Failed to initialize SyncKit:', error)
+  }
 })
 </script>
 
@@ -28,13 +36,20 @@ onMounted(async () => {
       <p class="subtitle">Built with SyncKit Vue Adapter</p>
     </header>
 
-    <PresenceBar document-id="demo-doc" />
+    <div v-if="!isInitialized" class="loading-overlay">
+      <div class="spinner"></div>
+      <p>Initializing SyncKit...</p>
+    </div>
 
-    <main class="app-main">
-      <Editor document-id="demo-doc" />
-    </main>
+    <template v-else>
+      <PresenceBar document-id="demo-doc" />
 
-    <StatusBar />
+      <main class="app-main">
+        <Editor document-id="demo-doc" />
+      </main>
+
+      <StatusBar />
+    </template>
   </div>
 </template>
 
@@ -72,5 +87,30 @@ onMounted(async () => {
   display: flex;
   flex-direction: column;
   padding: 2rem;
+}
+
+.loading-overlay {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  color: #666;
+  font-size: 1.1rem;
+}
+
+.loading-overlay .spinner {
+  width: 50px;
+  height: 50px;
+  border: 5px solid #f3f3f3;
+  border-top: 5px solid #667eea;
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+  margin-bottom: 1rem;
+}
+
+@keyframes spin {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
 }
 </style>

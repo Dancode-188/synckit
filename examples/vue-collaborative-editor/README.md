@@ -106,16 +106,13 @@ const { self, others, updatePresence } = usePresence('my-doc', {
 
 ## Storage
 
-This demo uses **memory storage** for simplicity. Data is lost on page refresh.
+This demo uses **IndexedDB storage** for persistent cross-tab synchronization.
 
-For production apps, use IndexedDB:
-
-```ts
-const synckit = new SyncKit({
-  name: 'my-app',
-  storage: 'indexeddb'  // Persistent storage
-})
-```
+Key features:
+- Data persists across page refreshes
+- Multiple tabs can share the same document
+- Changes sync automatically between tabs
+- Works entirely offline (no server needed)
 
 ## TypeScript Support
 

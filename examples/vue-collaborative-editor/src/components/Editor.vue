@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { ref, computed } from 'vue'
-import { useSyncDocument } from '@synckit-js/sdk/vue'
+import { useSyncKit } from '@synckit-js/sdk/vue'
 
 interface Props {
   documentId: string
@@ -8,11 +8,42 @@ interface Props {
 
 const props = defineProps<Props>()
 
-// Sync document title and content
-const { data: doc, loading } = useSyncDocument<{
-  title: string
-  content: string
-}>(props.documentId)
+// Get SyncKit instance
+const synckit = useSyncKit()
+
+// Get document
+const docRef = synckit.document(props.documentId)
+
+// Local state for document data
+const title = ref('')
+const content = ref('')
+const loading = ref(true)
+
+// Initialize document
+const initDoc = async () => {
+  try {
+    await docRef.init()
+
+    // Get initial data
+    const data = docRef.get()
+    title.value = (data.title as string) || ''
+    content.value = (data.content as string) || ''
+
+    // Subscribe to changes
+    docRef.subscribe(() => {
+      const newData = docRef.get()
+      title.value = (newData.title as string) || ''
+      content.value = (newData.content as string) || ''
+    })
+
+    loading.value = false
+  } catch (error) {
+    console.error('Failed to initialize document:', error)
+    loading.value = false
+  }
+}
+
+initDoc()
 
 // Local editing state
 const isEditing = ref(false)
@@ -20,19 +51,20 @@ const editTitle = ref('')
 const editContent = ref('')
 
 const startEditing = () => {
-  editTitle.value = doc.value?.title || ''
-  editContent.value = doc.value?.content || ''
+  editTitle.value = title.value
+  editContent.value = content.value
   isEditing.value = true
 }
 
 const saveChanges = async () => {
-  if (doc.value) {
-    // In a real app, you'd use document operations to update
-    // For now, we're just demonstrating the reactive state
-    console.log('Saving:', {
-      title: editTitle.value,
-      content: editContent.value
-    })
+  try {
+    // Update document data
+    await docRef.set('title', editTitle.value)
+    await docRef.set('content', editContent.value)
+
+    console.log('Document saved successfully')
+  } catch (error) {
+    console.error('Failed to save document:', error)
   }
   isEditing.value = false
 }
@@ -42,7 +74,7 @@ const cancelEditing = () => {
 }
 
 const hasContent = computed(() => {
-  return doc.value?.title || doc.value?.content
+  return title.value || content.value
 })
 </script>
 
@@ -55,7 +87,7 @@ const hasContent = computed(() => {
 
     <div v-else-if="!isEditing" class="view-mode">
       <div class="document-header">
-        <h2>{{ doc?.title || 'Untitled Document' }}</h2>
+        <h2>{{ title || 'Untitled Document' }}</h2>
         <button @click="startEditing" class="edit-btn">
           ✏️ Edit
         </button>
@@ -66,7 +98,7 @@ const hasContent = computed(() => {
           This document is empty. Click "Edit" to add content.
         </p>
         <div v-else class="content-text">
-          {{ doc?.content || 'No content yet...' }}
+          {{ content || 'No content yet...' }}
         </div>
       </div>
 

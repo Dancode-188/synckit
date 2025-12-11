@@ -48,7 +48,7 @@ const queueSize = computed(() => {
       </div>
 
       <div class="info-text">
-        💡 This demo uses memory storage. Data will be lost on page refresh.
+        💡 This demo uses IndexedDB storage. Changes persist across tabs and page refreshes.
       </div>
     </div>
   </div>
