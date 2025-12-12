@@ -600,6 +600,13 @@ impl WasmAwareness {
     /// Returns JSON array of removed client IDs
     #[wasm_bindgen(js_name = removeStaleClients)]
     pub fn remove_stale_clients(&mut self, timeout_ms: u64) -> Result<String, JsValue> {
+        #[cfg(not(target_arch = "wasm32"))]
+        let removed = {
+            let timeout = std::time::Duration::from_millis(timeout_ms);
+            self.inner.remove_stale_clients(timeout)
+        };
+
+        #[cfg(target_arch = "wasm32")]
         let removed = self.inner.remove_stale_clients(timeout_ms);
 
         serde_json::to_string(&removed)
