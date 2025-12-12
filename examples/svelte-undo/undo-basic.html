@@ -4,7 +4,6 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Svelte Undo/Redo - Basic Example</title>
-  <script defer src="https://unpkg.com/svelte@4/compiler.js"></script>
   <style>
     * {
       margin: 0;
@@ -211,10 +210,8 @@
 <body>
   <div id="app"></div>
 
-  <script type="module">
-    import { writable, derived } from 'https://unpkg.com/svelte@4/store/index.mjs';
-
-    // Simple inline Svelte component using vanilla JS
+  <script>
+    // Simple Svelte-style reactive implementation
     class UndoRedoApp {
       constructor(target) {
         this.text = '';
@@ -252,7 +249,7 @@
         this.redoStack = [];
         this.text = newText;
         this.operationCount++;
-        this.render();
+        this.updateState();
       }
 
       undo() {
@@ -261,7 +258,10 @@
         const operation = this.undoStack.pop();
         this.redoStack.push(operation);
         this.text = operation.data.from;
-        this.render();
+
+        const textarea = document.getElementById('editor-textarea');
+        if (textarea) textarea.value = this.text;
+        this.updateState();
       }
 
       redo() {
@@ -270,7 +270,10 @@
         const operation = this.redoStack.pop();
         this.undoStack.push(operation);
         this.text = operation.data.to;
-        this.render();
+
+        const textarea = document.getElementById('editor-textarea');
+        if (textarea) textarea.value = this.text;
+        this.updateState();
       }
 
       clear() {
@@ -278,7 +281,61 @@
         this.redoStack = [];
         this.text = '';
         this.operationCount = 0;
-        this.render();
+
+        const textarea = document.getElementById('editor-textarea');
+        if (textarea) textarea.value = '';
+        this.updateState();
+      }
+
+      updateState() {
+        // Update buttons
+        const undoBtn = document.getElementById('undo-btn');
+        const redoBtn = document.getElementById('redo-btn');
+        if (undoBtn) undoBtn.disabled = !this.canUndo;
+        if (redoBtn) redoBtn.disabled = !this.canRedo;
+
+        // Update info section
+        const infoContainer = document.getElementById('info-container');
+        if (infoContainer) {
+          infoContainer.innerHTML = `
+            <div class="info-row">
+              <span class="info-label">Operations</span>
+              <span class="info-value">${this.operationCount}</span>
+            </div>
+            <div class="info-row">
+              <span class="info-label">Undo Stack</span>
+              <span class="info-value">${this.undoStack.length}</span>
+            </div>
+            <div class="info-row">
+              <span class="info-label">Redo Stack</span>
+              <span class="info-value">${this.redoStack.length}</span>
+            </div>
+            <div class="info-row">
+              <span class="info-label">Can Undo</span>
+              <span class="badge ${this.canUndo ? 'badge-success' : 'badge-error'}">
+                ${this.canUndo ? 'Yes' : 'No'}
+              </span>
+            </div>
+            <div class="info-row">
+              <span class="info-label">Can Redo</span>
+              <span class="badge ${this.canRedo ? 'badge-success' : 'badge-error'}">
+                ${this.canRedo ? 'Yes' : 'No'}
+              </span>
+            </div>
+          `;
+        }
+
+        // Update history
+        const historyContainer = document.getElementById('history-container');
+        if (historyContainer) {
+          historyContainer.innerHTML = this.recentOperations.length === 0 ?
+            '<div class="history-empty">No operations yet</div>' :
+            this.recentOperations.map(op => `
+              <div class="history-item">
+                ${op.type}: ${op.data.to.substring(0, 30)}${op.data.to.length > 30 ? '...' : ''}
+              </div>
+            `).join('');
+        }
       }
 
       handleKeyDown(e) {
@@ -338,7 +395,7 @@
               </button>
             </div>
 
-            <div class="info">
+            <div class="info" id="info-container">
               <div class="info-row">
                 <span class="info-label">Operations</span>
                 <span class="info-value">${this.operationCount}</span>
@@ -367,14 +424,16 @@
 
             <div class="history">
               <h3>Recent Operations</h3>
-              ${this.recentOperations.length === 0 ?
-                '<div class="history-empty">No operations yet</div>' :
-                this.recentOperations.map(op => `
-                  <div class="history-item">
-                    ${op.type}: ${op.data.to.substring(0, 30)}${op.data.to.length > 30 ? '...' : ''}
-                  </div>
-                `).join('')
-              }
+              <div id="history-container">
+                ${this.recentOperations.length === 0 ?
+                  '<div class="history-empty">No operations yet</div>' :
+                  this.recentOperations.map(op => `
+                    <div class="history-item">
+                      ${op.type}: ${op.data.to.substring(0, 30)}${op.data.to.length > 30 ? '...' : ''}
+                    </div>
+                  `).join('')
+                }
+              </div>
             </div>
           </div>
         `;
