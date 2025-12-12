@@ -40,6 +40,9 @@ export { useSelf } from './composables/useSelf'
 // Rich text composable
 export { useRichText } from './composables/useRichText'
 
+// Undo/redo composable
+export { useUndo } from './composables/useUndo'
+
 // Types
 export type {
   MaybeRefOrGetter,
@@ -60,10 +63,14 @@ export type { UseSelfOptions, UseSelfReturn } from './composables/useSelf'
 // Rich text types
 export type { UseRichTextOptions, UseRichTextReturn } from './composables/useRichText'
 
+// Undo/redo types
+export type { UseUndoOptions, UseUndoReturn } from './composables/useUndo'
+
 // Re-export core types
 export type { AwarenessState, AwarenessUpdate } from '../../awareness'
 export type { FormatAttributes } from '../../crdt/peritext'
 export type { RichText, FormatRange } from '../../crdt/richtext'
+export type { Operation } from '../../undo/undo-manager'
 
 // Utilities (advanced users)
 export { toValue } from './utils/refs'

@@ -36,6 +36,9 @@ export { syncDocument } from './stores/syncDocument';
 export { syncText } from './stores/syncText';
 export { richText } from './stores/richText';
 
+// Undo/redo store
+export { undo } from './stores/undo';
+
 // Awareness stores
 export { presence } from './stores/presence';
 export { others } from './stores/others';
@@ -63,6 +66,9 @@ export type {
   SelfStore,
   SyncStatusStore,
   SyncStatusState,
+  UndoStore,
+  UndoState,
   AwarenessState,
+  Operation,
   SyncOptions,
 } from './types';
