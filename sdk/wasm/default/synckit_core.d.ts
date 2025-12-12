@@ -51,6 +51,79 @@ export class WasmAwareness {
   otherClientCount(): number;
 }
 
+export class WasmCounter {
+  free(): void;
+  [Symbol.dispose](): void;
+  /**
+   * Create a new PNCounter with the given replica ID
+   */
+  constructor(replica_id: string);
+  /**
+   * Increment the counter
+   *
+   * # Arguments
+   * * `amount` - Amount to increment (defaults to 1 if not provided)
+   */
+  increment(amount?: bigint | null): void;
+  /**
+   * Decrement the counter
+   *
+   * # Arguments
+   * * `amount` - Amount to decrement (defaults to 1 if not provided)
+   */
+  decrement(amount?: bigint | null): void;
+  /**
+   * Get the current counter value
+   */
+  value(): bigint;
+  /**
+   * Get the replica ID
+   */
+  getReplicaId(): string;
+  /**
+   * Merge with another counter
+   */
+  merge(other: WasmCounter): void;
+  /**
+   * Reset the counter to zero (local operation)
+   */
+  reset(): void;
+  /**
+   * Export as JSON string
+   */
+  toJSON(): string;
+  /**
+   * Import from JSON string
+   */
+  static fromJSON(json: string): WasmCounter;
+}
+
+export class WasmDelta {
+  private constructor();
+  free(): void;
+  [Symbol.dispose](): void;
+  /**
+   * Compute delta between two documents
+   */
+  static compute(from: WasmDocument, to: WasmDocument): WasmDelta;
+  /**
+   * Apply delta to a document
+   */
+  applyTo(document: WasmDocument, client_id: string): void;
+  /**
+   * Get document ID this delta applies to
+   */
+  getDocumentId(): string;
+  /**
+   * Get number of changes in this delta
+   */
+  changeCount(): number;
+  /**
+   * Export as JSON string
+   */
+  toJSON(): string;
+}
+
 export class WasmDocument {
   free(): void;
   [Symbol.dispose](): void;
@@ -86,6 +159,170 @@ export class WasmDocument {
    * Merge with another document
    */
   merge(other: WasmDocument): void;
+}
+
+export class WasmFugueText {
+  free(): void;
+  [Symbol.dispose](): void;
+  /**
+   * Create a new FugueText with the given client ID
+   */
+  constructor(client_id: string);
+  /**
+   * Insert text at the given position
+   *
+   * # Arguments
+   * * `position` - Grapheme index (user-facing position)
+   * * `text` - Text to insert
+   *
+   * # Returns
+   * JSON string of NodeId for the created block
+   */
+  insert(position: number, text: string): string;
+  /**
+   * Delete text at the given position
+   *
+   * # Arguments
+   * * `position` - Starting grapheme index
+   * * `length` - Number of graphemes to delete
+   *
+   * # Returns
+   * JSON string of array of deleted NodeIds
+   */
+  delete(position: number, length: number): string;
+  /**
+   * Get the NodeId of the character at the given position
+   *
+   * Returns a stable NodeId that identifies the character at the specified
+   * position. Critical for Peritext format spans that need stable character
+   * identifiers that don't shift when text is edited.
+   *
+   * # Arguments
+   * * `position` - Grapheme index of the character
+   *
+   * # Returns
+   * JSON string of NodeId (format: {client_id, clock, offset})
+   *
+   * # Example
+   * ```javascript
+   * const text = new WasmFugueText("client1");
+   * text.insert(0, "Hello");
+   * const nodeId = text.getNodeIdAtPosition(2);
+   * // Returns: '{"client_id":"client1","clock":1,"offset":2}'
+   * ```
+   */
+  getNodeIdAtPosition(position: number): string;
+  /**
+   * Get the current position of a character identified by NodeId
+   *
+   * This is the reverse of `getNodeIdAtPosition`. Given a stable NodeId,
+   * returns the character's current position in the text. Returns -1 if
+   * the character doesn't exist (e.g., was deleted).
+   *
+   * # Arguments
+   * * `node_id_json` - JSON string of NodeId (format: {client_id, clock, offset})
+   *
+   * # Returns
+   * Current position (0-based index), or -1 if character doesn't exist
+   *
+   * # Example
+   * ```javascript
+   * const nodeId = '{"client_id":"client1","clock":1,"offset":2}';
+   * const position = text.getPositionOfNodeId(nodeId);
+   * // Returns: 2 (or -1 if deleted)
+   * ```
+   */
+  getPositionOfNodeId(node_id_json: string): number;
+  /**
+   * Get the text content as a string
+   */
+  toString(): string;
+  /**
+   * Get the length in graphemes (user-perceived characters)
+   */
+  length(): number;
+  /**
+   * Check if the text is empty
+   */
+  isEmpty(): boolean;
+  /**
+   * Get the client ID
+   */
+  getClientId(): string;
+  /**
+   * Get the current Lamport clock value
+   */
+  getClock(): bigint;
+  /**
+   * Merge with another FugueText
+   */
+  merge(other: WasmFugueText): void;
+  /**
+   * Export as JSON string (for persistence/network)
+   */
+  toJSON(): string;
+  /**
+   * Import from JSON string (for loading from persistence/network)
+   */
+  static fromJSON(json: string): WasmFugueText;
+}
+
+export class WasmSet {
+  free(): void;
+  [Symbol.dispose](): void;
+  /**
+   * Create a new ORSet with the given replica ID
+   */
+  constructor(replica_id: string);
+  /**
+   * Add an element to the set
+   *
+   * # Arguments
+   * * `value` - Element to add
+   */
+  add(value: string): void;
+  /**
+   * Remove an element from the set
+   *
+   * # Arguments
+   * * `value` - Element to remove
+   */
+  remove(value: string): void;
+  /**
+   * Check if the set contains an element
+   *
+   * # Arguments
+   * * `value` - Element to check
+   */
+  has(value: string): boolean;
+  /**
+   * Get the number of elements in the set
+   */
+  size(): number;
+  /**
+   * Check if the set is empty
+   */
+  isEmpty(): boolean;
+  /**
+   * Get all values in the set as a JSON array string
+   */
+  values(): string;
+  /**
+   * Clear all elements from the set
+   */
+  clear(): void;
+  /**
+   * Merge with another set
+   */
+  merge(other: WasmSet): void;
+  /**
+   * Export as JSON string
+   */
+  toJSON(): string;
+  /**
+   * Import from JSON string
+   */
+  static fromJSON(json: string): WasmSet;
 }
 
 export class WasmVectorClock {
@@ -132,6 +369,7 @@ export interface InitOutput {
   readonly wasmdocument_getField: (a: number, b: number, c: number, d: number) => void;
   readonly wasmdocument_deleteField: (a: number, b: number, c: number) => void;
   readonly wasmdocument_getId: (a: number, b: number) => void;
+  readonly wasmdocument_fieldCount: (a: number) => number;
   readonly wasmdocument_toJSON: (a: number, b: number) => void;
   readonly wasmdocument_merge: (a: number, b: number) => void;
   readonly __wbg_wasmvectorclock_free: (a: number, b: number) => void;
@@ -141,6 +379,48 @@ export interface InitOutput {
   readonly wasmvectorclock_get: (a: number, b: number, c: number) => bigint;
   readonly wasmvectorclock_merge: (a: number, b: number) => void;
   readonly wasmvectorclock_toJSON: (a: number, b: number) => void;
+  readonly __wbg_wasmdelta_free: (a: number, b: number) => void;
+  readonly wasmdelta_compute: (a: number, b: number, c: number) => void;
+  readonly wasmdelta_applyTo: (a: number, b: number, c: number, d: number, e: number) => void;
+  readonly wasmdelta_getDocumentId: (a: number, b: number) => void;
+  readonly wasmdelta_changeCount: (a: number) => number;
+  readonly wasmdelta_toJSON: (a: number, b: number) => void;
+  readonly __wbg_wasmfuguetext_free: (a: number, b: number) => void;
+  readonly wasmfuguetext_new: (a: number, b: number) => number;
+  readonly wasmfuguetext_insert: (a: number, b: number, c: number, d: number, e: number) => void;
+  readonly wasmfuguetext_delete: (a: number, b: number, c: number, d: number) => void;
+  readonly wasmfuguetext_getNodeIdAtPosition: (a: number, b: number, c: number) => void;
+  readonly wasmfuguetext_getPositionOfNodeId: (a: number, b: number, c: number, d: number) => void;
+  readonly wasmfuguetext_toString: (a: number, b: number) => void;
+  readonly wasmfuguetext_length: (a: number) => number;
+  readonly wasmfuguetext_isEmpty: (a: number) => number;
+  readonly wasmfuguetext_getClientId: (a: number, b: number) => void;
+  readonly wasmfuguetext_getClock: (a: number) => bigint;
+  readonly wasmfuguetext_merge: (a: number, b: number, c: number) => void;
+  readonly wasmfuguetext_toJSON: (a: number, b: number) => void;
+  readonly wasmfuguetext_fromJSON: (a: number, b: number, c: number) => void;
+  readonly __wbg_wasmcounter_free: (a: number, b: number) => void;
+  readonly wasmcounter_new: (a: number, b: number) => number;
+  readonly wasmcounter_increment: (a: number, b: number, c: bigint) => void;
+  readonly wasmcounter_decrement: (a: number, b: number, c: bigint) => void;
+  readonly wasmcounter_value: (a: number) => bigint;
+  readonly wasmcounter_getReplicaId: (a: number, b: number) => void;
+  readonly wasmcounter_merge: (a: number, b: number) => void;
+  readonly wasmcounter_reset: (a: number) => void;
+  readonly wasmcounter_toJSON: (a: number, b: number) => void;
+  readonly wasmcounter_fromJSON: (a: number, b: number, c: number) => void;
+  readonly __wbg_wasmset_free: (a: number, b: number) => void;
+  readonly wasmset_new: (a: number, b: number) => number;
+  readonly wasmset_add: (a: number, b: number, c: number) => void;
+  readonly wasmset_remove: (a: number, b: number, c: number) => void;
+  readonly wasmset_has: (a: number, b: number, c: number) => number;
+  readonly wasmset_size: (a: number) => number;
+  readonly wasmset_isEmpty: (a: number) => number;
+  readonly wasmset_values: (a: number, b: number) => void;
+  readonly wasmset_clear: (a: number) => void;
+  readonly wasmset_merge: (a: number, b: number) => void;
+  readonly wasmset_toJSON: (a: number, b: number) => void;
+  readonly wasmset_fromJSON: (a: number, b: number, c: number) => void;
   readonly __wbg_wasmawareness_free: (a: number, b: number) => void;
   readonly wasmawareness_new: (a: number, b: number) => number;
   readonly wasmawareness_getClientId: (a: number, b: number) => void;
@@ -153,7 +433,6 @@ export interface InitOutput {
   readonly wasmawareness_createLeaveUpdate: (a: number, b: number) => void;
   readonly wasmawareness_clientCount: (a: number) => number;
   readonly wasmawareness_otherClientCount: (a: number) => number;
-  readonly wasmdocument_fieldCount: (a: number) => number;
   readonly init_panic_hook: () => void;
   readonly __wbindgen_export: (a: number, b: number, c: number) => void;
   readonly __wbindgen_export2: (a: number, b: number) => number;

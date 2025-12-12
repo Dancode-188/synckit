@@ -236,6 +236,65 @@ impl WasmFugueText {
             .map_err(|e| JsValue::from_str(&format!("JSON serialization failed: {}", e)))
     }
 
+    /// Get the NodeId of the character at the given position
+    ///
+    /// Returns a stable NodeId that identifies the character at the specified
+    /// position. Critical for Peritext format spans that need stable character
+    /// identifiers that don't shift when text is edited.
+    ///
+    /// # Arguments
+    /// * `position` - Grapheme index of the character
+    ///
+    /// # Returns
+    /// JSON string of NodeId (format: {client_id, clock, offset})
+    ///
+    /// # Example
+    /// ```javascript
+    /// const text = new WasmFugueText("client1");
+    /// text.insert(0, "Hello");
+    /// const nodeId = text.getNodeIdAtPosition(2);
+    /// // Returns: '{"client_id":"client1","clock":1,"offset":2}'
+    /// ```
+    #[wasm_bindgen(js_name = getNodeIdAtPosition)]
+    pub fn get_node_id_at_position(&mut self, position: usize) -> Result<String, JsValue> {
+        let node_id = self
+            .inner
+            .get_node_id_at_position(position)
+            .map_err(|e| JsValue::from_str(&format!("Get NodeId failed: {}", e)))?;
+
+        serde_json::to_string(&node_id)
+            .map_err(|e| JsValue::from_str(&format!("JSON serialization failed: {}", e)))
+    }
+
+    /// Get the current position of a character identified by NodeId
+    ///
+    /// This is the reverse of `getNodeIdAtPosition`. Given a stable NodeId,
+    /// returns the character's current position in the text. Returns -1 if
+    /// the character doesn't exist (e.g., was deleted).
+    ///
+    /// # Arguments
+    /// * `node_id_json` - JSON string of NodeId (format: {client_id, clock, offset})
+    ///
+    /// # Returns
+    /// Current position (0-based index), or -1 if character doesn't exist
+    ///
+    /// # Example
+    /// ```javascript
+    /// const nodeId = '{"client_id":"client1","clock":1,"offset":2}';
+    /// const position = text.getPositionOfNodeId(nodeId);
+    /// // Returns: 2 (or -1 if deleted)
+    /// ```
+    #[wasm_bindgen(js_name = getPositionOfNodeId)]
+    pub fn get_position_of_node_id(&mut self, node_id_json: &str) -> Result<i32, JsValue> {
+        let node_id: crate::crdt::text_fugue::NodeId = serde_json::from_str(node_id_json)
+            .map_err(|e| JsValue::from_str(&format!("JSON parse failed: {}", e)))?;
+
+        match self.inner.get_position_of_node_id(&node_id) {
+            Some(pos) => Ok(pos as i32),
+            None => Ok(-1), // Character doesn't exist (deleted)
+        }
+    }
+
     /// Get the text content as a string
     #[wasm_bindgen(js_name = toString)]
     #[allow(clippy::inherent_to_string)]
@@ -541,9 +600,7 @@ impl WasmAwareness {
     /// Returns JSON array of removed client IDs
     #[wasm_bindgen(js_name = removeStaleClients)]
     pub fn remove_stale_clients(&mut self, timeout_ms: u64) -> Result<String, JsValue> {
-        // Convert milliseconds to Duration for the inner method
-        let timeout = std::time::Duration::from_millis(timeout_ms);
-        let removed = self.inner.remove_stale_clients(timeout);
+        let removed = self.inner.remove_stale_clients(timeout_ms);
 
         serde_json::to_string(&removed)
             .map_err(|e| JsValue::from_str(&format!("Serialization failed: {}", e)))
