@@ -55,8 +55,8 @@ describe('CrossTabSync', () => {
       const messagePromise = new Promise<void>((resolve) => {
         crossTab2.on('update', (message) => {
           expect(message.from).toBe(crossTab1.getTabId());
-          // Seq is 1 because enable() sent tab-joined (seq 0) first
-          expect(message.seq).toBe(1);
+          // Seq is 2 because enable() sent tab-joined (seq 0) and election (seq 1) first
+          expect(message.seq).toBe(2);
           expect(message.timestamp).toBeGreaterThan(0);
           resolve();
         });
@@ -76,8 +76,8 @@ describe('CrossTabSync', () => {
       crossTab2.enable();
 
       let count = 0;
-      // Seq starts at 1 because enable() sent tab-joined (seq 0) first
-      const expectedSeqs = [1, 2];
+      // Seq starts at 2 because enable() sent tab-joined (seq 0) and election (seq 1) first
+      const expectedSeqs = [2, 3];
 
       const messagePromise = new Promise<void>((resolve) => {
         crossTab2.on('test', (message: any) => {
@@ -116,17 +116,23 @@ describe('CrossTabSync', () => {
     });
 
     it('should support wildcard handlers', async () => {
-      crossTab1.enable();
-      crossTab2.enable();
-
       const wildcardHandler = vi.fn();
       crossTab2.on('*', wildcardHandler);
+
+      crossTab1.enable();
+      crossTab2.enable();
 
       crossTab1.broadcast({ type: 'test' } as any);
 
       await new Promise((resolve) => setTimeout(resolve, 50));
-      // Called twice: once for tab-joined (from crossTab1.enable()), once for test message
-      expect(wildcardHandler).toHaveBeenCalledTimes(2);
+      // Wildcard receives all messages from crossTab1, including possible election responses
+      expect(wildcardHandler.mock.calls.length).toBeGreaterThanOrEqual(1);
+
+      // Verify it received the test message
+      const testMessages = wildcardHandler.mock.calls.filter(
+        ([msg]: any[]) => msg.type === 'test'
+      );
+      expect(testMessages).toHaveLength(1);
     });
 
     it('should remove specific handler with off()', async () => {

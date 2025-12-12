@@ -22,6 +22,18 @@ export interface CrossTabSyncOptions {
    * @default `synckit-${documentId}`
    */
   channelName?: string;
+
+  /**
+   * Heartbeat interval in milliseconds
+   * @default 2000
+   */
+  heartbeatInterval?: number;
+
+  /**
+   * Timeout for leader heartbeat in milliseconds
+   * @default 5000
+   */
+  heartbeatTimeout?: number;
 }
 
 /**
@@ -30,10 +42,21 @@ export interface CrossTabSyncOptions {
 export class CrossTabSync {
   private channel: BroadcastChannel;
   private tabId: string;
+  private tabStartTime: number;
   private messageSeq: number = 0;
   private handlers = new Map<string, Set<MessageHandler>>();
   private isEnabled: boolean;
   private channelName: string;
+
+  // Leader election state
+  private isLeader: boolean = false;
+  private currentLeaderId: string | null = null;
+  private lastLeaderHeartbeat: number = 0;
+  private heartbeatInterval: number;
+  private heartbeatTimeout: number;
+  private heartbeatTimer: ReturnType<typeof setInterval> | null = null;
+  private leaderCheckTimer: ReturnType<typeof setInterval> | null = null;
+  private electionTimer: ReturnType<typeof setTimeout> | null = null;
 
   /**
    * Creates a new CrossTabSync instance
@@ -54,8 +77,11 @@ export class CrossTabSync {
     options: CrossTabSyncOptions = {}
   ) {
     this.tabId = this.generateTabId();
+    this.tabStartTime = Date.now();
     this.channelName = options.channelName || `synckit-${documentId}`;
     this.isEnabled = options.enabled ?? true;
+    this.heartbeatInterval = options.heartbeatInterval ?? 2000;
+    this.heartbeatTimeout = options.heartbeatTimeout ?? 5000;
 
     // Check BroadcastChannel support
     if (typeof BroadcastChannel === 'undefined') {
@@ -70,6 +96,7 @@ export class CrossTabSync {
     if (this.isEnabled) {
       this.setupListeners();
       this.announcePresence();
+      this.startElection();
     }
   }
 
@@ -163,6 +190,7 @@ export class CrossTabSync {
     this.isEnabled = true;
     this.setupListeners();
     this.announcePresence();
+    this.startElection();
   }
 
   /**
@@ -171,9 +199,14 @@ export class CrossTabSync {
   disable(): void {
     if (!this.isEnabled) return;
 
-    // Broadcast leaving message before disabling
-    this.broadcast({ type: 'tab-leaving' } as Omit<CrossTabMessage, 'from' | 'seq' | 'timestamp'>);
+    // Broadcast leaving message before disabling (ignore errors during cleanup)
+    try {
+      this.broadcast({ type: 'tab-leaving' } as Omit<CrossTabMessage, 'from' | 'seq' | 'timestamp'>);
+    } catch (error) {
+      // Ignore errors during cleanup (channel may already be closed)
+    }
 
+    this.stopLeaderElection();
     this.isEnabled = false;
 
     // Clear handlers
@@ -203,9 +236,31 @@ export class CrossTabSync {
   }
 
   /**
+   * Check if this tab is the current leader
+   */
+  isCurrentLeader(): boolean {
+    return this.isLeader;
+  }
+
+  /**
+   * Get the current leader's tab ID
+   */
+  getLeaderId(): string | null {
+    return this.currentLeaderId;
+  }
+
+  /**
+   * Get this tab's start time (for election comparison)
+   */
+  getTabStartTime(): number {
+    return this.tabStartTime;
+  }
+
+  /**
    * Cleanup resources
    */
   destroy(): void {
+    this.stopLeaderElection();
     this.disable();
     this.channel.close();
     this.handlers.clear();
@@ -231,6 +286,13 @@ export class CrossTabSync {
     // Ignore messages from self
     if (message.from === this.tabId) {
       return;
+    }
+
+    // Handle leader election messages
+    if (message.type === 'election') {
+      this.handleElectionMessage(message);
+    } else if (message.type === 'heartbeat') {
+      this.handleHeartbeatMessage(message);
     }
 
     // Dispatch to registered handlers
@@ -278,6 +340,230 @@ export class CrossTabSync {
 
     // Fallback to timestamp + random
     return `tab-${Date.now()}-${Math.random().toString(36).substring(2, 11)}`;
+  }
+
+  /**
+   * Start leader election process
+   */
+  private startElection(): void {
+    // Optimistically set ourselves as potential leader
+    this.currentLeaderId = this.tabId;
+
+    // Start checking for leader liveness
+    this.leaderCheckTimer = setInterval(() => {
+      this.checkLeaderLiveness();
+    }, 1000);
+
+    // Create election timer BEFORE broadcasting so responses can cancel it
+    this.electionTimer = setTimeout(() => {
+      this.electionTimer = null;
+      if (this.currentLeaderId === this.tabId && !this.isLeader) {
+        this.becomeLeader();
+      }
+    }, 100);
+
+    // Broadcast election message with tab start time
+    // (must be after timer creation so responses can cancel it)
+    this.broadcast({
+      type: 'election',
+      tabId: this.tabId,
+      tabStartTime: this.tabStartTime,
+    } as any);
+  }
+
+  /**
+   * Stop leader election timers
+   */
+  private stopLeaderElection(): void {
+    if (this.heartbeatTimer) {
+      clearInterval(this.heartbeatTimer);
+      this.heartbeatTimer = null;
+    }
+
+    if (this.leaderCheckTimer) {
+      clearInterval(this.leaderCheckTimer);
+      this.leaderCheckTimer = null;
+    }
+
+    if (this.electionTimer) {
+      clearTimeout(this.electionTimer);
+      this.electionTimer = null;
+    }
+
+    this.isLeader = false;
+    this.currentLeaderId = null;
+  }
+
+  /**
+   * Handle election message from another tab
+   */
+  private handleElectionMessage(message: CrossTabMessage): void {
+    if (message.type !== 'election') return;
+
+    const electionMessage = message as any;
+    const otherTabStartTime = electionMessage.tabStartTime;
+    const otherTabId = electionMessage.tabId;
+
+    // If the other tab is older (started earlier), it should be leader
+    if (otherTabStartTime < this.tabStartTime) {
+      // The other tab is older, so it should be leader
+      if (this.isLeader) {
+        // We were leader, but an older tab exists - step down
+        this.stepDownAsLeader();
+      }
+
+      // Cancel our pending election timer since we found an older tab
+      if (this.electionTimer) {
+        clearTimeout(this.electionTimer);
+        this.electionTimer = null;
+      }
+
+      this.currentLeaderId = otherTabId;
+      this.lastLeaderHeartbeat = Date.now();
+    } else if (otherTabStartTime > this.tabStartTime) {
+      // We're older than the other tab
+      // If we're already leader or should be, respond with our election message
+      if (this.isLeader || this.currentLeaderId === null || this.currentLeaderId === this.tabId) {
+        // Respond so the new tab knows about us
+        this.broadcast({
+          type: 'election',
+          tabId: this.tabId,
+          tabStartTime: this.tabStartTime,
+        } as any);
+
+        // Claim leadership if not already leader
+        if (!this.isLeader) {
+          this.becomeLeader();
+        }
+      }
+    } else if (otherTabStartTime === this.tabStartTime) {
+      // Same start time (very rare), use tab ID as tiebreaker
+      if (otherTabId < this.tabId) {
+        this.currentLeaderId = otherTabId;
+        this.lastLeaderHeartbeat = Date.now();
+
+        if (this.isLeader) {
+          this.stepDownAsLeader();
+        }
+      } else if (!this.isLeader) {
+        // Respond with our election message
+        this.broadcast({
+          type: 'election',
+          tabId: this.tabId,
+          tabStartTime: this.tabStartTime,
+        } as any);
+        this.becomeLeader();
+      }
+    }
+  }
+
+  /**
+   * Handle heartbeat message from leader
+   */
+  private handleHeartbeatMessage(message: CrossTabMessage): void {
+    if (message.type !== 'heartbeat') return;
+
+    const heartbeatMessage = message as any;
+    const senderTabId = heartbeatMessage.tabId;
+
+    // Update last heartbeat time if it's from the current leader
+    if (senderTabId === this.currentLeaderId) {
+      this.lastLeaderHeartbeat = Date.now();
+    }
+  }
+
+  /**
+   * Become the leader
+   */
+  private becomeLeader(): void {
+    if (this.isLeader) return;
+
+    this.isLeader = true;
+    this.currentLeaderId = this.tabId;
+    this.lastLeaderHeartbeat = Date.now();
+
+    // Start sending heartbeats
+    this.heartbeatTimer = setInterval(() => {
+      this.sendHeartbeat();
+    }, this.heartbeatInterval);
+
+    // Notify handlers that this tab became leader
+    const handlers = this.handlers.get('leader-elected');
+    if (handlers) {
+      handlers.forEach(handler => {
+        try {
+          handler({
+            type: 'leader-elected',
+            from: this.tabId,
+            seq: this.messageSeq,
+            timestamp: Date.now(),
+            tabId: this.tabId,
+          } as any);
+        } catch (error) {
+          console.error('Error in leader-elected handler:', error);
+        }
+      });
+    }
+  }
+
+  /**
+   * Step down as leader
+   */
+  private stepDownAsLeader(): void {
+    this.isLeader = false;
+
+    if (this.heartbeatTimer) {
+      clearInterval(this.heartbeatTimer);
+      this.heartbeatTimer = null;
+    }
+  }
+
+  /**
+   * Send heartbeat message
+   */
+  private sendHeartbeat(): void {
+    if (!this.isLeader) return;
+
+    this.broadcast({
+      type: 'heartbeat',
+      tabId: this.tabId,
+      tabStartTime: this.tabStartTime,
+    } as any);
+  }
+
+  /**
+   * Check if leader is still alive
+   */
+  private checkLeaderLiveness(): void {
+    // If we're the leader, nothing to check
+    if (this.isLeader) return;
+
+    // If we think we should be leader but aren't yet, try to become leader
+    if (this.currentLeaderId === this.tabId && !this.isLeader) {
+      this.becomeLeader();
+      return;
+    }
+
+    // If no leader has been elected yet, try to become leader
+    if (this.currentLeaderId === null) {
+      this.becomeLeader();
+      return;
+    }
+
+    // Don't check heartbeat if we're the current leader (not yet actually leader)
+    if (this.currentLeaderId === this.tabId) {
+      return;
+    }
+
+    // Check if we've received a heartbeat recently
+    const now = Date.now();
+    const timeSinceLastHeartbeat = now - this.lastLeaderHeartbeat;
+
+    if (timeSinceLastHeartbeat > this.heartbeatTimeout) {
+      // Leader appears to be dead, start new election
+      this.currentLeaderId = null;
+      this.startElection();
+    }
   }
 }
 
