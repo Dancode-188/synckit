@@ -285,7 +285,8 @@ export class FormatMerger {
   computeRanges(
     text: string,
     spans: FormatSpan[],
-    getCharId: (position: number) => string
+    getCharId: (position: number) => string,
+    getPosition?: (charId: string) => number
   ): Array<{ text: string; attributes: FormatAttributes }> {
     if (text.length === 0) {
       return []
@@ -294,6 +295,15 @@ export class FormatMerger {
     const ranges: Array<{ text: string; attributes: FormatAttributes }> = []
     let currentAttrs: FormatAttributes = {}
     let currentText = ''
+
+    // Default position getter for backwards compatibility (position-based IDs)
+    const defaultGetPosition = (id: string): number => {
+      const parts = id.split('@')
+      const parsed = parseInt(parts[0] || '0')
+      return isNaN(parsed) ? 0 : parsed
+    }
+
+    const charIdToPosition = getPosition || defaultGetPosition
 
     for (let i = 0; i < text.length; i++) {
       const charId = getCharId(i)
@@ -304,12 +314,7 @@ export class FormatMerger {
       const attrs = SpanUtils.getFormatsAt(
         charId,
         spans,
-        (id) => {
-          // Simple position getter (in full implementation, use Fugue's position map)
-          const parts = id.split('@')
-          const parsed = parseInt(parts[0] || '0')
-          return isNaN(parsed) ? 0 : parsed
-        }
+        charIdToPosition
       )
 
       // Check if attributes changed

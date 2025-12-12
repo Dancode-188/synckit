@@ -15,6 +15,8 @@ import type { SyncableDocument, Operation } from './sync/manager'
 export interface WasmFugueText {
   insert(position: number, text: string): string  // returns JSON NodeId
   delete(position: number, length: number): string  // returns JSON NodeId[]
+  getNodeIdAtPosition(position: number): string  // returns JSON NodeId
+  getPositionOfNodeId(nodeIdJson: string): number  // returns position or -1 if deleted
   toString(): string
   length(): number
   isEmpty(): boolean
@@ -252,6 +254,40 @@ export class SyncText implements SyncableDocument {
         clock: { ...this.vectorClock }
       } as any)
     }
+  }
+
+  /**
+   * Get the NodeId of the character at a specific position
+   *
+   * Returns a stable identifier for the character at the given position.
+   * This is used internally by RichText for Peritext format spans.
+   *
+   * @param position - Grapheme index
+   * @returns NodeId object with {client_id, clock, offset}
+   *
+   * @example
+   * ```typescript
+   * const text = synckit.text('doc-123')
+   * await text.init()
+   * await text.insert(0, 'Hello')
+   *
+   * const nodeId = text.getNodeIdAtPosition(2)
+   * // Returns: {client_id: "client1", clock: 1, offset: 2}
+   * ```
+   */
+  getNodeIdAtPosition(position: number): { client_id: string; clock: number; offset: number } {
+    if (!this.wasmText) {
+      throw new Error('Text not initialized. Call init() first.')
+    }
+
+    // Validate position
+    if (position < 0 || position >= this.wasmText.length()) {
+      throw new Error(`Position ${position} out of bounds (length: ${this.wasmText.length()})`)
+    }
+
+    // Get NodeId from WASM (returns JSON string)
+    const nodeIdJson = this.wasmText.getNodeIdAtPosition(position)
+    return JSON.parse(nodeIdJson)
   }
 
   /**

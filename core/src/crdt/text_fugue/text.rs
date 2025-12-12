@@ -485,6 +485,161 @@ impl FugueText {
         Ok(deleted_ids)
     }
 
+    /// Get the NodeId of the character at the given position
+    ///
+    /// Returns a stable NodeId that identifies the character at the specified
+    /// grapheme position. This NodeId includes the block's timestamp and the
+    /// offset within the block, making it stable across text edits.
+    ///
+    /// This is critical for Peritext format spans - format ranges must reference
+    /// stable character identifiers, not position indices that shift on edits.
+    ///
+    /// # Arguments
+    ///
+    /// * `position` - Grapheme index of the character
+    ///
+    /// # Returns
+    ///
+    /// NodeId with correct offset for the character at this position
+    ///
+    /// # Errors
+    ///
+    /// Returns `TextError::PositionOutOfBounds` if position >= length
+    ///
+    /// # Complexity
+    ///
+    /// O(log n) with position cache, O(n) without cache
+    ///
+    /// # Example
+    ///
+    /// ```rust
+    /// use synckit_core::crdt::text_fugue::FugueText;
+    ///
+    /// let mut text = FugueText::new("client1".to_string());
+    /// text.insert(0, "Hello").unwrap();
+    ///
+    /// let node_id = text.get_node_id_at_position(2).unwrap();
+    /// // Returns NodeId for 'l' at position 2
+    /// // Format: client1@1:2 (client1, clock=1, offset=2)
+    /// ```
+    pub fn get_node_id_at_position(&mut self, position: usize) -> Result<NodeId, TextError> {
+        // 1. Validate position
+        let len = self.len();
+        if position >= len {
+            return Err(TextError::PositionOutOfBounds {
+                position,
+                length: len,
+            });
+        }
+
+        // 2. Ensure cache is valid for O(log n) lookup
+        if !self.cache_valid {
+            self.rebuild_position_cache();
+            self.cache_valid = true;
+        }
+
+        // 3. Binary search to find block containing this position
+        if self.cached_blocks.is_empty() {
+            return Err(TextError::PositionOutOfBounds {
+                position,
+                length: len,
+            });
+        }
+
+        let search_result = self.cached_blocks.binary_search_by(|id| {
+            let block = &self.blocks[id];
+            let block_start = block.cached_position().unwrap_or(0);
+            let block_end = block_start + block.len();
+
+            if position < block_start {
+                std::cmp::Ordering::Greater
+            } else if position >= block_end {
+                std::cmp::Ordering::Less
+            } else {
+                std::cmp::Ordering::Equal
+            }
+        });
+
+        // 4. Calculate offset within block and create NodeId
+        match search_result {
+            Ok(idx) => {
+                let block_id = &self.cached_blocks[idx];
+                let block = &self.blocks[block_id];
+                let block_start = block.cached_position().unwrap_or(0);
+                let offset_in_block = position - block_start;
+
+                // Create NodeId with correct offset
+                Ok(NodeId::new(
+                    block_id.client_id.clone(),
+                    block_id.clock,
+                    offset_in_block,
+                ))
+            }
+            Err(_) => {
+                // Should never happen if cache is valid and position is in bounds
+                Err(TextError::PositionOutOfBounds {
+                    position,
+                    length: len,
+                })
+            }
+        }
+    }
+
+    /// Get the current position of a character identified by NodeId
+    ///
+    /// This is the reverse of `get_node_id_at_position`. Given a stable NodeId
+    /// (client_id, clock, offset), returns the character's current position in the text.
+    ///
+    /// Returns None if the NodeId doesn't exist (e.g., character was deleted).
+    /// Complexity: O(n) for searching blocks (could be optimized with a block index).
+    ///
+    /// # Arguments
+    ///
+    /// * `node_id` - The NodeId to find
+    ///
+    /// # Example
+    ///
+    /// ```rust
+    /// let node_id = NodeId::new("client1".to_string(), 1, 2);
+    /// if let Some(pos) = text.get_position_of_node_id(&node_id) {
+    ///     println!("Character is at position {}", pos);
+    /// } else {
+    ///     println!("Character was deleted");
+    /// }
+    /// ```
+    pub fn get_position_of_node_id(&mut self, node_id: &NodeId) -> Option<usize> {
+        // 1. Ensure cache is valid
+        if !self.cache_valid {
+            self.rebuild_position_cache();
+            self.cache_valid = true;
+        }
+
+        // 2. Find the block with matching client_id and clock
+        // Blocks are keyed by NodeId with offset 0
+        let block_id = NodeId::new(node_id.client_id.clone(), node_id.clock, 0);
+
+        // Check if block exists and is visible
+        if let Some(block) = self.blocks.get(&block_id) {
+            // Block is deleted, character doesn't exist
+            if block.deleted {
+                return None;
+            }
+
+            // 3. Validate offset is within block length
+            if node_id.offset >= block.len() {
+                return None;
+            }
+
+            // 4. Get block's starting position and add offset
+            if let Some(block_start) = block.cached_position() {
+                return Some(block_start + node_id.offset);
+            }
+        }
+
+        // Block doesn't exist or character was deleted
+        None
+    }
+
     /// Merge with another FugueText replica
     ///
     /// Merges remote blocks into local state, ensuring convergence.
@@ -1302,5 +1457,103 @@ mod tests {
 
         // Merge should be associative
         assert_eq!(result1.to_string(), result2.to_string());
+    }
+
+    #[test]
+    fn test_get_node_id_at_position() {
+        let mut text = FugueText::new("client1".to_string());
+        text.insert(0, "Hello").unwrap();
+
+        // Get NodeId at position 0 (first character 'H')
+        let node_id_0 = text.get_node_id_at_position(0).unwrap();
+        assert_eq!(node_id_0.client_id, "client1");
+        assert_eq!(node_id_0.clock, 1);
+        assert_eq!(node_id_0.offset, 0);
+
+        // Get NodeId at position 2 (character 'l')
+        let node_id_2 = text.get_node_id_at_position(2).unwrap();
+        assert_eq!(node_id_2.client_id, "client1");
+        assert_eq!(node_id_2.clock, 1);
+        assert_eq!(node_id_2.offset, 2);
+
+        // Get NodeId at position 4 (last character 'o')
+        let node_id_4 = text.get_node_id_at_position(4).unwrap();
+        assert_eq!(node_id_4.client_id, "client1");
+        assert_eq!(node_id_4.clock, 1);
+        assert_eq!(node_id_4.offset, 4);
+    }
+
+    #[test]
+    fn test_get_node_id_at_position_out_of_bounds() {
+        let mut text = FugueText::new("client1".to_string());
+        text.insert(0, "Hello").unwrap();
+
+        // Position equal to length should fail
+        let result = text.get_node_id_at_position(5);
+        assert!(result.is_err());
+        match result {
+            Err(TextError::PositionOutOfBounds { position, length }) => {
+                assert_eq!(position, 5);
+                assert_eq!(length, 5);
+            }
+            _ => panic!("Expected PositionOutOfBounds error"),
+        }
+
+        // Position greater than length should fail
+        let result = text.get_node_id_at_position(10);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_get_node_id_multiple_blocks() {
+        let mut text = FugueText::new("client1".to_string());
+
+        // Insert "Hello" at position 0 (clock 1)
+        text.insert(0, "Hello").unwrap();
+
+        // Insert " World" at position 5 (clock 2)
+        text.insert(5, " World").unwrap();
+
+        // Get NodeId in first block (position 2 -> 'l' in "Hello")
+        let node_id_2 = text.get_node_id_at_position(2).unwrap();
+        assert_eq!(node_id_2.client_id, "client1");
+        assert_eq!(node_id_2.clock, 1);
+        assert_eq!(node_id_2.offset, 2);
+
+        // Get NodeId in second block (position 6 -> 'W' in " World")
+        let node_id_6 = text.get_node_id_at_position(6).unwrap();
+        assert_eq!(node_id_6.client_id, "client1");
+        assert_eq!(node_id_6.clock, 2);
+        assert_eq!(node_id_6.offset, 1); // " " is offset 0, "W" is offset 1
+    }
+
+    #[test]
+    fn test_get_node_id_after_delete() {
+        let mut text = FugueText::new("client1".to_string());
+
+        // Insert two separate blocks to test deletion
+        text.insert(0, "Hello").unwrap();
+        text.insert(5, " World").unwrap();
+
+        // Verify initial state
+        assert_eq!(text.to_string(), "Hello World");
+        assert_eq!(text.len(), 11);
+
+        // Delete " World" (positions 5-11)
+        text.delete(5, 6).unwrap();
+
+        // Text should now be "Hello"
+        assert_eq!(text.to_string(), "Hello");
+        assert_eq!(text.len(), 5);
+
+        // Get NodeId at position 2 (middle 'l' character in "Hello")
+        let node_id = text.get_node_id_at_position(2).unwrap();
+        assert_eq!(node_id.client_id, "client1");
+        assert_eq!(node_id.clock, 1);
+        assert_eq!(node_id.offset, 2);
+
+        // Position 5 should now be out of bounds
+        let result = text.get_node_id_at_position(5);
+        assert!(result.is_err());
     }
 }

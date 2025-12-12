@@ -190,13 +190,16 @@ export class RichText extends SyncText {
 
     // Generate unique operation ID
     const opId = this.generateOpId()
-    const timestamp = this.getClock() + 1
+    const timestamp = Number(this.getClock()) + 1
 
-    // Create anchors at start and end positions
-    // Note: In full implementation, we'd get actual Fugue character IDs
-    // For now, we use position@clientId as a simple character ID format
-    const startCharId = `${start}@${(this as any).clientId}`
-    const endCharId = `${end - 1}@${(this as any).clientId}`
+    // Create anchors at start and end positions using stable NodeIds
+    // Get stable character IDs from Fugue CRDT (not position-based!)
+    const startNodeId = this.getNodeIdAtPosition(start)
+    const endNodeId = this.getNodeIdAtPosition(end - 1)
+
+    // Format NodeIds as strings: client_id@clock:offset
+    const startCharId = `${startNodeId.client_id}@${startNodeId.clock}:${startNodeId.offset}`
+    const endCharId = `${endNodeId.client_id}@${endNodeId.clock}:${endNodeId.offset}`
 
     const startAnchor = new StyleAnchor(
       startCharId,
@@ -381,10 +384,18 @@ export class RichText extends SyncText {
       (id) => this.getPosition(id)
     )
 
+    // Convert positions to stable NodeIds
+    const positionToCharId = (position: number): string => {
+      const nodeId = this.getNodeIdAtPosition(position)
+      return `${nodeId.client_id}@${nodeId.clock}:${nodeId.offset}`
+    }
+
+    // Pass both converters: position→NodeId and NodeId→position
     return this.merger.computeRanges(
       text,
       mergedSpans,
-      (position) => `${position}@${(this as any).clientId}`
+      positionToCharId,
+      (charId) => this.getPosition(charId)
     )
   }
 
@@ -465,16 +476,41 @@ export class RichText extends SyncText {
   }
 
   /**
-   * Get position from character ID
+   * Get position from character ID (NodeId)
    *
-   * In full implementation, this would query the Fugue CRDT for the actual
-   * position of a character ID. For now, we extract position from our
-   * simple "position@clientId" format.
+   * Parses NodeId format: client_id@clock:offset
+   * Queries the Fugue CRDT to get the current position of the character.
+   * Returns 0 if character was deleted.
    */
   private getPosition(characterId: string): number {
-    const parts = characterId.split('@')
-    const position = parseInt(parts[0] || '0')
-    return isNaN(position) ? 0 : position
+    const wasmText = (this as any).wasmText
+    if (!wasmText) {
+      return 0
+    }
+
+    // Parse NodeId format: client_id@clock:offset
+    const match = characterId.match(/^([^@]+)@(\d+):(\d+)$/)
+    if (!match) {
+      console.warn(`Invalid NodeId format: ${characterId}`)
+      return 0
+    }
+
+    const clientId = match[1]
+    const clockStr = match[2]
+    const offsetStr = match[3]
+
+    if (!clientId || !clockStr || !offsetStr) {
+      return 0
+    }
+
+    const nodeIdJson = JSON.stringify({
+      client_id: clientId,
+      clock: parseInt(clockStr),
+      offset: parseInt(offsetStr)
+    })
+
+    const position = wasmText.getPositionOfNodeId(nodeIdJson)
+    return position === -1 ? 0 : position  // Return 0 if character was deleted
   }
 
   /**
