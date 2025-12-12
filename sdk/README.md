@@ -108,8 +108,17 @@ pnpm add @synckit-js/sdk
 
 ### Framework Integration
 - ✅ **React hooks**: Built-in hooks for React 18+
+- ✅ **Vue composables**: Full Vue 3 Composition API support
+- ✅ **Svelte stores**: Hybrid Svelte 4/5 store implementation
 - ✅ **Network-aware hooks**: Monitor connection and sync state
 - ✅ **TypeScript support**: Full type inference throughout
+
+### Undo/Redo (v0.2.0)
+- ✅ **Intelligent merging**: Automatically merges consecutive operations
+- ✅ **Cross-tab sync**: Undo/redo state syncs across browser tabs
+- ✅ **Persistent history**: Survives page refreshes via IndexedDB
+- ✅ **Framework adapters**: Native React/Vue/Svelte integrations
+- ✅ **Customizable**: Configure merge strategies and stack size
 
 ## 🔌 React Integration
 
@@ -179,6 +188,135 @@ function DocumentSyncStatus({ docId }: { docId: string }) {
   )
 }
 ```
+
+## ↩️ Undo/Redo
+
+SyncKit includes a powerful undo/redo system with cross-tab synchronization and intelligent operation merging.
+
+### React
+
+```tsx
+import { useUndo } from '@synckit-js/sdk/react'
+
+function TextEditor() {
+  const [text, setText] = useState('')
+  const { canUndo, canRedo, undo, redo, add } = useUndo('doc-123')
+
+  const handleChange = (newText: string) => {
+    const oldText = text
+    setText(newText)
+
+    add({
+      type: 'text-change',
+      data: { from: oldText, to: newText }
+    })
+  }
+
+  const handleUndo = () => {
+    const op = undo()
+    if (op?.data) setText(op.data.from)
+  }
+
+  const handleRedo = () => {
+    const op = redo()
+    if (op?.data) setText(op.data.to)
+  }
+
+  return (
+    <div>
+      <button onClick={handleUndo} disabled={!canUndo}>Undo</button>
+      <button onClick={handleRedo} disabled={!canRedo}>Redo</button>
+      <textarea value={text} onChange={e => handleChange(e.target.value)} />
+    </div>
+  )
+}
+```
+
+### Vue
+
+```vue
+<script setup lang="ts">
+import { ref } from 'vue'
+import { useUndo } from '@synckit-js/sdk/vue'
+
+const text = ref('')
+const { canUndo, canRedo, undo, redo, add } = useUndo('doc-123')
+
+const handleChange = (newText: string) => {
+  const oldText = text.value
+  text.value = newText
+
+  add({
+    type: 'text-change',
+    data: { from: oldText, to: newText }
+  })
+}
+
+const handleUndo = () => {
+  const op = undo()
+  if (op?.data) text.value = op.data.from
+}
+
+const handleRedo = () => {
+  const op = redo()
+  if (op?.data) text.value = op.data.to
+}
+</script>
+
+<template>
+  <div>
+    <button @click="handleUndo" :disabled="!canUndo">Undo</button>
+    <button @click="handleRedo" :disabled="!canRedo">Redo</button>
+    <textarea :value="text" @input="handleChange($event.target.value)" />
+  </div>
+</template>
+```
+
+### Svelte
+
+```svelte
+<script>
+  import { undo } from '@synckit-js/sdk/svelte'
+
+  let text = ''
+  const undoStore = undo('doc-123')
+
+  function handleChange(event) {
+    const newText = event.target.value
+    const oldText = text
+    text = newText
+
+    undoStore.add({
+      type: 'text-change',
+      data: { from: oldText, to: newText }
+    })
+  }
+
+  function handleUndo() {
+    const op = undoStore.undo()
+    if (op?.data) text = op.data.from
+  }
+
+  function handleRedo() {
+    const op = undoStore.redo()
+    if (op?.data) text = op.data.to
+  }
+</script>
+
+<button on:click={handleUndo} disabled={!$undoStore.canUndo}>Undo</button>
+<button on:click={handleRedo} disabled={!$undoStore.canRedo}>Redo</button>
+<textarea value={text} on:input={handleChange} />
+```
+
+### Key Features
+
+- **Intelligent Merging**: Consecutive operations automatically merge (e.g., typing becomes one undo unit)
+- **Cross-Tab Sync**: Undo/redo state syncs across browser tabs in real-time
+- **Persistent**: History survives page refreshes via IndexedDB
+- **Customizable**: Configure merge windows, stack size, and custom merge strategies
+- **Keyboard Shortcuts**: Built-in support for Ctrl+Z and Ctrl+Y
+
+See [UNDO_REDO.md](./docs/UNDO_REDO.md) for complete API documentation.
 
 ## 📚 API Reference
 

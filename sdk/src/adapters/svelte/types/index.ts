@@ -5,6 +5,7 @@
 
 import type { Readable } from 'svelte/store';
 import type { AwarenessState as CoreAwarenessState } from '../../../awareness';
+import type { Operation as UndoOperation } from '../../../undo/undo-manager';
 
 /**
  * Base store shape that works with both Svelte 4 and 5
@@ -86,9 +87,49 @@ export interface RichTextStore extends BaseStore<string> {
 }
 
 /**
- * Re-export core awareness type
+ * Undo/redo store state
+ */
+export interface UndoState {
+  undoStack: readonly UndoOperation[];
+  redoStack: readonly UndoOperation[];
+  canUndo: boolean;
+  canRedo: boolean;
+}
+
+/**
+ * Undo/redo store with cross-tab synchronization
+ */
+export interface UndoStore extends BaseStore<UndoState> {
+  /** Rune-reactive undo stack (Svelte 5) */
+  readonly undoStack: readonly UndoOperation[];
+
+  /** Rune-reactive redo stack (Svelte 5) */
+  readonly redoStack: readonly UndoOperation[];
+
+  /** Rune-reactive canUndo flag (Svelte 5) */
+  readonly canUndo: boolean;
+
+  /** Rune-reactive canRedo flag (Svelte 5) */
+  readonly canRedo: boolean;
+
+  /** Undo the last operation */
+  undo(): UndoOperation | null;
+
+  /** Redo the last undone operation */
+  redo(): UndoOperation | null;
+
+  /** Add an operation to the undo stack */
+  add(operation: UndoOperation): void;
+
+  /** Clear all undo/redo history */
+  clear(): void;
+}
+
+/**
+ * Re-export core types
  */
 export type AwarenessState = CoreAwarenessState;
+export type Operation = UndoOperation;
 
 /**
  * Presence store combining self and others

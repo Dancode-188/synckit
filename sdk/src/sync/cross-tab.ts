@@ -1,0 +1,592 @@
+/**
+ * Cross-Tab Synchronization using BroadcastChannel
+ *
+ * Enables instant synchronization between browser tabs without server roundtrip.
+ * Uses BroadcastChannel API for same-origin tab communication.
+ */
+
+import type { CrossTabMessage, MessageHandler } from './message-types';
+
+/**
+ * Options for CrossTabSync configuration
+ */
+export interface CrossTabSyncOptions {
+  /**
+   * Whether to enable cross-tab sync immediately
+   * @default true
+   */
+  enabled?: boolean;
+
+  /**
+   * Custom channel name (for testing/debugging)
+   * @default `synckit-${documentId}`
+   */
+  channelName?: string;
+
+  /**
+   * Heartbeat interval in milliseconds
+   * @default 2000
+   */
+  heartbeatInterval?: number;
+
+  /**
+   * Timeout for leader heartbeat in milliseconds
+   * @default 5000
+   */
+  heartbeatTimeout?: number;
+}
+
+/**
+ * CrossTabSync manages communication between browser tabs using BroadcastChannel
+ */
+export class CrossTabSync {
+  private channel: BroadcastChannel;
+  private tabId: string;
+  private tabStartTime: number;
+  private messageSeq: number = 0;
+  private handlers = new Map<string, Set<MessageHandler>>();
+  private isEnabled: boolean;
+  private channelName: string;
+
+  // Leader election state
+  private isLeader: boolean = false;
+  private currentLeaderId: string | null = null;
+  private lastLeaderHeartbeat: number = 0;
+  private heartbeatInterval: number;
+  private heartbeatTimeout: number;
+  private heartbeatTimer: ReturnType<typeof setInterval> | null = null;
+  private leaderCheckTimer: ReturnType<typeof setInterval> | null = null;
+  private electionTimer: ReturnType<typeof setTimeout> | null = null;
+
+  /**
+   * Creates a new CrossTabSync instance
+   *
+   * @param documentId - Document ID to sync across tabs
+   * @param options - Configuration options
+   *
+   * @example
+   * ```typescript
+   * const crossTab = new CrossTabSync('doc-123');
+   * crossTab.on('update', (message) => {
+   *   console.log('Received update from another tab:', message);
+   * });
+   * ```
+   */
+  constructor(
+    private documentId: string,
+    options: CrossTabSyncOptions = {}
+  ) {
+    this.tabId = this.generateTabId();
+    this.tabStartTime = Date.now();
+    this.channelName = options.channelName || `synckit-${documentId}`;
+    this.isEnabled = options.enabled ?? true;
+    this.heartbeatInterval = options.heartbeatInterval ?? 2000;
+    this.heartbeatTimeout = options.heartbeatTimeout ?? 5000;
+
+    // Check BroadcastChannel support
+    if (typeof BroadcastChannel === 'undefined') {
+      throw new Error(
+        'BroadcastChannel not supported. Cross-tab sync requires a modern browser. ' +
+        'See: https://caniuse.com/broadcastchannel'
+      );
+    }
+
+    this.channel = new BroadcastChannel(this.channelName);
+
+    if (this.isEnabled) {
+      this.setupListeners();
+      this.announcePresence();
+      this.startElection();
+    }
+  }
+
+  /**
+   * Broadcast a message to all other tabs
+   *
+   * @param message - Message to broadcast (without `from` and `seq` fields)
+   *
+   * @example
+   * ```typescript
+   * crossTab.broadcast({
+   *   type: 'update',
+   *   documentId: 'doc-123',
+   *   data: { title: 'New Title' }
+   * });
+   * ```
+   */
+  broadcast(message: Omit<CrossTabMessage, 'from' | 'seq' | 'timestamp'>): void {
+    if (!this.isEnabled) {
+      return;
+    }
+
+    const fullMessage: CrossTabMessage = {
+      ...message,
+      from: this.tabId,
+      seq: this.messageSeq++,
+      timestamp: Date.now(),
+    } as CrossTabMessage;
+
+    try {
+      this.channel.postMessage(fullMessage);
+    } catch (error) {
+      console.error('Failed to broadcast message:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Register a message handler for a specific message type
+   *
+   * @param type - Message type to listen for
+   * @param handler - Handler function
+   *
+   * @example
+   * ```typescript
+   * crossTab.on('update', (message) => {
+   *   if (message.type === 'update') {
+   *     console.log('Update received:', message.data);
+   *   }
+   * });
+   * ```
+   */
+  on(type: string, handler: MessageHandler): void {
+    if (!this.handlers.has(type)) {
+      this.handlers.set(type, new Set());
+    }
+    this.handlers.get(type)!.add(handler);
+  }
+
+  /**
+   * Remove a message handler
+   *
+   * @param type - Message type
+   * @param handler - Handler function to remove
+   */
+  off(type: string, handler: MessageHandler): void {
+    const handlers = this.handlers.get(type);
+    if (handlers) {
+      handlers.delete(handler);
+      if (handlers.size === 0) {
+        this.handlers.delete(type);
+      }
+    }
+  }
+
+  /**
+   * Remove all handlers for a message type
+   *
+   * @param type - Message type
+   */
+  removeAllListeners(type: string): void {
+    this.handlers.delete(type);
+  }
+
+  /**
+   * Enable cross-tab sync if it was disabled
+   */
+  enable(): void {
+    if (this.isEnabled) return;
+
+    this.isEnabled = true;
+    this.setupListeners();
+    this.announcePresence();
+    this.startElection();
+  }
+
+  /**
+   * Disable cross-tab sync
+   */
+  disable(): void {
+    if (!this.isEnabled) return;
+
+    // Broadcast leaving message before disabling (ignore errors during cleanup)
+    try {
+      this.broadcast({ type: 'tab-leaving' } as Omit<CrossTabMessage, 'from' | 'seq' | 'timestamp'>);
+    } catch (error) {
+      // Ignore errors during cleanup (channel may already be closed)
+    }
+
+    this.stopLeaderElection();
+    this.isEnabled = false;
+
+    // Clear handlers
+    this.channel.onmessage = null;
+    this.channel.onmessageerror = null;
+  }
+
+  /**
+   * Get the current tab's ID
+   */
+  getTabId(): string {
+    return this.tabId;
+  }
+
+  /**
+   * Get the document ID
+   */
+  getDocumentId(): string {
+    return this.documentId;
+  }
+
+  /**
+   * Check if cross-tab sync is enabled
+   */
+  isActive(): boolean {
+    return this.isEnabled;
+  }
+
+  /**
+   * Check if this tab is the current leader
+   */
+  isCurrentLeader(): boolean {
+    return this.isLeader;
+  }
+
+  /**
+   * Get the current leader's tab ID
+   */
+  getLeaderId(): string | null {
+    return this.currentLeaderId;
+  }
+
+  /**
+   * Get this tab's start time (for election comparison)
+   */
+  getTabStartTime(): number {
+    return this.tabStartTime;
+  }
+
+  /**
+   * Cleanup resources
+   */
+  destroy(): void {
+    this.stopLeaderElection();
+    this.disable();
+    this.channel.close();
+    this.handlers.clear();
+  }
+
+  /**
+   * Setup BroadcastChannel message listeners
+   */
+  private setupListeners(): void {
+    this.channel.onmessage = (event: MessageEvent<CrossTabMessage>) => {
+      this.handleMessage(event.data);
+    };
+
+    this.channel.onmessageerror = (event: MessageEvent) => {
+      console.error('BroadcastChannel message error:', event);
+    };
+  }
+
+  /**
+   * Handle incoming message from BroadcastChannel
+   */
+  private handleMessage(message: CrossTabMessage): void {
+    // Ignore messages from self
+    if (message.from === this.tabId) {
+      return;
+    }
+
+    // Handle leader election messages
+    if (message.type === 'election') {
+      this.handleElectionMessage(message);
+    } else if (message.type === 'heartbeat') {
+      this.handleHeartbeatMessage(message);
+    }
+
+    // Dispatch to registered handlers
+    const handlers = this.handlers.get(message.type);
+    if (handlers) {
+      handlers.forEach(handler => {
+        try {
+          handler(message);
+        } catch (error) {
+          console.error(`Error in message handler for type "${message.type}":`, error);
+        }
+      });
+    }
+
+    // Dispatch to wildcard handlers (*)
+    const wildcardHandlers = this.handlers.get('*');
+    if (wildcardHandlers) {
+      wildcardHandlers.forEach(handler => {
+        try {
+          handler(message);
+        } catch (error) {
+          console.error('Error in wildcard message handler:', error);
+        }
+      });
+    }
+  }
+
+  /**
+   * Announce this tab's presence to other tabs
+   */
+  private announcePresence(): void {
+    this.broadcast({
+      type: 'tab-joined',
+    } as Omit<CrossTabMessage, 'from' | 'seq' | 'timestamp'>);
+  }
+
+  /**
+   * Generate a unique tab ID
+   */
+  private generateTabId(): string {
+    // Use crypto.randomUUID if available (modern browsers)
+    if (typeof crypto !== 'undefined' && crypto.randomUUID) {
+      return crypto.randomUUID();
+    }
+
+    // Fallback to timestamp + random
+    return `tab-${Date.now()}-${Math.random().toString(36).substring(2, 11)}`;
+  }
+
+  /**
+   * Start leader election process
+   */
+  private startElection(): void {
+    // Optimistically set ourselves as potential leader
+    this.currentLeaderId = this.tabId;
+
+    // Start checking for leader liveness
+    this.leaderCheckTimer = setInterval(() => {
+      this.checkLeaderLiveness();
+    }, 1000);
+
+    // Create election timer BEFORE broadcasting so responses can cancel it
+    this.electionTimer = setTimeout(() => {
+      this.electionTimer = null;
+      if (this.currentLeaderId === this.tabId && !this.isLeader) {
+        this.becomeLeader();
+      }
+    }, 100);
+
+    // Broadcast election message with tab start time
+    // (must be after timer creation so responses can cancel it)
+    this.broadcast({
+      type: 'election',
+      tabId: this.tabId,
+      tabStartTime: this.tabStartTime,
+    } as any);
+  }
+
+  /**
+   * Stop leader election timers
+   */
+  private stopLeaderElection(): void {
+    if (this.heartbeatTimer) {
+      clearInterval(this.heartbeatTimer);
+      this.heartbeatTimer = null;
+    }
+
+    if (this.leaderCheckTimer) {
+      clearInterval(this.leaderCheckTimer);
+      this.leaderCheckTimer = null;
+    }
+
+    if (this.electionTimer) {
+      clearTimeout(this.electionTimer);
+      this.electionTimer = null;
+    }
+
+    this.isLeader = false;
+    this.currentLeaderId = null;
+  }
+
+  /**
+   * Handle election message from another tab
+   */
+  private handleElectionMessage(message: CrossTabMessage): void {
+    if (message.type !== 'election') return;
+
+    const electionMessage = message as any;
+    const otherTabStartTime = electionMessage.tabStartTime;
+    const otherTabId = electionMessage.tabId;
+
+    // If the other tab is older (started earlier), it should be leader
+    if (otherTabStartTime < this.tabStartTime) {
+      // The other tab is older, so it should be leader
+      if (this.isLeader) {
+        // We were leader, but an older tab exists - step down
+        this.stepDownAsLeader();
+      }
+
+      // Cancel our pending election timer since we found an older tab
+      if (this.electionTimer) {
+        clearTimeout(this.electionTimer);
+        this.electionTimer = null;
+      }
+
+      this.currentLeaderId = otherTabId;
+      this.lastLeaderHeartbeat = Date.now();
+    } else if (otherTabStartTime > this.tabStartTime) {
+      // We're older than the other tab
+      // If we're already leader or should be, respond with our election message
+      if (this.isLeader || this.currentLeaderId === null || this.currentLeaderId === this.tabId) {
+        // Respond so the new tab knows about us
+        this.broadcast({
+          type: 'election',
+          tabId: this.tabId,
+          tabStartTime: this.tabStartTime,
+        } as any);
+
+        // Claim leadership if not already leader
+        if (!this.isLeader) {
+          this.becomeLeader();
+        }
+      }
+    } else if (otherTabStartTime === this.tabStartTime) {
+      // Same start time (very rare), use tab ID as tiebreaker
+      if (otherTabId < this.tabId) {
+        this.currentLeaderId = otherTabId;
+        this.lastLeaderHeartbeat = Date.now();
+
+        if (this.isLeader) {
+          this.stepDownAsLeader();
+        }
+      } else if (!this.isLeader) {
+        // Respond with our election message
+        this.broadcast({
+          type: 'election',
+          tabId: this.tabId,
+          tabStartTime: this.tabStartTime,
+        } as any);
+        this.becomeLeader();
+      }
+    }
+  }
+
+  /**
+   * Handle heartbeat message from leader
+   */
+  private handleHeartbeatMessage(message: CrossTabMessage): void {
+    if (message.type !== 'heartbeat') return;
+
+    const heartbeatMessage = message as any;
+    const senderTabId = heartbeatMessage.tabId;
+
+    // Update last heartbeat time if it's from the current leader
+    if (senderTabId === this.currentLeaderId) {
+      this.lastLeaderHeartbeat = Date.now();
+    }
+  }
+
+  /**
+   * Become the leader
+   */
+  private becomeLeader(): void {
+    if (this.isLeader) return;
+
+    this.isLeader = true;
+    this.currentLeaderId = this.tabId;
+    this.lastLeaderHeartbeat = Date.now();
+
+    // Start sending heartbeats
+    this.heartbeatTimer = setInterval(() => {
+      this.sendHeartbeat();
+    }, this.heartbeatInterval);
+
+    // Notify handlers that this tab became leader
+    const handlers = this.handlers.get('leader-elected');
+    if (handlers) {
+      handlers.forEach(handler => {
+        try {
+          handler({
+            type: 'leader-elected',
+            from: this.tabId,
+            seq: this.messageSeq,
+            timestamp: Date.now(),
+            tabId: this.tabId,
+          } as any);
+        } catch (error) {
+          console.error('Error in leader-elected handler:', error);
+        }
+      });
+    }
+  }
+
+  /**
+   * Step down as leader
+   */
+  private stepDownAsLeader(): void {
+    this.isLeader = false;
+
+    if (this.heartbeatTimer) {
+      clearInterval(this.heartbeatTimer);
+      this.heartbeatTimer = null;
+    }
+  }
+
+  /**
+   * Send heartbeat message
+   */
+  private sendHeartbeat(): void {
+    if (!this.isLeader) return;
+
+    this.broadcast({
+      type: 'heartbeat',
+      tabId: this.tabId,
+      tabStartTime: this.tabStartTime,
+    } as any);
+  }
+
+  /**
+   * Check if leader is still alive
+   */
+  private checkLeaderLiveness(): void {
+    // If we're the leader, nothing to check
+    if (this.isLeader) return;
+
+    // If we think we should be leader but aren't yet, try to become leader
+    if (this.currentLeaderId === this.tabId && !this.isLeader) {
+      this.becomeLeader();
+      return;
+    }
+
+    // If no leader has been elected yet, try to become leader
+    if (this.currentLeaderId === null) {
+      this.becomeLeader();
+      return;
+    }
+
+    // Don't check heartbeat if we're the current leader (not yet actually leader)
+    if (this.currentLeaderId === this.tabId) {
+      return;
+    }
+
+    // Check if we've received a heartbeat recently
+    const now = Date.now();
+    const timeSinceLastHeartbeat = now - this.lastLeaderHeartbeat;
+
+    if (timeSinceLastHeartbeat > this.heartbeatTimeout) {
+      // Leader appears to be dead, start new election
+      this.currentLeaderId = null;
+      this.startElection();
+    }
+  }
+}
+
+/**
+ * Helper function to enable cross-tab sync with minimal configuration
+ *
+ * @param documentId - Document ID to sync
+ * @param options - Configuration options
+ * @returns CrossTabSync instance
+ *
+ * @example
+ * ```typescript
+ * const crossTab = enableCrossTabSync('doc-123');
+ *
+ * // Listen for updates
+ * crossTab.on('update', (message) => {
+ *   console.log('Update from another tab:', message);
+ * });
+ * ```
+ */
+export function enableCrossTabSync(
+  documentId: string,
+  options?: CrossTabSyncOptions
+): CrossTabSync {
+  return new CrossTabSync(documentId, options);
+}
