@@ -71,6 +71,7 @@ describe('UndoManager', () => {
       const manager1 = new UndoManager({
         documentId: 'doc-load-test',
         crossTabSync,
+        mergeWindow: 0, // Disable merging for this test
       });
       await manager1.init();
 
@@ -113,6 +114,7 @@ describe('UndoManager', () => {
       undoManager = new UndoManager({
         documentId: docId,
         crossTabSync,
+        mergeWindow: 0, // Disable merging for these tests
       });
       await undoManager.init();
     });
@@ -164,6 +166,7 @@ describe('UndoManager', () => {
         documentId: 'doc-small',
         crossTabSync,
         maxUndoSize: 3,
+        mergeWindow: 0, // Disable merging for this test
       });
       await smallManager.init();
 
@@ -193,6 +196,7 @@ describe('UndoManager', () => {
       undoManager = new UndoManager({
         documentId: docId,
         crossTabSync,
+        mergeWindow: 0, // Disable merging for these tests
       });
       await undoManager.init();
     });
@@ -248,6 +252,7 @@ describe('UndoManager', () => {
       undoManager = new UndoManager({
         documentId: docId,
         crossTabSync,
+        mergeWindow: 0, // Disable merging for these tests
       });
       await undoManager.init();
     });
@@ -306,6 +311,7 @@ describe('UndoManager', () => {
       undoManager = new UndoManager({
         documentId: docId,
         crossTabSync,
+        mergeWindow: 0, // Disable merging for these tests
       });
       await undoManager.init();
     });

@@ -9,7 +9,18 @@ export interface Operation {
   data?: any;
   timestamp?: number;
   userId?: string;
+  mergeWindow?: number; // Time window in ms for merging operations
 }
+
+/**
+ * Function to determine if two operations can be merged
+ */
+export type CanMergeFn = (prev: Operation, next: Operation) => boolean;
+
+/**
+ * Function to merge two operations
+ */
+export type MergeFn = (prev: Operation, next: Operation) => Operation;
 
 /**
  * Configuration options for UndoManager
@@ -18,6 +29,9 @@ export interface UndoManagerOptions {
   documentId: string;
   crossTabSync: CrossTabSync;
   maxUndoSize?: number;
+  mergeWindow?: number; // Default merge window in ms (default: 1000ms)
+  canMerge?: CanMergeFn;
+  merge?: MergeFn;
   onStateChanged?: (state: UndoManagerState) => void;
 }
 
@@ -38,11 +52,17 @@ export class UndoManager {
   private undoStack: Operation[] = [];
   private redoStack: Operation[] = [];
   private maxUndoSize: number;
+  private mergeWindow: number;
+  private canMergeFn: CanMergeFn;
+  private mergeFn: MergeFn;
   private storageCoordinator: StorageCoordinator;
   private onStateChanged?: (state: UndoManagerState) => void;
 
   constructor(options: UndoManagerOptions) {
     this.maxUndoSize = options.maxUndoSize ?? 100;
+    this.mergeWindow = options.mergeWindow ?? 1000; // 1 second default
+    this.canMergeFn = options.canMerge ?? this.defaultCanMerge.bind(this);
+    this.mergeFn = options.merge ?? this.defaultMerge.bind(this);
     this.onStateChanged = options.onStateChanged;
 
     // Initialize storage coordinator
@@ -81,9 +101,27 @@ export class UndoManager {
       data: operation.data,
       timestamp: operation.timestamp ?? Date.now(),
       userId: operation.userId,
+      mergeWindow: operation.mergeWindow,
     };
 
-    // Add to undo stack
+    // Try to merge with the last operation if possible
+    if (this.undoStack.length > 0) {
+      const lastOp = this.undoStack[this.undoStack.length - 1]!;
+
+      if (this.canMergeFn(lastOp, op)) {
+        // Replace last operation with merged version
+        const merged = this.mergeFn(lastOp, op);
+        this.undoStack[this.undoStack.length - 1] = merged;
+
+        // Clear redo stack and notify
+        this.redoStack = [];
+        this.saveState();
+        this.notifyStateChanged();
+        return;
+      }
+    }
+
+    // Add to undo stack if not merged
     this.undoStack.push(op);
 
     // Clear redo stack when new operation is added
@@ -178,6 +216,59 @@ export class UndoManager {
    */
   destroy(): void {
     this.storageCoordinator.destroy();
+  }
+
+  /**
+   * Default merge strategy: can merge if same type, same user, within time window
+   */
+  private defaultCanMerge(prev: Operation, next: Operation): boolean {
+    // Must be same type
+    if (prev.type !== next.type) {
+      return false;
+    }
+
+    // Must be same user (or both undefined)
+    if (prev.userId !== next.userId) {
+      return false;
+    }
+
+    // Check time window
+    const mergeWindow = next.mergeWindow ?? prev.mergeWindow ?? this.mergeWindow;
+    const timeDiff = (next.timestamp ?? 0) - (prev.timestamp ?? 0);
+
+    return timeDiff > 0 && timeDiff <= mergeWindow;
+  }
+
+  /**
+   * Default merge implementation: combines data arrays or replaces single values
+   */
+  private defaultMerge(prev: Operation, next: Operation): Operation {
+    let mergedData = next.data;
+
+    // If both have array data, concatenate them
+    if (Array.isArray(prev.data) && Array.isArray(next.data)) {
+      mergedData = [...prev.data, ...next.data];
+    }
+    // If both have string data, concatenate them
+    else if (typeof prev.data === 'string' && typeof next.data === 'string') {
+      mergedData = prev.data + next.data;
+    }
+    // If both have number data, sum them
+    else if (typeof prev.data === 'number' && typeof next.data === 'number') {
+      mergedData = prev.data + next.data;
+    }
+    // Otherwise use the latest data
+    else {
+      mergedData = next.data;
+    }
+
+    return {
+      type: prev.type,
+      data: mergedData,
+      timestamp: prev.timestamp, // Keep original timestamp
+      userId: prev.userId,
+      mergeWindow: prev.mergeWindow,
+    };
   }
 
   /**
