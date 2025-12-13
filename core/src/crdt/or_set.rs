@@ -31,7 +31,12 @@
 use crate::ClientID;
 use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet};
+
+#[cfg(not(target_arch = "wasm32"))]
 use std::time::{SystemTime, UNIX_EPOCH};
+
+#[cfg(target_arch = "wasm32")]
+use js_sys::Date;
 
 /// Unique identifier for an element in the set
 ///
@@ -95,10 +100,14 @@ where
     ///
     /// Creates a unique tag for this add operation.
     pub fn add(&mut self, element: T) {
+        #[cfg(not(target_arch = "wasm32"))]
         let timestamp = SystemTime::now()
             .duration_since(UNIX_EPOCH)
             .unwrap()
             .as_micros() as u64;
+
+        #[cfg(target_arch = "wasm32")]
+        let timestamp = (Date::now() * 1000.0) as u64; // Convert ms to microseconds
 
         self.sequence += 1;
         let tag = UniqueTag::new(self.replica_id.clone(), timestamp, self.sequence);
