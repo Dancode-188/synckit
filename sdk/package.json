@@ -40,6 +40,8 @@
     "dev": "tsup src/index.ts src/index-lite.ts src/adapters/react.tsx src/adapters/vue/index.ts src/adapters/svelte/index.ts --format cjs,esm --dts --watch",
     "test": "vitest",
     "test:ui": "vitest --ui",
+    "test:chaos": "playwright test",
+    "test:chaos:ui": "playwright test --ui",
     "lint": "tsc --noEmit",
     "prepublishOnly": "npm run build"
   },
@@ -90,6 +92,7 @@
     }
   },
   "devDependencies": {
+    "@playwright/test": "^1.57.0",
     "@testing-library/vue": "^8.1.0",
     "@types/node": "^20.10.0",
     "@types/react": "^18.2.0",
