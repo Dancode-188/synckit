@@ -115,3 +115,9 @@ tests/node_modules/
 # Temporary test files at root (use proper test directories instead)
 test-*.mjs
 test-*.js
+
+# Development test files
+sdk/wasm/*/server.js
+sdk/wasm/*/test.html
+sdk/wasm/*/test.js
+sdk/wasm/*/test.mjs
