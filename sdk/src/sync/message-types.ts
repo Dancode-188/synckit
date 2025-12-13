@@ -37,6 +37,7 @@ export interface HeartbeatMessage extends BaseMessage {
   type: 'heartbeat';
   tabId: string;
   tabStartTime: number;
+  stateHash?: string | null;
 }
 
 /**
@@ -73,6 +74,28 @@ export interface TabLeavingMessage extends BaseMessage {
 }
 
 /**
+ * Request full state sync from leader
+ */
+export interface RequestFullSyncMessage extends BaseMessage {
+  type: 'request-full-sync';
+  requesterId: string;
+  targetLeaderId: string;
+}
+
+/**
+ * Full state sync response from leader
+ */
+export interface FullSyncResponseMessage extends BaseMessage {
+  type: 'full-sync-response';
+  requesterId: string;
+  state: {
+    undoStack: any[];
+    redoStack: any[];
+    documentState?: any;
+  };
+}
+
+/**
  * Union type of all possible cross-tab messages
  */
 export type CrossTabMessage =
@@ -82,7 +105,9 @@ export type CrossTabMessage =
   | WriteRequestMessage
   | WriteAckMessage
   | TabJoinedMessage
-  | TabLeavingMessage;
+  | TabLeavingMessage
+  | RequestFullSyncMessage
+  | FullSyncResponseMessage;
 
 /**
  * Message handler function type
