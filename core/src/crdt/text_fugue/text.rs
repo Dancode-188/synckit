@@ -783,7 +783,7 @@ impl FugueText {
                 if grapheme_pos == block_start {
                     // Insert right before this block
                     right_origin = Some(id.clone()); // First character of this block
-                    // Find left_origin (last character of previous block)
+                                                     // Find left_origin (last character of previous block)
                     if idx > 0 {
                         let prev_id = &self.cached_blocks[idx - 1];
                         let prev_block = &self.blocks[prev_id];
@@ -987,23 +987,26 @@ impl FugueText {
 
         for (id, block) in sorted_blocks {
             // Map character-level NodeIds to their containing blocks
-            let left_block = block.left_origin.as_ref()
+            let left_block = block
+                .left_origin
+                .as_ref()
                 .and_then(|node_id| self.find_block_for_nodeid(node_id));
-            let right_block = block.right_origin.as_ref()
+            let right_block = block
+                .right_origin
+                .as_ref()
                 .and_then(|node_id| self.find_block_for_nodeid(node_id));
 
-            let (parent, side) = self.determine_parent_and_side(
-                &left_block,
-                &right_block,
-                &tree,
+            let (parent, side) = self.determine_parent_and_side(&left_block, &right_block, &tree);
+
+            tree.insert(
+                id.clone(),
+                TreeNode {
+                    id: id.clone(),
+                    parent,
+                    side,
+                    deleted: block.is_deleted(),
+                },
             );
-
-            tree.insert(id.clone(), TreeNode {
-                id: id.clone(),
-                parent,
-                side,
-                deleted: block.is_deleted(),
-            });
         }
 
         tree
@@ -1127,14 +1130,13 @@ impl FugueText {
         let mut left_children: Vec<NodeId> = tree
             .values()
             .filter(|n| {
-                n.parent.as_ref() == Some(node_id) &&
-                n.side == Side::Left
+                n.parent.as_ref() == Some(node_id) && n.side == Side::Left
                 // Don't filter by deleted here - deleted nodes can have children!
             })
             .map(|n| n.id.clone())
             .collect();
 
-        left_children.sort();  // Deterministic ordering by causal dot (NodeId)
+        left_children.sort(); // Deterministic ordering by causal dot (NodeId)
 
         for child_id in left_children {
             self.in_order_visit(&child_id, tree, result);
@@ -1150,14 +1152,13 @@ impl FugueText {
         let mut right_children: Vec<NodeId> = tree
             .values()
             .filter(|n| {
-                n.parent.as_ref() == Some(node_id) &&
-                n.side == Side::Right
+                n.parent.as_ref() == Some(node_id) && n.side == Side::Right
                 // Don't filter by deleted here - deleted nodes can have children!
             })
             .map(|n| n.id.clone())
             .collect();
 
-        right_children.sort();  // Deterministic ordering by causal dot (NodeId)
+        right_children.sort(); // Deterministic ordering by causal dot (NodeId)
 
         for child_id in right_children {
             self.in_order_visit(&child_id, tree, result);
@@ -1854,8 +1855,11 @@ mod fugue_tree_tests {
 
         // Expected: "The very quick brown fox"
         let result = text.to_string();
-        assert_eq!(result, "The very quick brown fox",
-            "Expected 'The very quick brown fox', got '{}'", result);
+        assert_eq!(
+            result, "The very quick brown fox",
+            "Expected 'The very quick brown fox', got '{}'",
+            result
+        );
     }
 
     #[test]
@@ -1892,13 +1896,20 @@ mod fugue_tree_tests {
         // Try to get NodeId at position 0
         let node_id = text.get_node_id_at_position(0);
         println!("NodeId at position 0: {:?}", node_id);
-        assert!(node_id.is_ok(), "Should be able to get NodeId at position 0");
+        assert!(
+            node_id.is_ok(),
+            "Should be able to get NodeId at position 0"
+        );
 
         // Try all positions
         for i in 0..text.len() {
             let node_id = text.get_node_id_at_position(i);
             println!("NodeId at position {}: {:?}", i, node_id);
-            assert!(node_id.is_ok(), "Should be able to get NodeId at position {}", i);
+            assert!(
+                node_id.is_ok(),
+                "Should be able to get NodeId at position {}",
+                i
+            );
         }
     }
 }
