@@ -1487,6 +1487,7 @@ impl FugueText {
     /// # Arguments
     /// * `delete_pos` - Grapheme position where text was deleted
     /// * `delete_len` - Number of graphemes deleted
+    #[allow(dead_code)]
     fn update_cache_after_delete(&mut self, delete_pos: usize, _delete_len: usize) {
         if !self.cache_valid {
             // Cache is already invalid, will rebuild on next find_origins
