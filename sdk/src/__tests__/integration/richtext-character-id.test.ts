@@ -72,18 +72,10 @@ describe('RichText - Character ID Stability', () => {
     expect(ranges[1]?.attributes).toEqual({ bold: true })
   })
 
-  it.skip('should maintain format when text is deleted before formatted range', async () => {
-    // KNOWN LIMITATION: Partial block deletion not yet supported
-    // This test requires block splitting when deleting part of a block.
-    // Currently, the entire block is marked as deleted, causing position
-    // tracking to fail. This will be fixed in a future PR with proper
-    // block splitting implementation.
-    //
-    // Original test:
-    // - Insert "Hello Beautiful World" (creates single block)
-    // - Delete "Beautiful " (positions 6-16)
-    // - Expected: "Hello World" remains with format preserved
-    // - Actual: Entire block marked deleted, position cache becomes empty
+  it('should maintain format when text is deleted before formatted range', async () => {
+    // Block splitting is now implemented with per-character clock allocation!
+    // This test verifies that format spans remain attached to the correct
+    // characters even when text is partially deleted.
 
     // Insert "Hello Beautiful World"
     await richText.insert(0, 'Hello Beautiful World')
@@ -145,8 +137,9 @@ describe('RichText - Character ID Stability', () => {
     expect(italicRange?.text).toBe('brown')
   })
 
-  it('should use NodeIds with correct offset for characters within same block', async () => {
+  it('should use NodeIds with clock values for characters (per-character allocation)', async () => {
     // Insert "Hello" in one operation (single block with RLE)
+    // With per-character clocks, "Hello" allocates clocks [1, 2, 3, 4, 5]
     await richText.insert(0, 'Hello')
 
     // Format first 'l' (position 2) as bold
@@ -168,21 +161,21 @@ describe('RichText - Character ID Stability', () => {
       throw new Error('NodeId format did not match expected pattern')
     }
 
-    // Both should reference the same block (same client_id and clock)
+    // With per-character clocks, position 2 ('l') has clock 3, offset 0
     expect(startMatch[1]).toBe('client1') // client_id
-    expect(startMatch[2]).toBe('1')       // clock
-    expect(startMatch[3]).toBe('2')       // offset (position 2 in block)
+    expect(startMatch[2]).toBe('3')       // clock (third character has clock 3)
+    expect(startMatch[3]).toBe('0')       // offset (always 0 with per-character clocks)
 
     expect(endMatch[1]).toBe('client1')
-    expect(endMatch[2]).toBe('1')
-    expect(endMatch[3]).toBe('2')         // offset (position 2, end is inclusive)
+    expect(endMatch[2]).toBe('3')         // clock (same character)
+    expect(endMatch[3]).toBe('0')         // offset (always 0)
   })
 
   it('should handle format spans across multiple blocks', async () => {
-    // Insert "Hello" (block 1, clock 1)
+    // Insert "Hello" (allocates clocks 1-5)
     await richText.insert(0, 'Hello')
 
-    // Insert " World" (block 2, clock 2)
+    // Insert " World" (allocates clocks 6-11)
     await richText.insert(5, ' World')
 
     // Format "o W" (spans across both blocks, positions 4-7)
@@ -204,12 +197,13 @@ describe('RichText - Character ID Stability', () => {
       throw new Error('NodeId format did not match expected pattern')
     }
 
-    // Start should be in block 1 (clock 1, offset 4)
-    expect(startMatch[2]).toBe('1') // clock 1
-    expect(startMatch[3]).toBe('4') // offset 4 ('o' in "Hello")
+    // With per-character clocks:
+    // "Hello" = clocks [1,2,3,4,5], position 4 ('o') = clock 5
+    expect(startMatch[2]).toBe('5') // clock 5 (fifth character of "Hello")
+    expect(startMatch[3]).toBe('0') // offset 0
 
-    // End should be in block 2 (clock 2, offset 1)
-    expect(endMatch[2]).toBe('2')   // clock 2
-    expect(endMatch[3]).toBe('1')   // offset 1 ('W' in " World")
+    // " World" = clocks [6,7,8,9,10,11], position 7 ('W') = clock 7
+    expect(endMatch[2]).toBe('7')   // clock 7 (second character of " World")
+    expect(endMatch[3]).toBe('0')   // offset 0
   })
 })
