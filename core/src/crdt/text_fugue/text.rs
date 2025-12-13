@@ -811,11 +811,7 @@ impl FugueText {
                 let char_clock = block_start_clock + offset_in_block as u64;
 
                 // Create NodeId with clock value (offset=0!)
-                Ok(NodeId::new(
-                    block_id.client_id.clone(),
-                    char_clock,
-                    0,
-                ))
+                Ok(NodeId::new(block_id.client_id.clone(), char_clock, 0))
             }
             Err(_) => {
                 // Should never happen if cache is valid and position is in bounds
@@ -1021,7 +1017,8 @@ impl FugueText {
                     if idx > 0 {
                         let prev_id = &self.cached_blocks[idx - 1];
                         // Last character has the block's clock value (blocks store LAST clock)
-                        left_origin = Some(NodeId::new(prev_id.client_id.clone(), prev_id.clock, 0));
+                        left_origin =
+                            Some(NodeId::new(prev_id.client_id.clone(), prev_id.clock, 0));
                     }
                 } else if grapheme_pos == block_end {
                     // Insert right after this block
@@ -1034,7 +1031,8 @@ impl FugueText {
                         let next_block = &self.blocks[next_id];
                         let next_block_len = next_block.len() as u64;
                         let next_start_clock = next_id.clock.saturating_sub(next_block_len - 1);
-                        right_origin = Some(NodeId::new(next_id.client_id.clone(), next_start_clock, 0));
+                        right_origin =
+                            Some(NodeId::new(next_id.client_id.clone(), next_start_clock, 0));
                     }
                 } else {
                     // Insert INSIDE this block
@@ -1060,7 +1058,11 @@ impl FugueText {
                     let first_block = &self.blocks[first_id];
                     let first_block_len = first_block.len() as u64;
                     let first_start_clock = first_id.clock.saturating_sub(first_block_len - 1);
-                    right_origin = Some(NodeId::new(first_id.client_id.clone(), first_start_clock, 0));
+                    right_origin = Some(NodeId::new(
+                        first_id.client_id.clone(),
+                        first_start_clock,
+                        0,
+                    ));
                 } else if idx >= self.cached_blocks.len() {
                     // Insert at very end - point to last character of last block
                     let last_id = &self.cached_blocks[self.cached_blocks.len() - 1];
@@ -1077,7 +1079,11 @@ impl FugueText {
                     let right_block = &self.blocks[right_id];
                     let right_block_len = right_block.len() as u64;
                     let right_start_clock = right_id.clock.saturating_sub(right_block_len - 1);
-                    right_origin = Some(NodeId::new(right_id.client_id.clone(), right_start_clock, 0));
+                    right_origin = Some(NodeId::new(
+                        right_id.client_id.clone(),
+                        right_start_clock,
+                        0,
+                    ));
                 }
             }
         }
