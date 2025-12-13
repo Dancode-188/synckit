@@ -73,8 +73,18 @@ describe('RichText - Character ID Stability', () => {
   })
 
   it.skip('should maintain format when text is deleted before formatted range', async () => {
-    // TODO: Fix Fugue CRDT cache issue - "Position 0 out of bounds (length: 11)"
-    // This appears to be a pre-existing bug in the Fugue CRDT cache management after deletions
+    // KNOWN LIMITATION: Partial block deletion not yet supported
+    // This test requires block splitting when deleting part of a block.
+    // Currently, the entire block is marked as deleted, causing position
+    // tracking to fail. This will be fixed in a future PR with proper
+    // block splitting implementation.
+    //
+    // Original test:
+    // - Insert "Hello Beautiful World" (creates single block)
+    // - Delete "Beautiful " (positions 6-16)
+    // - Expected: "Hello World" remains with format preserved
+    // - Actual: Entire block marked deleted, position cache becomes empty
+
     // Insert "Hello Beautiful World"
     await richText.insert(0, 'Hello Beautiful World')
 
@@ -98,10 +108,8 @@ describe('RichText - Character ID Stability', () => {
     expect(ranges[1]?.attributes).toEqual({ italic: true })
   })
 
-  it.skip('should handle multiple format spans with stable NodeIds', async () => {
-    // TODO: Fix Fugue CRDT insertion bug - text corruption when inserting in middle
-    // Expected: "The very quick brown fox" but got "The  veryquick brown fox"
-    // This appears to be a pre-existing bug in the Fugue CRDT text insertion logic
+  it('should handle multiple format spans with stable NodeIds', async () => {
+    // DEBUG: Investigating insertion corruption
     // Insert "The quick brown fox"
     await richText.insert(0, 'The quick brown fox')
 
@@ -111,8 +119,8 @@ describe('RichText - Character ID Stability', () => {
     // Format "brown" as italic (positions 10-15)
     await richText.format(10, 15, { italic: true })
 
-    // Insert " very" before "quick" (at position 4)
-    await richText.insert(4, ' very')
+    // Insert "very " before "quick" (at position 4)
+    await richText.insert(4, 'very ')
 
     // Text should now be "The very quick brown fox"
     expect(richText.get()).toBe('The very quick brown fox')
@@ -121,9 +129,9 @@ describe('RichText - Character ID Stability', () => {
     const ranges = richText.getRanges()
 
     // Verify format preservation:
-    // - "The" (unformatted)
-    // - " very" (unformatted)
-    // - " quick" (bold)
+    // - "The " (unformatted)
+    // - "very " (unformatted)
+    // - "quick" (bold)
     // - " " (unformatted)
     // - "brown" (italic)
     // - " fox" (unformatted)
@@ -132,7 +140,7 @@ describe('RichText - Character ID Stability', () => {
     const italicRange = ranges.find(r => r.attributes.italic === true)
 
     expect(boldRange).toBeDefined()
-    expect(boldRange?.text).toBe(' quick')
+    expect(boldRange?.text).toBe('quick')
     expect(italicRange).toBeDefined()
     expect(italicRange?.text).toBe('brown')
   })
