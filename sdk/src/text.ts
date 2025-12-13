@@ -104,9 +104,20 @@ export class SyncText implements SyncableDocument {
       if (stored && this.isTextStorageData(stored)) {
         if (stored.crdt && this.wasmText) {
           // Restore from serialized CRDT state
-          const restoredText = (wasm as any).WasmFugueText.fromJSON(stored.crdt)
-          this.wasmText.free()
-          this.wasmText = restoredText
+          let restoredText = null
+          try {
+            restoredText = (wasm as any).WasmFugueText.fromJSON(stored.crdt)
+            // Only free and replace if restoration succeeded
+            this.wasmText.free()
+            this.wasmText = restoredText
+            restoredText = null // Prevent cleanup in finally block
+          } catch (error) {
+            // If restoration failed, clean up the restored text if it was created
+            if (restoredText) {
+              restoredText.free()
+            }
+            throw error
+          }
         } else if (stored.content && this.wasmText) {
           // Fallback: insert content (for backward compatibility)
           this.wasmText.insert(0, stored.content)
@@ -369,10 +380,26 @@ export class SyncText implements SyncableDocument {
     }
 
     const wasm = await initWASM()
-    this.wasmText = (wasm as any).WasmFugueText.fromJSON(json)
-    this.updateLocalState()
-    await this.persist()
-    this.notifySubscribers()
+    let newText = null
+
+    try {
+      newText = (wasm as any).WasmFugueText.fromJSON(json)
+
+      // Free old WASM object before replacing
+      this.wasmText.free()
+      this.wasmText = newText
+      newText = null // Prevent cleanup in finally block
+
+      this.updateLocalState()
+      await this.persist()
+      this.notifySubscribers()
+    } catch (error) {
+      // If loading failed, clean up the new text if it was created
+      if (newText) {
+        newText.free()
+      }
+      throw error
+    }
   }
 
   /**
