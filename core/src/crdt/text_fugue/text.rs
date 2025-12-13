@@ -87,6 +87,35 @@ impl LamportClock {
         self.value
     }
 
+    /// Tick by N values (for per-character clock allocation)
+    ///
+    /// This method increments the clock by N values instead of 1, enabling
+    /// per-character clock allocation for RLE blocks. Each character in a block
+    /// gets its own unique clock value.
+    ///
+    /// # Arguments
+    ///
+    /// * `count` - Number of clock values to allocate
+    ///
+    /// # Returns
+    ///
+    /// The new clock value after incrementing by count
+    ///
+    /// # Example
+    ///
+    /// ```rust
+    /// use synckit_core::crdt::text_fugue::LamportClock;
+    ///
+    /// let mut clock = LamportClock::new();
+    /// let ts = clock.tick_by(5);  // Allocate 5 clock values
+    /// assert_eq!(ts, 5);
+    /// assert_eq!(clock.value(), 5);
+    /// ```
+    pub fn tick_by(&mut self, count: usize) -> u64 {
+        self.value += count as u64;
+        self.value
+    }
+
     /// Update clock from remote timestamp (for merge operations)
     ///
     /// Sets clock to max(local, remote) to maintain causality
@@ -120,6 +149,14 @@ pub enum TextError {
     /// Insert position is inside an existing block (requires splitting)
     BlockSplitRequired,
 
+    /// Invalid block split parameters
+    InvalidBlockSplit {
+        block_id: NodeId,
+        offset_start: usize,
+        offset_end: usize,
+        block_len: usize,
+    },
+
     /// Rope operation failed
     RopeError(String),
 }
@@ -146,6 +183,18 @@ impl std::fmt::Display for TextError {
             }
             TextError::BlockSplitRequired => {
                 write!(f, "Block splitting not implemented in Phase 1")
+            }
+            TextError::InvalidBlockSplit {
+                block_id,
+                offset_start,
+                offset_end,
+                block_len,
+            } => {
+                write!(
+                    f,
+                    "Invalid block split: block {} (length {}) cannot be split at {}..{}",
+                    block_id, block_len, offset_start, offset_end
+                )
             }
             TextError::RopeError(msg) => {
                 write!(f, "Rope error: {}", msg)
@@ -401,25 +450,33 @@ impl FugueText {
         // 2. Find CRDT origins (Phase 1.5: O(log n) with cache!)
         let (left_origin, right_origin) = self.find_origins(position)?;
 
-        // 3. Generate timestamp and NodeId
-        let timestamp = self.clock.tick();
+        // 3. Calculate grapheme length for per-character clock allocation
+        #[cfg(feature = "text-crdt")]
+        let char_count = text.graphemes(true).count();
+        #[cfg(not(feature = "text-crdt"))]
+        let char_count = text.chars().count();
+
+        // 4. Generate timestamp range and NodeId (one clock value per character!)
+        // This allocates clock values [timestamp - char_count + 1, timestamp]
+        // Example: "Hello" with 5 chars allocates clocks [1, 2, 3, 4, 5]
+        let timestamp = self.clock.tick_by(char_count);
         let id = NodeId::new(self.client_id.clone(), timestamp, 0);
 
-        // 4. Calculate grapheme length for cache update
+        // 5. Cache the insert length for later use
         #[cfg(feature = "text-crdt")]
-        let insert_len = text.graphemes(true).count();
+        let insert_len = char_count;
 
-        // 5. Create FugueBlock with RLE (entire text as one block!)
+        // 6. Create FugueBlock with RLE (entire text as one block!)
         let block = FugueBlock::new(id.clone(), text.to_string(), left_origin, right_origin);
 
-        // 6. Insert into BTreeMap (maintains Fugue ordering)
+        // 7. Insert into BTreeMap (maintains Fugue ordering)
         self.blocks.insert(id.clone(), block);
 
-        // 7. Insert into rope (O(log n))
+        // 8. Insert into rope (O(log n))
         let byte_pos = self.char_to_byte(position)?;
         self.rope.insert(byte_pos, text);
 
-        // 8. Update position cache incrementally (O(k) instead of O(n) rebuild!)
+        // 9. Update position cache incrementally (O(k) instead of O(n) rebuild!)
         self.invalidate_position_cache(byte_pos); // Rope cache separate
         #[cfg(feature = "text-crdt")]
         self.update_cache_after_insert(position, insert_len, &id);
@@ -467,11 +524,13 @@ impl FugueText {
             });
         }
 
-        // 2. Find blocks in range (O(n) scan)
+        // 2. Find blocks that overlap deletion range and split if needed
+        let mut blocks_to_split = Vec::new();
         let mut deleted_ids = Vec::new();
         let mut current_pos = 0;
 
-        for (id, block) in &mut self.blocks {
+        // First pass: identify blocks that need splitting
+        for (id, block) in &self.blocks {
             if block.is_deleted() {
                 continue;
             }
@@ -482,12 +541,48 @@ impl FugueText {
 
             // Check if block overlaps deletion range
             if block_start < position + length && block_end > position {
-                // Mark entire block as deleted (tombstone)
-                block.mark_deleted();
-                deleted_ids.push(id.clone());
+                // Calculate overlap boundaries
+                let delete_start = position.max(block_start);
+                let delete_end = (position + length).min(block_end);
+                let offset_in_block_start = delete_start - block_start;
+                let offset_in_block_end = delete_end - block_start;
+
+                blocks_to_split.push((
+                    id.clone(),
+                    block.clone(),
+                    block_start,
+                    offset_in_block_start,
+                    offset_in_block_end,
+                ));
             }
 
             current_pos += block_len;
+        }
+
+        // Second pass: split blocks and create new ones
+        for (orig_id, orig_block, _block_start, offset_start, offset_end) in blocks_to_split {
+            let block_len = orig_block.len();
+
+            // Check if we need to split (partial deletion)
+            let needs_left_split = offset_start > 0;
+            let needs_right_split = offset_end < block_len;
+
+            if needs_left_split || needs_right_split {
+                // Block splitting: create up to 3 blocks
+                self.split_block_for_deletion(
+                    &orig_id,
+                    &orig_block,
+                    offset_start,
+                    offset_end,
+                    &mut deleted_ids,
+                )?;
+            } else {
+                // Entire block is deleted - just mark it
+                if let Some(block) = self.blocks.get_mut(&orig_id) {
+                    block.mark_deleted();
+                    deleted_ids.push(orig_id);
+                }
+            }
         }
 
         // 3. Delete from rope (O(log n))
@@ -496,13 +591,134 @@ impl FugueText {
             let byte_end = self.char_to_byte(position + length)?;
             self.rope.remove(byte_start..byte_end);
 
-            // 4. Update position cache incrementally (O(k) instead of O(n) rebuild!)
+            // 4. Invalidate position cache (block splitting creates new blocks)
             self.invalidate_position_cache(byte_start); // Rope cache separate
             #[cfg(feature = "text-crdt")]
-            self.update_cache_after_delete(position, length);
+            {
+                // Invalidate cache - block splitting changes the block structure
+                self.cache_valid = false;
+            }
         }
 
         Ok(deleted_ids)
+    }
+
+    /// Split a block when deleting a portion of it (Clock-based IDs)
+    ///
+    /// Creates up to 3 blocks with clock-based IDs (all with offset=0):
+    /// 1. Left block: characters before deletion (if any)
+    /// 2. Middle block: deleted characters (marked as deleted)
+    /// 3. Right block: characters after deletion (if any)
+    ///
+    /// # Clock-based ID Generation
+    ///
+    /// With per-character clocks, block `test@15:0` with length=15 contains
+    /// characters at clocks [1, 2, 3, ..., 15]. When deleting chars 6-10:
+    /// - Left block: `test@5:0` (clocks 1-5)
+    /// - Middle block: `test@10:0` (clocks 6-10, deleted)
+    /// - Right block: `test@15:0` (clocks 11-15)
+    ///
+    /// All new block IDs have offset=0!
+    ///
+    /// # Arguments
+    ///
+    /// * `orig_id` - Original block ID
+    /// * `orig_block` - Original block to split
+    /// * `offset_start` - Start offset within block (in graphemes)
+    /// * `offset_end` - End offset within block (in graphemes)
+    /// * `deleted_ids` - Vector to collect IDs of deleted blocks
+    #[cfg(feature = "text-crdt")]
+    fn split_block_for_deletion(
+        &mut self,
+        orig_id: &NodeId,
+        orig_block: &FugueBlock,
+        offset_start: usize,
+        offset_end: usize,
+        deleted_ids: &mut Vec<NodeId>,
+    ) -> Result<(), TextError> {
+        use unicode_segmentation::UnicodeSegmentation;
+
+        // Split text into grapheme clusters
+        let graphemes: Vec<&str> = orig_block.text.graphemes(true).collect();
+        let block_len = graphemes.len();
+
+        // Validate offsets
+        if offset_start >= block_len || offset_end > block_len || offset_start >= offset_end {
+            return Err(TextError::InvalidBlockSplit {
+                block_id: orig_id.clone(),
+                offset_start,
+                offset_end,
+                block_len,
+            });
+        }
+
+        // Extract text segments
+        let left_text: String = graphemes[..offset_start].join("");
+        let middle_text: String = graphemes[offset_start..offset_end].join("");
+        let right_text: String = graphemes[offset_end..].join("");
+
+        // Calculate the block's starting clock value
+        // Block ID stores the LAST clock value, so start = end - len + 1
+        // Example: block@15:0 with len=15 → start_clock = 15 - 15 + 1 = 1
+        let block_start_clock = orig_id.clock - (block_len as u64) + 1;
+
+        // Remove original block (if it still exists)
+        if !self.blocks.contains_key(orig_id) {
+            // Block was already removed or doesn't exist
+            return Ok(());
+        }
+        self.blocks.remove(orig_id);
+
+        // IMPORTANT: All split blocks maintain the SAME origins as the original block!
+        // They represent parts of the same insert operation, so they have the same
+        // position in the Fugue tree. The clock ranges differentiate them.
+
+        // Create left block (if needed)
+        if !left_text.is_empty() {
+            let left_len = offset_start as u64;
+            let left_end_clock = block_start_clock + left_len - 1;
+            let left_id = NodeId::new(orig_id.client_id.clone(), left_end_clock, 0);
+
+            let left_block = FugueBlock::new(
+                left_id.clone(),
+                left_text,
+                orig_block.left_origin.clone(),  // Same as original!
+                orig_block.right_origin.clone(), // Same as original!
+            );
+            self.blocks.insert(left_id.clone(), left_block);
+        }
+
+        // Create middle block (deleted)
+        let _middle_len = (offset_end - offset_start) as u64;
+        let middle_end_clock = block_start_clock + offset_end as u64 - 1;
+        let middle_id = NodeId::new(orig_id.client_id.clone(), middle_end_clock, 0);
+
+        let mut middle_block = FugueBlock::new(
+            middle_id.clone(),
+            middle_text,
+            orig_block.left_origin.clone(),  // Same as original!
+            orig_block.right_origin.clone(), // Same as original!
+        );
+        middle_block.mark_deleted();
+        self.blocks.insert(middle_id.clone(), middle_block);
+        deleted_ids.push(middle_id.clone());
+
+        // Create right block (if needed)
+        if !right_text.is_empty() {
+            let _right_len = (block_len - offset_end) as u64;
+            let right_end_clock = block_start_clock + block_len as u64 - 1;
+            let right_id = NodeId::new(orig_id.client_id.clone(), right_end_clock, 0);
+
+            let right_block = FugueBlock::new(
+                right_id.clone(),
+                right_text,
+                orig_block.left_origin.clone(),  // Same as original!
+                orig_block.right_origin.clone(), // Same as original!
+            );
+            self.blocks.insert(right_id, right_block);
+        }
+
+        Ok(())
     }
 
     /// Get the NodeId of the character at the given position
@@ -580,7 +796,7 @@ impl FugueText {
             }
         });
 
-        // 4. Calculate offset within block and create NodeId
+        // 4. Calculate clock value for character and create NodeId
         match search_result {
             Ok(idx) => {
                 let block_id = &self.cached_blocks[idx];
@@ -588,11 +804,17 @@ impl FugueText {
                 let block_start = block.cached_position().unwrap_or(0);
                 let offset_in_block = position - block_start;
 
-                // Create NodeId with correct offset
+                // Calculate the actual clock value for this character
+                // Block ID stores the LAST clock, so start = end - len + 1
+                let block_len = block.len() as u64;
+                let block_start_clock = block_id.clock.saturating_sub(block_len - 1);
+                let char_clock = block_start_clock + offset_in_block as u64;
+
+                // Create NodeId with clock value (offset=0!)
                 Ok(NodeId::new(
                     block_id.client_id.clone(),
-                    block_id.clock,
-                    offset_in_block,
+                    char_clock,
+                    0,
                 ))
             }
             Err(_) => {
@@ -607,15 +829,18 @@ impl FugueText {
 
     /// Get the current position of a character identified by NodeId
     ///
-    /// This is the reverse of `get_node_id_at_position`. Given a stable NodeId
-    /// (client_id, clock, offset), returns the character's current position in the text.
+    /// This is the reverse of `get_node_id_at_position`. Given a clock-based NodeId
+    /// (client_id, clock, 0), returns the character's current position in the text.
+    ///
+    /// With per-character clocks, the clock value directly identifies a unique character.
+    /// We find the block whose clock range contains this clock value.
     ///
     /// Returns None if the NodeId doesn't exist (e.g., character was deleted).
     /// Complexity: O(n) for searching blocks (could be optimized with a block index).
     ///
     /// # Arguments
     ///
-    /// * `node_id` - The NodeId to find
+    /// * `node_id` - The NodeId to find (clock-based, offset should be 0)
     ///
     /// # Example
     ///
@@ -625,7 +850,7 @@ impl FugueText {
     /// let mut text = FugueText::new("client1".to_string());
     /// text.insert(0, "Hello").unwrap();
     ///
-    /// let node_id = NodeId::new("client1".to_string(), 1, 2);
+    /// let node_id = NodeId::new("client1".to_string(), 3, 0);  // 3rd clock value
     /// if let Some(pos) = text.get_position_of_node_id(&node_id) {
     ///     println!("Character is at position {}", pos);
     /// } else {
@@ -639,25 +864,30 @@ impl FugueText {
             self.cache_valid = true;
         }
 
-        // 2. Find the block with matching client_id and clock
-        // Blocks are keyed by NodeId with offset 0
-        let block_id = NodeId::new(node_id.client_id.clone(), node_id.clock, 0);
+        // 2. Find the block whose clock range contains node_id.clock
+        // Use find_block_for_nodeid which handles clock ranges
+        let block_id = self.find_block_for_nodeid(node_id)?;
 
-        // Check if block exists and is visible
+        // 3. Check if block exists and is visible
         if let Some(block) = self.blocks.get(&block_id) {
             // Block is deleted, character doesn't exist
             if block.deleted {
                 return None;
             }
 
-            // 3. Validate offset is within block length
-            if node_id.offset >= block.len() {
+            // 4. Calculate offset within block based on clock values
+            let block_len = block.len() as u64;
+            let block_start_clock = block_id.clock.saturating_sub(block_len - 1);
+            let offset_in_block = (node_id.clock - block_start_clock) as usize;
+
+            // Validate offset is within block length
+            if offset_in_block >= block.len() {
                 return None;
             }
 
-            // 4. Get block's starting position and add offset
+            // 5. Get block's starting position and add offset
             if let Some(block_start) = block.cached_position() {
-                return Some(block_start + node_id.offset);
+                return Some(block_start + offset_in_block);
             }
         }
 
@@ -782,80 +1012,72 @@ impl FugueText {
 
                 if grapheme_pos == block_start {
                     // Insert right before this block
-                    right_origin = Some(id.clone()); // First character of this block
-                                                     // Find left_origin (last character of previous block)
+                    // Right origin: first character of this block
+                    let block_len = block.len() as u64;
+                    let block_start_clock = id.clock.saturating_sub(block_len - 1);
+                    right_origin = Some(NodeId::new(id.client_id.clone(), block_start_clock, 0));
+
+                    // Find left_origin (last character of previous block)
                     if idx > 0 {
                         let prev_id = &self.cached_blocks[idx - 1];
-                        let prev_block = &self.blocks[prev_id];
-                        let prev_last_offset = prev_block.len() - 1;
-                        left_origin = Some(NodeId::new(
-                            prev_id.client_id.clone(),
-                            prev_id.clock,
-                            prev_id.offset + prev_last_offset,
-                        ));
+                        // Last character has the block's clock value (blocks store LAST clock)
+                        left_origin = Some(NodeId::new(prev_id.client_id.clone(), prev_id.clock, 0));
                     }
                 } else if grapheme_pos == block_end {
                     // Insert right after this block
-                    // Left origin: last character of this block
-                    let last_char_offset = block.len() - 1;
-                    left_origin = Some(NodeId::new(
-                        id.client_id.clone(),
-                        id.clock,
-                        id.offset + last_char_offset,
-                    ));
+                    // Left origin: last character of this block (block's clock value)
+                    left_origin = Some(NodeId::new(id.client_id.clone(), id.clock, 0));
+
                     // Find right_origin (next block - first character)
                     if idx + 1 < self.cached_blocks.len() {
-                        right_origin = Some(self.cached_blocks[idx + 1].clone());
+                        let next_id = &self.cached_blocks[idx + 1];
+                        let next_block = &self.blocks[next_id];
+                        let next_block_len = next_block.len() as u64;
+                        let next_start_clock = next_id.clock.saturating_sub(next_block_len - 1);
+                        right_origin = Some(NodeId::new(next_id.client_id.clone(), next_start_clock, 0));
                     }
                 } else {
                     // Insert INSIDE this block
-                    // Calculate character-level offsets for proper Fugue tree structure
+                    // Calculate character-level clock values for proper Fugue tree structure
                     let offset_in_block = grapheme_pos - block_start;
+                    let block_len = block.len() as u64;
+                    let block_start_clock = id.clock.saturating_sub(block_len - 1);
 
                     // Left origin: character immediately before insertion point
-                    let left_char_offset = offset_in_block - 1;
-                    left_origin = Some(NodeId::new(
-                        id.client_id.clone(),
-                        id.clock,
-                        id.offset + left_char_offset,
-                    ));
+                    let left_char_clock = block_start_clock + offset_in_block as u64 - 1;
+                    left_origin = Some(NodeId::new(id.client_id.clone(), left_char_clock, 0));
 
                     // Right origin: character at insertion point
-                    right_origin = Some(NodeId::new(
-                        id.client_id.clone(),
-                        id.clock,
-                        id.offset + offset_in_block,
-                    ));
+                    let right_char_clock = block_start_clock + offset_in_block as u64;
+                    right_origin = Some(NodeId::new(id.client_id.clone(), right_char_clock, 0));
                 }
             }
             Err(idx) => {
                 // Position falls between blocks or at boundaries
                 if idx == 0 {
-                    // Insert at very beginning
-                    right_origin = Some(self.cached_blocks[0].clone());
+                    // Insert at very beginning - right origin is first char of first block
+                    let first_id = &self.cached_blocks[0];
+                    let first_block = &self.blocks[first_id];
+                    let first_block_len = first_block.len() as u64;
+                    let first_start_clock = first_id.clock.saturating_sub(first_block_len - 1);
+                    right_origin = Some(NodeId::new(first_id.client_id.clone(), first_start_clock, 0));
                 } else if idx >= self.cached_blocks.len() {
                     // Insert at very end - point to last character of last block
                     let last_id = &self.cached_blocks[self.cached_blocks.len() - 1];
-                    let last_block = &self.blocks[last_id];
-                    let last_offset = last_block.len() - 1;
-                    left_origin = Some(NodeId::new(
-                        last_id.client_id.clone(),
-                        last_id.clock,
-                        last_id.offset + last_offset,
-                    ));
+                    // Last character has the block's clock value
+                    left_origin = Some(NodeId::new(last_id.client_id.clone(), last_id.clock, 0));
                 } else {
                     // Insert between blocks
-                    // Left: last character of previous block
+                    // Left: last character of previous block (its clock value)
                     let left_id = &self.cached_blocks[idx - 1];
-                    let left_block = &self.blocks[left_id];
-                    let left_last_offset = left_block.len() - 1;
-                    left_origin = Some(NodeId::new(
-                        left_id.client_id.clone(),
-                        left_id.clock,
-                        left_id.offset + left_last_offset,
-                    ));
+                    left_origin = Some(NodeId::new(left_id.client_id.clone(), left_id.clock, 0));
+
                     // Right: first character of next block
-                    right_origin = Some(self.cached_blocks[idx].clone());
+                    let right_id = &self.cached_blocks[idx];
+                    let right_block = &self.blocks[right_id];
+                    let right_block_len = right_block.len() as u64;
+                    let right_start_clock = right_id.clock.saturating_sub(right_block_len - 1);
+                    right_origin = Some(NodeId::new(right_id.client_id.clone(), right_start_clock, 0));
                 }
             }
         }
@@ -940,25 +1162,40 @@ impl FugueText {
 
     /// Find the block that contains a given character-level NodeId.
     ///
-    /// Character-level NodeIds use offsets to point to specific characters within blocks.
-    /// This function maps them back to the block ID (offset 0 of the same client_id and clock).
+    /// With per-character clock allocation, each block represents a RANGE of clock values,
+    /// not just a single clock. Block IDs always have offset=0.
+    ///
+    /// # Clock Range Calculation
+    ///
+    /// A block with ID `client@5:0` and length=3 contains characters at clocks [3, 4, 5]:
+    /// - block_start_clock = 5 - 3 + 1 = 3
+    /// - block_end_clock = 5
     ///
     /// # Arguments
-    /// * `node_id` - Character-level NodeId (may have non-zero offset)
+    /// * `node_id` - Character-level NodeId pointing to a specific clock value
     ///
     /// # Returns
-    /// Block-level NodeId (offset 0) if the block exists, None otherwise
+    /// Block ID that contains this clock value, None if not found
     fn find_block_for_nodeid(&self, node_id: &NodeId) -> Option<NodeId> {
-        // Block IDs always have the form client_id@clock:0
-        // Character IDs have the form client_id@clock:offset
-        // We need to find the block with the same client_id and clock
-        let block_id = NodeId::new(node_id.client_id.clone(), node_id.clock, 0);
+        // Find block with matching client_id whose clock range contains node_id.clock
+        for (block_id, block) in &self.blocks {
+            if block_id.client_id == node_id.client_id {
+                // Block represents clock range [start_clock, end_clock]
+                // Example: block@5:0 with len=3 → clocks [3, 4, 5]
+                let block_len = block.len() as u64;
+                if block_len == 0 {
+                    continue; // Empty blocks don't contain any characters
+                }
 
-        if self.blocks.contains_key(&block_id) {
-            Some(block_id)
-        } else {
-            None
+                let block_start_clock = block_id.clock.saturating_sub(block_len - 1);
+                let block_end_clock = block_id.clock;
+
+                if node_id.clock >= block_start_clock && node_id.clock <= block_end_clock {
+                    return Some(block_id.clone());
+                }
+            }
         }
+        None
     }
 
     /// Reconstruct the Fugue tree from left_origin and right_origin metadata.
@@ -1329,7 +1566,7 @@ mod tests {
 
         assert_eq!(text.len(), 5);
         assert_eq!(text.to_string(), "Hello");
-        assert_eq!(text.clock(), 1); // Clock ticked once
+        assert_eq!(text.clock(), 5); // Per-character allocation: 5 chars = clock 5
     }
 
     #[test]
@@ -1340,7 +1577,7 @@ mod tests {
         text.insert(6, "World").unwrap();
 
         assert_eq!(text.to_string(), "Hello World");
-        assert_eq!(text.clock(), 3); // Clock ticked 3 times
+        assert_eq!(text.clock(), 11); // Per-character: 5 + 1 + 5 = 11
     }
 
     #[test]
@@ -1722,22 +1959,23 @@ mod tests {
         text.insert(0, "Hello").unwrap();
 
         // Get NodeId at position 0 (first character 'H')
+        // With per-character clocks, "Hello" allocates clocks 1-5
         let node_id_0 = text.get_node_id_at_position(0).unwrap();
         assert_eq!(node_id_0.client_id, "client1");
-        assert_eq!(node_id_0.clock, 1);
+        assert_eq!(node_id_0.clock, 1); // First char has clock 1
         assert_eq!(node_id_0.offset, 0);
 
         // Get NodeId at position 2 (character 'l')
         let node_id_2 = text.get_node_id_at_position(2).unwrap();
         assert_eq!(node_id_2.client_id, "client1");
-        assert_eq!(node_id_2.clock, 1);
-        assert_eq!(node_id_2.offset, 2);
+        assert_eq!(node_id_2.clock, 3); // Third char has clock 3
+        assert_eq!(node_id_2.offset, 0);
 
         // Get NodeId at position 4 (last character 'o')
         let node_id_4 = text.get_node_id_at_position(4).unwrap();
         assert_eq!(node_id_4.client_id, "client1");
-        assert_eq!(node_id_4.clock, 1);
-        assert_eq!(node_id_4.offset, 4);
+        assert_eq!(node_id_4.clock, 5); // Fifth char has clock 5
+        assert_eq!(node_id_4.offset, 0);
     }
 
     #[test]
@@ -1765,23 +2003,23 @@ mod tests {
     fn test_get_node_id_multiple_blocks() {
         let mut text = FugueText::new("client1".to_string());
 
-        // Insert "Hello" at position 0 (clock 1)
+        // Insert "Hello" at position 0 (allocates clocks 1-5)
         text.insert(0, "Hello").unwrap();
 
-        // Insert " World" at position 5 (clock 2)
+        // Insert " World" at position 5 (allocates clocks 6-11)
         text.insert(5, " World").unwrap();
 
         // Get NodeId in first block (position 2 -> 'l' in "Hello")
         let node_id_2 = text.get_node_id_at_position(2).unwrap();
         assert_eq!(node_id_2.client_id, "client1");
-        assert_eq!(node_id_2.clock, 1);
-        assert_eq!(node_id_2.offset, 2);
+        assert_eq!(node_id_2.clock, 3); // Third char has clock 3
+        assert_eq!(node_id_2.offset, 0);
 
         // Get NodeId in second block (position 6 -> 'W' in " World")
         let node_id_6 = text.get_node_id_at_position(6).unwrap();
         assert_eq!(node_id_6.client_id, "client1");
-        assert_eq!(node_id_6.clock, 2);
-        assert_eq!(node_id_6.offset, 1); // " " is offset 0, "W" is offset 1
+        assert_eq!(node_id_6.clock, 7); // "Hello"=1-5, " "=6, "W"=7
+        assert_eq!(node_id_6.offset, 0);
     }
 
     #[test]
@@ -1789,8 +2027,8 @@ mod tests {
         let mut text = FugueText::new("client1".to_string());
 
         // Insert two separate blocks to test deletion
-        text.insert(0, "Hello").unwrap();
-        text.insert(5, " World").unwrap();
+        text.insert(0, "Hello").unwrap(); // Clocks 1-5
+        text.insert(5, " World").unwrap(); // Clocks 6-11
 
         // Verify initial state
         assert_eq!(text.to_string(), "Hello World");
@@ -1806,8 +2044,8 @@ mod tests {
         // Get NodeId at position 2 (middle 'l' character in "Hello")
         let node_id = text.get_node_id_at_position(2).unwrap();
         assert_eq!(node_id.client_id, "client1");
-        assert_eq!(node_id.clock, 1);
-        assert_eq!(node_id.offset, 2);
+        assert_eq!(node_id.clock, 3); // Third char has clock 3
+        assert_eq!(node_id.offset, 0);
 
         // Position 5 should now be out of bounds
         let result = text.get_node_id_at_position(5);
@@ -1863,53 +2101,45 @@ mod fugue_tree_tests {
     }
 
     #[test]
-    #[ignore = "Block splitting not yet implemented"]
     fn test_delete_and_get_node_id() {
-        // KNOWN LIMITATION: Partial block deletion not yet supported
-        // This test requires block splitting when deleting part of a block.
-        // Currently, the entire block is marked as deleted, causing the position
-        // cache to become empty (no non-deleted blocks remain). This makes
-        // get_node_id_at_position fail even though the rope shows correct text.
-        //
-        // Original test:
-        // - Insert "Hello Beautiful World" (creates single block)
-        // - Delete "Beautiful " (positions 6-16)
-        // - Expected: get_node_id_at_position works for "Hello World"
-        // - Actual: Entire block marked deleted, cached_blocks empty, method fails
-        //
-        // This will be fixed in a future PR with proper block splitting implementation.
+        // This test verifies block splitting works correctly!
+        // When deleting part of a block, it should be split into 3 blocks:
+        // - Left block (non-deleted)
+        // - Middle block (deleted)
+        // - Right block (non-deleted)
 
         let mut text = FugueText::new("test".to_string());
 
-        // Insert "Hello Beautiful World"
+        // Insert "Hello Beautiful World" (allocates clocks 1-21)
         text.insert(0, "Hello Beautiful World").unwrap();
         println!("After insert: '{}'", text.to_string());
         assert_eq!(text.to_string(), "Hello Beautiful World");
         assert_eq!(text.len(), 21);
 
-        // Delete "Beautiful " (positions 6-16, length 10)
+        // Delete "Beautiful " (positions 6-15 inclusive, length 10)
         text.delete(6, 10).unwrap();
         println!("After delete: '{}'", text.to_string());
         assert_eq!(text.to_string(), "Hello World");
         assert_eq!(text.len(), 11);
 
-        // Try to get NodeId at position 0
-        let node_id = text.get_node_id_at_position(0);
-        println!("NodeId at position 0: {:?}", node_id);
-        assert!(
-            node_id.is_ok(),
-            "Should be able to get NodeId at position 0"
-        );
-
-        // Try all positions
+        // Verify we can get NodeIds for all positions
         for i in 0..text.len() {
-            let node_id = text.get_node_id_at_position(i);
-            println!("NodeId at position {}: {:?}", i, node_id);
-            assert!(
-                node_id.is_ok(),
-                "Should be able to get NodeId at position {}",
-                i
-            );
+            let node_id = text.get_node_id_at_position(i).unwrap();
+            println!("NodeId at position {}: {}", i, node_id);
+            assert_eq!(node_id.client_id, "test");
+            assert_eq!(node_id.offset, 0); // All NodeIds should have offset=0
         }
+
+        // Verify specific positions have correct clocks
+        // "Hello" = clocks 1-5, " " = clock 6, "World" = clocks 17-21
+        // (clocks 7-16 were deleted with "Beautiful ")
+        let node_0 = text.get_node_id_at_position(0).unwrap(); // 'H'
+        assert_eq!(node_0.clock, 1);
+
+        let node_5 = text.get_node_id_at_position(5).unwrap(); // ' ' after Hello
+        assert_eq!(node_5.clock, 6);
+
+        let node_6 = text.get_node_id_at_position(6).unwrap(); // 'W'
+        assert_eq!(node_6.clock, 17); // First char of "World"
     }
 }
