@@ -21,7 +21,7 @@ export interface WasmFugueText {
   length(): number
   isEmpty(): boolean
   getClientId(): string
-  getClock(): number
+  getClock(): bigint  // WASM returns bigint for u64 clock values
   merge(other: WasmFugueText): void
   toJSON(): string
   free(): void
@@ -475,7 +475,7 @@ export class SyncText implements SyncableDocument {
     if (!this.wasmText) return
 
     this.content = this.wasmText.toString()
-    this.clock = this.wasmText.getClock()
+    this.clock = Number(this.wasmText.getClock())  // Convert BigInt to number for JSON serialization
   }
 
   private notifySubscribers(): void {

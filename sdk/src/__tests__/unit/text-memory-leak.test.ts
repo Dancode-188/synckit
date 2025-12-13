@@ -91,11 +91,7 @@ describe('SyncText Memory Management', () => {
     text.dispose()
   })
 
-  it.skip('should not leak memory during init restoration from storage', async () => {
-    // Skipped: This test has issues with CRDT state restoration
-    // The CRDT doesn't persist correctly when recreating with same IDs
-    // This is a separate persistence issue, not a memory leak issue
-
+  it('should not leak memory during init restoration from storage', async () => {
     // Create and persist a text document
     const text1 = new SyncText('doc-5', 'client-5', storage)
     await text1.init()
