@@ -64,18 +64,18 @@ export class WasmCounter {
    * # Arguments
    * * `amount` - Amount to increment (defaults to 1 if not provided)
    */
-  increment(amount?: bigint | null): void;
+  increment(amount?: number | null): void;
   /**
    * Decrement the counter
    *
    * # Arguments
    * * `amount` - Amount to decrement (defaults to 1 if not provided)
    */
-  decrement(amount?: bigint | null): void;
+  decrement(amount?: number | null): void;
   /**
    * Get the current counter value
    */
-  value(): bigint;
+  value(): number;
   /**
    * Get the replica ID
    */
@@ -369,7 +369,6 @@ export interface InitOutput {
   readonly wasmdocument_getField: (a: number, b: number, c: number, d: number) => void;
   readonly wasmdocument_deleteField: (a: number, b: number, c: number) => void;
   readonly wasmdocument_getId: (a: number, b: number) => void;
-  readonly wasmdocument_fieldCount: (a: number) => number;
   readonly wasmdocument_toJSON: (a: number, b: number) => void;
   readonly wasmdocument_merge: (a: number, b: number) => void;
   readonly __wbg_wasmvectorclock_free: (a: number, b: number) => void;
@@ -401,9 +400,9 @@ export interface InitOutput {
   readonly wasmfuguetext_fromJSON: (a: number, b: number, c: number) => void;
   readonly __wbg_wasmcounter_free: (a: number, b: number) => void;
   readonly wasmcounter_new: (a: number, b: number) => number;
-  readonly wasmcounter_increment: (a: number, b: number, c: bigint) => void;
-  readonly wasmcounter_decrement: (a: number, b: number, c: bigint) => void;
-  readonly wasmcounter_value: (a: number) => bigint;
+  readonly wasmcounter_increment: (a: number, b: number, c: number) => void;
+  readonly wasmcounter_decrement: (a: number, b: number, c: number) => void;
+  readonly wasmcounter_value: (a: number) => number;
   readonly wasmcounter_getReplicaId: (a: number, b: number) => void;
   readonly wasmcounter_merge: (a: number, b: number) => void;
   readonly wasmcounter_reset: (a: number) => void;
@@ -433,6 +432,7 @@ export interface InitOutput {
   readonly wasmawareness_createLeaveUpdate: (a: number, b: number) => void;
   readonly wasmawareness_clientCount: (a: number) => number;
   readonly wasmawareness_otherClientCount: (a: number) => number;
+  readonly wasmdocument_fieldCount: (a: number) => number;
   readonly init_panic_hook: () => void;
   readonly __wbindgen_export: (a: number, b: number, c: number) => void;
   readonly __wbindgen_export2: (a: number, b: number) => number;

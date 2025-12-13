@@ -375,8 +375,8 @@ impl WasmCounter {
     /// # Arguments
     /// * `amount` - Amount to increment (defaults to 1 if not provided)
     #[wasm_bindgen(js_name = increment)]
-    pub fn increment(&mut self, amount: Option<i64>) {
-        self.inner.increment(amount.unwrap_or(1));
+    pub fn increment(&mut self, amount: Option<f64>) {
+        self.inner.increment(amount.unwrap_or(1.0) as i64);
     }
 
     /// Decrement the counter
@@ -384,14 +384,14 @@ impl WasmCounter {
     /// # Arguments
     /// * `amount` - Amount to decrement (defaults to 1 if not provided)
     #[wasm_bindgen(js_name = decrement)]
-    pub fn decrement(&mut self, amount: Option<i64>) {
-        self.inner.decrement(amount.unwrap_or(1));
+    pub fn decrement(&mut self, amount: Option<f64>) {
+        self.inner.decrement(amount.unwrap_or(1.0) as i64);
     }
 
     /// Get the current counter value
     #[wasm_bindgen(js_name = value)]
-    pub fn value(&self) -> i64 {
-        self.inner.value()
+    pub fn value(&self) -> f64 {
+        self.inner.value() as f64
     }
 
     /// Get the replica ID
