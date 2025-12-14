@@ -1,13 +1,14 @@
 import { defineConfig, devices } from '@playwright/test'
 
 /**
- * Playwright configuration for chaos testing
+ * Playwright configuration for multi-tab testing
  *
  * This config supports multi-tab scenarios for testing leader election,
- * network partitions, and cross-tab synchronization.
+ * network partitions, cross-tab synchronization, and integration tests.
  */
 export default defineConfig({
-  testDir: './src/__tests__/chaos',
+  testDir: './src/__tests__',
+  testMatch: ['**/{chaos,integration}/*.test.ts'],
 
   // Run tests in parallel
   fullyParallel: false, // Chaos tests should run sequentially to avoid port conflicts

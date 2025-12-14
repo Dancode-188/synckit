@@ -8,6 +8,8 @@
 import React, { useEffect, useState, useRef } from 'react'
 import { SyncKit } from '@synckit-js/sdk'
 import { MemoryStorage } from '@synckit-js/sdk/lite'
+import { CrossTabSync } from '../../../../sdk/src/sync/cross-tab'
+import { UndoManager, type Operation } from '../../../../sdk/src/undo/undo-manager'
 
 export function TestHarness() {
   const [text, setText] = useState('')
@@ -23,6 +25,9 @@ export function TestHarness() {
 
   // Initialize SyncKit on mount
   useEffect(() => {
+    let leaderCheckInterval: NodeJS.Timeout | null = null
+    let stackCheckInterval: NodeJS.Timeout | null = null
+
     const initSyncKit = async () => {
       try {
         // Create SyncKit instance with memory storage (no IndexedDB for simpler testing)
@@ -33,6 +38,36 @@ export function TestHarness() {
         })
 
         synckitRef.current = synckit
+
+        // Create CrossTabSync instance
+        const crossTabSync = new CrossTabSync('test-doc', { enabled: true })
+        crossTabSync.enable()
+        crossTabSyncRef.current = crossTabSync
+
+        // Set initial tab ID
+        setTabId(crossTabSync.getTabId())
+
+        // Check leader status periodically
+        const checkLeader = () => {
+          const leader = crossTabSync.isCurrentLeader()
+          setIsLeader(leader)
+        }
+
+        checkLeader()
+        leaderCheckInterval = setInterval(checkLeader, 500)
+
+        // Create UndoManager instance with CrossTabSync
+        const undoManager = new UndoManager({
+          documentId: 'test-doc',
+          crossTabSync,
+          onStateChanged: (state) => {
+            setUndoStackSize(state.undoStack.length)
+            setRedoStackSize(state.redoStack.length)
+          }
+        })
+
+        await undoManager.init()
+        undoManagerRef.current = undoManager
 
         // Get text document
         const textDoc = synckit.text('test-doc')
@@ -45,48 +80,33 @@ export function TestHarness() {
           setText(newText)
         })
 
-        // Access CrossTabSync if available
-        if ((synckit as any).crossTabSync) {
-          const crossTabSync = (synckit as any).crossTabSync
-          crossTabSyncRef.current = crossTabSync
-
-          // Set initial tab ID
-          setTabId(crossTabSync.tabId || 'unknown')
-
-          // Check leader status periodically
-          const checkLeader = () => {
-            const leader = crossTabSync.isCurrentLeader ? crossTabSync.isCurrentLeader() : false
-            setIsLeader(leader)
-          }
-
-          checkLeader()
-          const interval = setInterval(checkLeader, 500)
-
-          return () => clearInterval(interval)
+        // Update undo/redo stack sizes periodically
+        const updateStacks = () => {
+          const state = undoManager.getState()
+          setUndoStackSize(state.undoStack.length)
+          setRedoStackSize(state.redoStack.length)
         }
 
-        // Access UndoManager if available
-        if ((synckit as any).undoManager) {
-          const undoManager = (synckit as any).undoManager
-          undoManagerRef.current = undoManager
-
-          // Update undo/redo stack sizes periodically
-          const updateStacks = () => {
-            setUndoStackSize(undoManager.undoStack?.length || 0)
-            setRedoStackSize(undoManager.redoStack?.length || 0)
-          }
-
-          updateStacks()
-          const interval = setInterval(updateStacks, 500)
-
-          return () => clearInterval(interval)
-        }
+        updateStacks()
+        stackCheckInterval = setInterval(updateStacks, 500)
       } catch (error) {
         console.error('Failed to initialize SyncKit:', error)
       }
     }
 
     initSyncKit()
+
+    // Cleanup on unmount
+    return () => {
+      if (leaderCheckInterval) clearInterval(leaderCheckInterval)
+      if (stackCheckInterval) clearInterval(stackCheckInterval)
+      if (crossTabSyncRef.current) {
+        crossTabSyncRef.current.destroy()
+      }
+      if (undoManagerRef.current) {
+        undoManagerRef.current.destroy()
+      }
+    }
   }, [])
 
   // Expose state to Playwright via window object
@@ -101,30 +121,76 @@ export function TestHarness() {
   const handleTextChange = async (e: React.ChangeEvent<HTMLTextAreaElement>) => {
     const newText = e.target.value
     const textDoc = textDocRef.current
+    const undoManager = undoManagerRef.current
 
     if (!textDoc) return
 
+    // Store previous text for undo
+    const previousText = textDoc.get()
+
     // Simple replace: delete all and insert new
-    const currentText = textDoc.get()
-    if (currentText.length > 0) {
-      await textDoc.delete(0, currentText.length)
+    if (previousText.length > 0) {
+      await textDoc.delete(0, previousText.length)
     }
     if (newText.length > 0) {
       await textDoc.insert(0, newText)
+    }
+
+    // Track operation in undo manager (store as text snapshot)
+    if (undoManager) {
+      const operation: Operation = {
+        type: 'text-change',
+        data: {
+          previousText,
+          newText
+        },
+        timestamp: Date.now()
+      }
+      undoManager.add(operation)
     }
   }
 
   const handleUndo = async () => {
     const undoManager = undoManagerRef.current
-    if (undoManager && undoManager.canUndo && undoManager.canUndo()) {
-      await undoManager.undo()
+    const textDoc = textDocRef.current
+
+    if (!undoManager || !textDoc || !undoManager.canUndo()) return
+
+    // Get the operation to undo
+    const operation = undoManager.undo()
+    if (!operation || !operation.data) return
+
+    // Restore previous text
+    const { previousText } = operation.data
+    const currentText = textDoc.get()
+
+    if (currentText.length > 0) {
+      await textDoc.delete(0, currentText.length)
+    }
+    if (previousText.length > 0) {
+      await textDoc.insert(0, previousText)
     }
   }
 
   const handleRedo = async () => {
     const undoManager = undoManagerRef.current
-    if (undoManager && undoManager.canRedo && undoManager.canRedo()) {
-      await undoManager.redo()
+    const textDoc = textDocRef.current
+
+    if (!undoManager || !textDoc || !undoManager.canRedo()) return
+
+    // Get the operation to redo
+    const operation = undoManager.redo()
+    if (!operation || !operation.data) return
+
+    // Restore new text
+    const { newText } = operation.data
+    const currentText = textDoc.get()
+
+    if (currentText.length > 0) {
+      await textDoc.delete(0, currentText.length)
+    }
+    if (newText.length > 0) {
+      await textDoc.insert(0, newText)
     }
   }
 
