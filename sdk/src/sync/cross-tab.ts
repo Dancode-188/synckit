@@ -8,6 +8,15 @@
 import type { CrossTabMessage, MessageHandler } from './message-types';
 
 /**
+ * State snapshot for hash computation and recovery
+ */
+export interface StateSnapshot {
+  undoStack: any[];
+  redoStack: any[];
+  documentState?: any;
+}
+
+/**
  * Options for CrossTabSync configuration
  */
 export interface CrossTabSyncOptions {
@@ -34,6 +43,18 @@ export interface CrossTabSyncOptions {
    * @default 5000
    */
   heartbeatTimeout?: number;
+
+  /**
+   * Callback to get current state for hash computation
+   * Used for message loss detection and recovery
+   */
+  stateProvider?: () => StateSnapshot;
+
+  /**
+   * Callback to restore state from leader during recovery
+   * Used when follower detects state divergence
+   */
+  stateRestorer?: (state: StateSnapshot) => void;
 }
 
 /**
@@ -57,6 +78,10 @@ export class CrossTabSync {
   private heartbeatTimer: ReturnType<typeof setInterval> | null = null;
   private leaderCheckTimer: ReturnType<typeof setInterval> | null = null;
   private electionTimer: ReturnType<typeof setTimeout> | null = null;
+
+  // State recovery
+  private stateProvider?: () => StateSnapshot;
+  private stateRestorer?: (state: StateSnapshot) => void;
 
   /**
    * Creates a new CrossTabSync instance
@@ -82,6 +107,8 @@ export class CrossTabSync {
     this.isEnabled = options.enabled ?? true;
     this.heartbeatInterval = options.heartbeatInterval ?? 2000;
     this.heartbeatTimeout = options.heartbeatTimeout ?? 5000;
+    this.stateProvider = options.stateProvider;
+    this.stateRestorer = options.stateRestorer;
 
     // Check BroadcastChannel support
     if (typeof BroadcastChannel === 'undefined') {
@@ -293,6 +320,18 @@ export class CrossTabSync {
       this.handleElectionMessage(message);
     } else if (message.type === 'heartbeat') {
       this.handleHeartbeatMessage(message);
+    } else if (message.type === 'request-full-sync') {
+      // Handle full sync request (leader only)
+      const requestMessage = message as any;
+      if (requestMessage.targetLeaderId === this.tabId) {
+        this.sendFullState(requestMessage.requesterId);
+      }
+    } else if (message.type === 'full-sync-response') {
+      // Handle full sync response (follower only)
+      const responseMessage = message as any;
+      if (responseMessage.requesterId === this.tabId) {
+        this.applyFullState(responseMessage.state);
+      }
     }
 
     // Dispatch to registered handlers
@@ -469,6 +508,16 @@ export class CrossTabSync {
     // Update last heartbeat time if it's from the current leader
     if (senderTabId === this.currentLeaderId) {
       this.lastLeaderHeartbeat = Date.now();
+
+      // Verify state hash if both leader and follower have state providers
+      if (heartbeatMessage.stateHash && this.stateProvider) {
+        const myHash = this.computeStateHash();
+
+        if (myHash && myHash !== heartbeatMessage.stateHash) {
+          console.warn('[CrossTab] State diverged from leader. My hash:', myHash, 'Leader hash:', heartbeatMessage.stateHash);
+          this.requestFullSync(senderTabId);
+        }
+      }
     }
   }
 
@@ -524,10 +573,13 @@ export class CrossTabSync {
   private sendHeartbeat(): void {
     if (!this.isLeader) return;
 
+    const stateHash = this.computeStateHash();
+
     this.broadcast({
       type: 'heartbeat',
       tabId: this.tabId,
       tabStartTime: this.tabStartTime,
+      stateHash,
     } as any);
   }
 
@@ -563,6 +615,98 @@ export class CrossTabSync {
       // Leader appears to be dead, start new election
       this.currentLeaderId = null;
       this.startElection();
+    }
+  }
+
+  /**
+   * Compute hash of current state for divergence detection
+   * Returns null if no state provider is configured
+   */
+  private computeStateHash(): string | null {
+    if (!this.stateProvider) {
+      return null;
+    }
+
+    try {
+      const state = this.stateProvider();
+
+      // Create deterministic representation
+      const hashInput = {
+        undoStack: state.undoStack.map(op => ({
+          type: (op as any).type,
+          timestamp: (op as any).timestamp,
+        })),
+        redoStack: state.redoStack.map(op => ({
+          type: (op as any).type,
+          timestamp: (op as any).timestamp,
+        })),
+        documentState: state.documentState,
+      };
+
+      const json = JSON.stringify(hashInput);
+
+      // Simple hash function (djb2)
+      let hash = 5381;
+      for (let i = 0; i < json.length; i++) {
+        hash = ((hash << 5) + hash) + json.charCodeAt(i);
+      }
+
+      return hash.toString(36).substring(0, 16);
+    } catch (error) {
+      console.error('Failed to compute state hash:', error);
+      return null;
+    }
+  }
+
+  /**
+   * Request full state sync from leader
+   */
+  private requestFullSync(leaderId: string): void {
+    console.warn('[CrossTab] Requesting full sync from leader:', leaderId);
+
+    this.broadcast({
+      type: 'request-full-sync',
+      requesterId: this.tabId,
+      targetLeaderId: leaderId,
+    } as any);
+  }
+
+  /**
+   * Send full state to requesting follower (leader only)
+   */
+  private sendFullState(requesterId: string): void {
+    if (!this.isLeader || !this.stateProvider) {
+      return;
+    }
+
+    try {
+      const state = this.stateProvider();
+
+      console.info('[CrossTab] Sending full state to:', requesterId);
+
+      this.broadcast({
+        type: 'full-sync-response',
+        requesterId,
+        state,
+      } as any);
+    } catch (error) {
+      console.error('Failed to send full state:', error);
+    }
+  }
+
+  /**
+   * Apply full state from leader (follower only)
+   */
+  private applyFullState(state: StateSnapshot): void {
+    if (this.isLeader || !this.stateRestorer) {
+      return;
+    }
+
+    try {
+      console.info('[CrossTab] Applying full state from leader');
+      this.stateRestorer(state);
+    } catch (error) {
+      console.error('Failed to apply full state:', error);
     }
   }
 }
