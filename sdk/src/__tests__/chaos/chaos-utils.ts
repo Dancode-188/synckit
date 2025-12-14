@@ -202,3 +202,73 @@ export async function getFollowerPages(pages: Page[]): Promise<Page[]> {
 
   return followers
 }
+
+/**
+ * Heal network partition by restoring BroadcastChannel
+ * Alias for restoreTab
+ */
+export async function healPartition(page: Page): Promise<void> {
+  await restoreTab(page)
+}
+
+/**
+ * Add packet loss to a tab by randomly dropping BroadcastChannel messages
+ * @param page - The page to add packet loss to
+ * @param lossPercentage - Percentage of messages to drop (0-100)
+ */
+export async function addPacketLoss(page: Page, lossPercentage: number): Promise<void> {
+  await page.evaluate((percentage) => {
+    const originalBroadcastChannel = (window as any).BroadcastChannel
+
+    ;(window as any).BroadcastChannel = class PacketLossBroadcastChannel {
+      private channel: any
+      private messageListeners: Set<(event: MessageEvent) => void> = new Set()
+
+      constructor(name: string) {
+        this.channel = new originalBroadcastChannel(name)
+
+        // Intercept incoming messages and randomly drop them
+        this.channel.addEventListener('message', (event: MessageEvent) => {
+          if (Math.random() * 100 >= percentage) {
+            // Pass through message (not dropped)
+            this.messageListeners.forEach(listener => {
+              try {
+                listener(event)
+              } catch (error) {
+                console.error('Message listener error:', error)
+              }
+            })
+          }
+          // else: drop message (packet loss)
+        })
+      }
+
+      postMessage(message: any) {
+        // Randomly drop outgoing messages
+        if (Math.random() * 100 >= percentage) {
+          this.channel.postMessage(message)
+        }
+        // else: drop message (packet loss)
+      }
+
+      close() {
+        this.channel.close()
+      }
+
+      addEventListener(type: string, listener: any) {
+        if (type === 'message') {
+          this.messageListeners.add(listener)
+        }
+      }
+
+      removeEventListener(type: string, listener: any) {
+        if (type === 'message') {
+          this.messageListeners.delete(listener)
+        }
+      }
+    }
+
+    // Store original for potential restoration
+    ;(window as any).__original_BroadcastChannel = originalBroadcastChannel
+  }, lossPercentage)
+}
