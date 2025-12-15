@@ -6,10 +6,8 @@
  */
 
 import React, { useEffect, useState, useRef } from 'react'
-import { SyncKit } from '@synckit-js/sdk'
+import { SyncKit, SyncText, CrossTabSync, UndoManager, type Operation } from '@synckit-js/sdk'
 import { MemoryStorage } from '@synckit-js/sdk/lite'
-import { CrossTabSync } from '../../../../sdk/src/sync/cross-tab'
-import { UndoManager, type Operation } from '../../../../sdk/src/undo/undo-manager'
 
 export function TestHarness() {
   const [text, setText] = useState('')
@@ -25,8 +23,8 @@ export function TestHarness() {
 
   // Initialize SyncKit on mount
   useEffect(() => {
-    let leaderCheckInterval: NodeJS.Timeout | null = null
-    let stackCheckInterval: NodeJS.Timeout | null = null
+    let leaderCheckInterval: ReturnType<typeof setInterval> | null = null
+    let stackCheckInterval: ReturnType<typeof setInterval> | null = null
 
     const initSyncKit = async () => {
       try {
@@ -69,8 +67,14 @@ export function TestHarness() {
         await undoManager.init()
         undoManagerRef.current = undoManager
 
-        // Get text document
-        const textDoc = synckit.text('test-doc')
+        // Create text document with CrossTabSync integration
+        const textDoc = new SyncText(
+          'test-doc',
+          synckit.getClientId(),
+          synckit.getStorage(),
+          undefined, // syncManager
+          crossTabSync
+        )
         await textDoc.init()
         textDocRef.current = textDoc
 

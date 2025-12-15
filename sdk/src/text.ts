@@ -11,6 +11,8 @@ import { initWASM } from './wasm-loader'
 import type { StorageAdapter } from './storage'
 import type { SyncManager, VectorClock } from './sync/manager'
 import type { SyncableDocument, Operation } from './sync/manager'
+import type { CrossTabSync } from './sync/cross-tab'
+import type { TextInsertMessage, TextDeleteMessage } from './sync/message-types'
 
 export interface WasmFugueText {
   insert(position: number, text: string): string  // returns JSON NodeId
@@ -70,12 +72,14 @@ export class SyncText implements SyncableDocument {
   private content: string = ''
   private clock: number = 0
   private vectorClock: VectorClock = {}
+  private isApplyingRemote: boolean = false
 
   constructor(
     private readonly id: string,
     private readonly clientId: string,
     private readonly storage?: StorageAdapter,
-    private readonly syncManager?: SyncManager
+    private readonly syncManager?: SyncManager,
+    private readonly crossTabSync?: CrossTabSync
   ) {}
 
   /**
@@ -134,6 +138,41 @@ export class SyncText implements SyncableDocument {
     if (this.syncManager) {
       this.syncManager.registerDocument(this)
       await this.syncManager.subscribeDocument(this.id)
+    }
+
+    // Register cross-tab message handlers
+    if (this.crossTabSync) {
+      // Handle text insert from other tabs
+      this.crossTabSync.on('text-insert', async (message) => {
+        const msg = message as TextInsertMessage
+        if (msg.documentId !== this.id || !this.wasmText) return
+
+        this.isApplyingRemote = true
+        try {
+          this.wasmText.insert(msg.position, msg.text)
+          this.updateLocalState()
+          await this.persist()
+          this.notifySubscribers()
+        } finally {
+          this.isApplyingRemote = false
+        }
+      })
+
+      // Handle text delete from other tabs
+      this.crossTabSync.on('text-delete', async (message) => {
+        const msg = message as TextDeleteMessage
+        if (msg.documentId !== this.id || !this.wasmText) return
+
+        this.isApplyingRemote = true
+        try {
+          this.wasmText.delete(msg.position, msg.length)
+          this.updateLocalState()
+          await this.persist()
+          this.notifySubscribers()
+        } finally {
+          this.isApplyingRemote = false
+        }
+      })
     }
   }
 
@@ -196,6 +235,16 @@ export class SyncText implements SyncableDocument {
     // Notify subscribers
     this.notifySubscribers()
 
+    // Broadcast to other tabs (if not applying a remote operation)
+    if (this.crossTabSync && !this.isApplyingRemote) {
+      this.crossTabSync.broadcast({
+        type: 'text-insert',
+        documentId: this.id,
+        position,
+        text
+      } as Omit<TextInsertMessage, 'from' | 'seq' | 'timestamp'>)
+    }
+
     // Sync (if sync manager available)
     if (this.syncManager) {
       // Increment vector clock
@@ -248,6 +297,16 @@ export class SyncText implements SyncableDocument {
 
     // Notify subscribers
     this.notifySubscribers()
+
+    // Broadcast to other tabs (if not applying a remote operation)
+    if (this.crossTabSync && !this.isApplyingRemote) {
+      this.crossTabSync.broadcast({
+        type: 'text-delete',
+        documentId: this.id,
+        position,
+        length
+      } as Omit<TextDeleteMessage, 'from' | 'seq' | 'timestamp'>)
+    }
 
     // Sync (if sync manager available)
     if (this.syncManager) {
