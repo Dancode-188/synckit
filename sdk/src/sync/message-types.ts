@@ -96,6 +96,26 @@ export interface FullSyncResponseMessage extends BaseMessage {
 }
 
 /**
+ * Text insert operation - broadcasts text insertion to other tabs
+ */
+export interface TextInsertMessage extends BaseMessage {
+  type: 'text-insert';
+  documentId: string;
+  position: number;
+  text: string;
+}
+
+/**
+ * Text delete operation - broadcasts text deletion to other tabs
+ */
+export interface TextDeleteMessage extends BaseMessage {
+  type: 'text-delete';
+  documentId: string;
+  position: number;
+  length: number;
+}
+
+/**
  * Union type of all possible cross-tab messages
  */
 export type CrossTabMessage =
@@ -107,7 +127,9 @@ export type CrossTabMessage =
   | TabJoinedMessage
   | TabLeavingMessage
   | RequestFullSyncMessage
-  | FullSyncResponseMessage;
+  | FullSyncResponseMessage
+  | TextInsertMessage
+  | TextDeleteMessage;
 
 /**
  * Message handler function type

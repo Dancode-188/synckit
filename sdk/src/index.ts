@@ -18,6 +18,14 @@ export { SyncSet } from './set'
 export { Awareness } from './awareness'
 export type { AwarenessState, AwarenessUpdate, AwarenessCallback } from './awareness'
 
+// Cross-tab sync
+export { CrossTabSync } from './sync/cross-tab'
+export type { CrossTabSyncOptions } from './sync/cross-tab'
+
+// Undo/Redo
+export { UndoManager } from './undo/undo-manager'
+export type { Operation, UndoManagerState } from './undo/undo-manager'
+
 // Storage adapters
 export { MemoryStorage, IndexedDBStorage, createStorage } from './storage'
 export type { StorageAdapter, StoredDocument } from './storage'

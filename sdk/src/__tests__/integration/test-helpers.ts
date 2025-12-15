@@ -8,6 +8,7 @@ export interface SyncKitTab {
 
 /**
  * Open multiple SyncKit tabs
+ * NOTE: All tabs share the same browser context to enable BroadcastChannel communication
  */
 export async function openTabs(
   browser: Browser,
@@ -15,8 +16,11 @@ export async function openTabs(
 ): Promise<SyncKitTab[]> {
   const tabs: SyncKitTab[] = []
 
+  // Create a single context that all tabs will share
+  // This is necessary for BroadcastChannel to work across tabs
+  const context = await browser.newContext()
+
   for (let i = 0; i < count; i++) {
-    const context = await browser.newContext()
     const page = await context.newPage()
 
     await page.goto('/')
@@ -34,9 +38,12 @@ export async function openTabs(
 
 /**
  * Close all tabs
+ * Since all tabs share the same context, we only need to close it once
  */
 export async function closeTabs(tabs: SyncKitTab[]): Promise<void> {
-  await Promise.all(tabs.map(tab => tab.context.close()))
+  if (tabs.length > 0 && tabs[0]) {
+    await tabs[0].context.close()
+  }
 }
 
 /**

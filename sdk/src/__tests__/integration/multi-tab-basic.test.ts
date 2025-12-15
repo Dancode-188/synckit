@@ -153,8 +153,8 @@ test.describe('Multi-Tab Basic Integration', () => {
         await typeText(leaderTab, 'Important data')
         await waitForConvergence(tabs, 2000)
 
-        // Close leader
-        await leaderTab.context.close()
+        // Close leader page (simulates closing a tab)
+        await leaderTab.page.close()
         const remainingTabs = tabs.filter((_, i) => i !== leaderIndex)
 
         // Wait for new leader election
