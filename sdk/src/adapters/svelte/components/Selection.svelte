@@ -4,6 +4,7 @@
    * @module adapters/svelte/components/Selection
    */
 
+  import { get } from 'svelte/store'
   import { deserializeRange } from '../../../cursor/selection'
   import type { SerializedRange, SelectionRange, CursorMode } from '../../../cursor/types'
   import type { Writable } from 'svelte/store'
@@ -52,12 +53,13 @@
 
     // New format (SerializedRange): Deserialize to visual coordinates
     if (isSerializedRange(user.selection)) {
-      // containerRef is passed as a Writable store, don't dereference it here
-      // deserializeRange will handle it appropriately
+      // Extract container element from writable store for deserializeRange
+      const containerValue = containerRef ? get(containerRef) : null
+      const container = containerValue ?? undefined
       return deserializeRange(
         user.selection,
         mode,
-        undefined
+        container
       )
     }
 
