@@ -76,3 +76,14 @@ export type { Operation } from '../../undo/undo-manager'
 export { toValue } from './utils/refs'
 export { useCleanup, tryOnScopeDispose } from './utils/lifecycle'
 export { isSSR, isBrowser } from './utils/ssr'
+
+// Selection composable
+export { useSelection } from './composables/useSelection'
+
+// Selection components
+export { default as Selection } from './components/Selection.vue'
+export { default as Selections } from './components/Selections.vue'
+
+// Selection types
+export type { UseSelectionOptions, UseSelectionReturn } from './composables/useSelection'
+export type { SelectionUser } from './types/selection'

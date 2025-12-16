@@ -72,3 +72,14 @@ export type {
   Operation,
   SyncOptions,
 } from './types';
+
+// Selection store
+export { selectionStore } from './stores/selectionStore';
+
+// Selection components
+export { default as Selection } from './components/Selection.svelte';
+export { default as Selections } from './components/Selections.svelte';
+
+// Selection types
+export type { SelectionStoreOptions, SelectionStoreReturn } from './stores/selectionStore';
+export type { SelectionUser } from './types/selection';
