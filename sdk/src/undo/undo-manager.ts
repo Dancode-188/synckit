@@ -1,5 +1,6 @@
 import { StorageCoordinator } from '../storage/storage-coordinator';
 import { CrossTabSync } from '../sync/cross-tab';
+import type { UndoAddMessage, UndoMessage, RedoMessage } from '../sync/message-types';
 
 /**
  * Represents an operation that can be undone/redone
@@ -56,9 +57,14 @@ export class UndoManager {
   private canMergeFn: CanMergeFn;
   private mergeFn: MergeFn;
   private storageCoordinator: StorageCoordinator;
+  private crossTabSync: CrossTabSync;
+  private documentId: string;
   private onStateChanged?: (state: UndoManagerState) => void;
+  private isApplyingRemote: boolean = false;
 
   constructor(options: UndoManagerOptions) {
+    this.documentId = options.documentId;
+    this.crossTabSync = options.crossTabSync;
     this.maxUndoSize = options.maxUndoSize ?? 100;
     this.mergeWindow = options.mergeWindow ?? 1000; // 1 second default
     this.canMergeFn = options.canMerge ?? this.defaultCanMerge.bind(this);
@@ -87,6 +93,48 @@ export class UndoManager {
       this.redoStack = state.redoStack;
     }
 
+    // Register cross-tab message handlers
+    this.crossTabSync.on('undo-add', (message) => {
+      const msg = message as UndoAddMessage;
+      if (msg.documentId !== this.documentId) {
+        return;
+      }
+
+      this.isApplyingRemote = true;
+      try {
+        // Add operation to local stack without broadcasting
+        this.addLocal(msg.operation);
+      } finally {
+        this.isApplyingRemote = false;
+      }
+    });
+
+    this.crossTabSync.on('undo', (message) => {
+      const msg = message as UndoMessage;
+      if (msg.documentId !== this.documentId) return;
+
+      this.isApplyingRemote = true;
+      try {
+        // Perform undo locally without broadcasting
+        this.undoLocal();
+      } finally {
+        this.isApplyingRemote = false;
+      }
+    });
+
+    this.crossTabSync.on('redo', (message) => {
+      const msg = message as RedoMessage;
+      if (msg.documentId !== this.documentId) return;
+
+      this.isApplyingRemote = true;
+      try {
+        // Perform redo locally without broadcasting
+        this.redoLocal();
+      } finally {
+        this.isApplyingRemote = false;
+      }
+    });
+
     // Always notify after initialization
     this.notifyStateChanged();
   }
@@ -95,6 +143,22 @@ export class UndoManager {
    * Add an operation to the undo stack
    */
   add(operation: Operation): void {
+    this.addLocal(operation);
+
+    // Broadcast to other tabs (if not applying a remote operation)
+    if (!this.isApplyingRemote) {
+      this.crossTabSync.broadcast({
+        type: 'undo-add',
+        documentId: this.documentId,
+        operation,
+      } as Omit<UndoAddMessage, 'from' | 'seq' | 'timestamp'>);
+    }
+  }
+
+  /**
+   * Add an operation locally without broadcasting
+   */
+  private addLocal(operation: Operation): void {
     // Clone operation to avoid mutations
     const op: Operation = {
       type: operation.type,
@@ -141,6 +205,23 @@ export class UndoManager {
    * Undo the last operation
    */
   undo(): Operation | null {
+    const operation = this.undoLocal();
+
+    // Broadcast to other tabs (if not applying a remote operation)
+    if (operation && !this.isApplyingRemote) {
+      this.crossTabSync.broadcast({
+        type: 'undo',
+        documentId: this.documentId,
+      } as Omit<UndoMessage, 'from' | 'seq' | 'timestamp'>);
+    }
+
+    return operation;
+  }
+
+  /**
+   * Undo locally without broadcasting
+   */
+  private undoLocal(): Operation | null {
     if (this.undoStack.length === 0) {
       return null;
     }
@@ -159,6 +240,23 @@ export class UndoManager {
    * Redo the last undone operation
    */
   redo(): Operation | null {
+    const operation = this.redoLocal();
+
+    // Broadcast to other tabs (if not applying a remote operation)
+    if (operation && !this.isApplyingRemote) {
+      this.crossTabSync.broadcast({
+        type: 'redo',
+        documentId: this.documentId,
+      } as Omit<RedoMessage, 'from' | 'seq' | 'timestamp'>);
+    }
+
+    return operation;
+  }
+
+  /**
+   * Redo locally without broadcasting
+   */
+  private redoLocal(): Operation | null {
     if (this.redoStack.length === 0) {
       return null;
     }

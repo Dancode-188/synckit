@@ -89,6 +89,9 @@ test.describe('Multi-Tab Basic Integration', () => {
       await typeText(tab1, 'Version 1')
       await waitForConvergence(tabs, 2000)
 
+      // Wait longer than merge window (1000ms) to ensure separate operations
+      await new Promise(resolve => setTimeout(resolve, 1100))
+
       await typeText(tab1, 'Version 2')
       await waitForConvergence(tabs, 2000)
 

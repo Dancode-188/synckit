@@ -158,11 +158,16 @@ export function TestHarness() {
     const undoManager = undoManagerRef.current
     const textDoc = textDocRef.current
 
-    if (!undoManager || !textDoc || !undoManager.canUndo()) return
+    if (!undoManager || !textDoc || !undoManager.canUndo()) {
+      return
+    }
 
     // Get the operation to undo
     const operation = undoManager.undo()
-    if (!operation || !operation.data) return
+
+    if (!operation || !operation.data) {
+      return
+    }
 
     // Restore previous text
     const { previousText } = operation.data
@@ -171,7 +176,7 @@ export function TestHarness() {
     if (currentText.length > 0) {
       await textDoc.delete(0, currentText.length)
     }
-    if (previousText.length > 0) {
+    if (previousText && previousText.length > 0) {
       await textDoc.insert(0, previousText)
     }
   }

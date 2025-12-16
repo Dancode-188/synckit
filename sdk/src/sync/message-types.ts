@@ -116,6 +116,31 @@ export interface TextDeleteMessage extends BaseMessage {
 }
 
 /**
+ * Undo operation added - broadcasts new operation to other tabs
+ */
+export interface UndoAddMessage extends BaseMessage {
+  type: 'undo-add';
+  documentId: string;
+  operation: any;
+}
+
+/**
+ * Undo operation - broadcasts undo action to other tabs
+ */
+export interface UndoMessage extends BaseMessage {
+  type: 'undo';
+  documentId: string;
+}
+
+/**
+ * Redo operation - broadcasts redo action to other tabs
+ */
+export interface RedoMessage extends BaseMessage {
+  type: 'redo';
+  documentId: string;
+}
+
+/**
  * Union type of all possible cross-tab messages
  */
 export type CrossTabMessage =
@@ -129,7 +154,10 @@ export type CrossTabMessage =
   | RequestFullSyncMessage
   | FullSyncResponseMessage
   | TextInsertMessage
-  | TextDeleteMessage;
+  | TextDeleteMessage
+  | UndoAddMessage
+  | UndoMessage
+  | RedoMessage;
 
 /**
  * Message handler function type
