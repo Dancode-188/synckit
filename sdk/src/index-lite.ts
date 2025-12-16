@@ -36,16 +36,6 @@ export {
   DocumentError
 } from './types'
 
-// React hooks (optional, requires React)
-export {
-  SyncProvider,
-  useSyncKit,
-  useSyncDocument,
-  useSyncField,
-  useSyncDocumentList
-} from './adapters/react'
-export type { SyncProviderProps } from './adapters/react'
-
 // Version
 export const VERSION = '0.1.0-alpha.1-lite'
 export const VARIANT = 'lite'

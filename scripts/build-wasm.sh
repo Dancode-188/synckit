@@ -69,6 +69,8 @@ echo "✅ Bindings generated"
 echo ""
 echo "Step 3: Optimizing WASM binary..."
 wasm-opt -Oz \
+    --strip-debug \
+    --strip-producers \
     pkg-$VARIANT/synckit_core_bg.wasm \
     -o pkg-$VARIANT/synckit_core_bg.wasm
 

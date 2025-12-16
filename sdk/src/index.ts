@@ -56,26 +56,6 @@ export {
   NetworkError,
 } from './types'
 
-// React hooks (optional, requires React)
-export {
-  SyncProvider,
-  useSyncKit,
-  useSyncDocument,
-  useSyncField,
-  useSyncDocumentList,
-  useNetworkStatus,
-  useSyncState,
-  useSyncDocumentWithState,
-  useSyncText,
-  useSyncCounter,
-  useSyncSet,
-  useAwareness,
-  usePresence,
-  useOthers,
-  useSelf,
-} from './adapters/react'
-export type { SyncProviderProps, UseSyncDocumentResult } from './adapters/react'
-
 // Version
 export const VERSION = '0.1.0-alpha.1'
 export const VARIANT = 'default'

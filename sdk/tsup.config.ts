@@ -7,10 +7,15 @@ export default defineConfig({
     'src/adapters/react.tsx',
     'src/adapters/vue/index.ts',
     'src/adapters/svelte/index.ts',
+    'src/cursor/selection.ts',
   ],
   format: ['cjs', 'esm'],
   dts: true,
   clean: true,
+  minify: true,
+  treeshake: true,
+  splitting: false,
+  metafile: true,
   external: [
     // Keep WASM bindings external so they can use import.meta.url natively
     '../wasm/default/synckit_core.js',
@@ -24,4 +29,7 @@ export default defineConfig({
   ],
   // Don't bundle WASM files
   noExternal: [],
+  esbuildOptions(options) {
+    options.drop = ['console', 'debugger']
+  },
 })
