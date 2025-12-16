@@ -241,16 +241,20 @@ describe('StorageCoordinator', () => {
       await coordinator2.init();
 
       // Wait for tab2 to receive at least one heartbeat from tab1
-      // Heartbeat interval is 1000ms by default
-      await vi.advanceTimersByTimeAsync(1100);
+      // Heartbeat interval is 2000ms by default
+      await vi.advanceTimersByTimeAsync(2100);
 
       // tab1 leaves
       tab1.destroy();
       coordinator1.destroy();
 
       // tab2 should detect leader failure and become leader
-      // Need to wait for heartbeatTimeout (3000ms) + multiple liveness checks + election
-      await vi.advanceTimersByTimeAsync(5000);
+      // Timeline:
+      // - heartbeatTimeout: 5000ms (default)
+      // - leaderCheckInterval: 1000ms
+      // - Need: timeout + next check cycle + election time
+      // Total: 5000ms + 1000ms + 500ms = 6500ms
+      await vi.advanceTimersByTimeAsync(7000);
 
       // tab2 should load state from IndexedDB
       expect(tab2.isCurrentLeader()).toBe(true);
