@@ -446,24 +446,24 @@ export class WasmCounter {
      *
      * # Arguments
      * * `amount` - Amount to increment (defaults to 1 if not provided)
-     * @param {bigint | null} [amount]
+     * @param {number | null} [amount]
      */
     increment(amount) {
-        wasm.wasmcounter_increment(this.__wbg_ptr, !isLikeNone(amount), isLikeNone(amount) ? BigInt(0) : amount);
+        wasm.wasmcounter_increment(this.__wbg_ptr, !isLikeNone(amount), isLikeNone(amount) ? 0 : amount);
     }
     /**
      * Decrement the counter
      *
      * # Arguments
      * * `amount` - Amount to decrement (defaults to 1 if not provided)
-     * @param {bigint | null} [amount]
+     * @param {number | null} [amount]
      */
     decrement(amount) {
-        wasm.wasmcounter_decrement(this.__wbg_ptr, !isLikeNone(amount), isLikeNone(amount) ? BigInt(0) : amount);
+        wasm.wasmcounter_decrement(this.__wbg_ptr, !isLikeNone(amount), isLikeNone(amount) ? 0 : amount);
     }
     /**
      * Get the current counter value
-     * @returns {bigint}
+     * @returns {number}
      */
     value() {
         const ret = wasm.wasmcounter_value(this.__wbg_ptr);
@@ -1481,6 +1481,10 @@ function __wbg_get_imports() {
     imports.wbg.__wbg_new_8a6f238a6ece86ea = function() {
         const ret = new Error();
         return addHeapObject(ret);
+    };
+    imports.wbg.__wbg_now_b0938c2b128e32c8 = function() {
+        const ret = Date.now();
+        return ret;
     };
     imports.wbg.__wbg_stack_0ed75d68575b0f3c = function(arg0, arg1) {
         const ret = getObject(arg1).stack;

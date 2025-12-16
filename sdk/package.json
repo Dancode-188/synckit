@@ -78,6 +78,7 @@
     "README.md",
     "LICENSE"
   ],
+  "sideEffects": false,
   "engines": {
     "node": ">=18.0.0"
   },
@@ -109,6 +110,7 @@
     "happy-dom": "^20.0.11",
     "jsdom": "^27.3.0",
     "react": "^18.2.0",
+    "rollup-plugin-visualizer": "^6.0.5",
     "svelte": "^5.45.8",
     "tsup": "^8.0.0",
     "typescript": "^5.3.0",

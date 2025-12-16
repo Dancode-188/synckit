@@ -58,7 +58,11 @@ default = ["core-lite"]
 
 # Core variants
 core-lite = ["wee_alloc"]              # Minimal: LWW + Vector Clock (~22-25KB target)
-core = ["prost", "bytes", "base64", "chrono", "prost-build", "protoc-bin-vendored"]  # Full: + Protocol + DateTime (~40-45KB)
+core = []                               # Base core (no datetime, no protobuf)
+
+# Optional features (can be added to core)
+datetime = ["chrono"]                   # DateTime support (~30-40KB)
+protocol-binary = ["prost", "bytes", "base64", "chrono", "prost-build", "protoc-bin-vendored"]  # Binary protocol (~20-30KB, includes datetime)
 
 # Individual CRDTs (opt-in, require core)
 text-crdt = ["core", "ropey", "unicode-segmentation"]  # Fugue Text CRDT with Rope
@@ -69,13 +73,13 @@ fractional-index = ["core"]
 # Convenience bundles
 text = ["core", "text-crdt"]
 advanced = ["core", "counters", "sets", "fractional-index"]
-full = ["core", "text-crdt", "counters", "sets", "fractional-index"]
+full = ["core", "datetime", "protocol-binary", "text-crdt", "counters", "sets", "fractional-index", "wee_alloc"]
 
 # WASM support (orthogonal to features)
 wasm = ["wasm-bindgen", "web-sys", "js-sys", "console_error_panic_hook"]
 
-# Protocol support (requires prost)
-protocol = ["prost", "bytes", "base64", "prost-build", "protoc-bin-vendored"]
+# Legacy alias for backward compatibility
+protocol = ["protocol-binary"]
 
 # Benchmark harness
 [[bench]]

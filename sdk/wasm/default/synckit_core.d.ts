@@ -64,18 +64,18 @@ export class WasmCounter {
    * # Arguments
    * * `amount` - Amount to increment (defaults to 1 if not provided)
    */
-  increment(amount?: bigint | null): void;
+  increment(amount?: number | null): void;
   /**
    * Decrement the counter
    *
    * # Arguments
    * * `amount` - Amount to decrement (defaults to 1 if not provided)
    */
-  decrement(amount?: bigint | null): void;
+  decrement(amount?: number | null): void;
   /**
    * Get the current counter value
    */
-  value(): bigint;
+  value(): number;
   /**
    * Get the replica ID
    */
@@ -401,9 +401,9 @@ export interface InitOutput {
   readonly wasmfuguetext_fromJSON: (a: number, b: number, c: number) => void;
   readonly __wbg_wasmcounter_free: (a: number, b: number) => void;
   readonly wasmcounter_new: (a: number, b: number) => number;
-  readonly wasmcounter_increment: (a: number, b: number, c: bigint) => void;
-  readonly wasmcounter_decrement: (a: number, b: number, c: bigint) => void;
-  readonly wasmcounter_value: (a: number) => bigint;
+  readonly wasmcounter_increment: (a: number, b: number, c: number) => void;
+  readonly wasmcounter_decrement: (a: number, b: number, c: number) => void;
+  readonly wasmcounter_value: (a: number) => number;
   readonly wasmcounter_getReplicaId: (a: number, b: number) => void;
   readonly wasmcounter_merge: (a: number, b: number) => void;
   readonly wasmcounter_reset: (a: number) => void;
