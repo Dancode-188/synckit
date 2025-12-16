@@ -18,6 +18,9 @@ export default defineConfig({
     // Svelte store types
     'svelte/store',
     'svelte',
+    // Vue and Svelte component files (shipped as source, compiled by consumer)
+    /\.vue$/,
+    /\.svelte$/,
   ],
   // Don't bundle WASM files
   noExternal: [],
