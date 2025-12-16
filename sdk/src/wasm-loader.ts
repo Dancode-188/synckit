@@ -77,8 +77,13 @@ export async function initWASM(): Promise<WASMModule> {
       const wasm = await import('../wasm/default/synckit_core.js')
 
       // Initialize WASM module
-      // In Node.js, we need to load the WASM file manually since fetch doesn't support file:// URLs
-      const isNode = typeof process !== 'undefined' && process.versions?.node && typeof window === 'undefined'
+      // In Node.js or test environments, we need to load the WASM file manually since fetch doesn't support file:// URLs
+      const isNode = typeof process !== 'undefined' && process.versions?.node && (
+        typeof window === 'undefined' ||
+        // Also detect test environments (vitest, jest, etc.) even if they provide window (jsdom)
+        process.env.NODE_ENV === 'test' ||
+        typeof (globalThis as any).describe !== 'undefined' // vitest/jest global
+      )
 
       if (isNode) {
         // Node.js: Load WASM file using fs and pass as buffer
