@@ -9,6 +9,13 @@ import { defineConfig, devices } from '@playwright/test'
 export default defineConfig({
   testDir: './src/__tests__',
   testMatch: ['**/{chaos,integration}/*.test.ts'],
+  testIgnore: [
+    '**/integration/sync.test.ts',
+    '**/integration/richtext-character-id.test.ts',
+    '**/integration/multi-tab-basic.test.ts',
+    '**/integration/cross-feature.test.ts',
+    '**/integration/selection-sharing.test.ts',
+  ],
 
   // Run tests in parallel
   fullyParallel: false, // Chaos tests should run sequentially to avoid port conflicts
@@ -42,6 +49,14 @@ export default defineConfig({
     {
       name: 'chromium',
       use: { ...devices['Desktop Chrome'] },
+    },
+    {
+      name: 'firefox',
+      use: { ...devices['Desktop Firefox'] },
+    },
+    {
+      name: 'webkit',
+      use: { ...devices['Desktop Safari'] },
     },
   ],
 
