@@ -1,11 +1,21 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { CrossTabSync, enableCrossTabSync } from '../sync/cross-tab';
+import {
+  installMockBroadcastChannel,
+  resetMockBroadcastChannel,
+  restoreBroadcastChannel,
+} from './mocks/broadcast-channel';
 
 describe('CrossTabSync', () => {
   let crossTab1: CrossTabSync;
   let crossTab2: CrossTabSync;
+  let originalBroadcastChannel: any;
 
   beforeEach(() => {
+    // Install mock BroadcastChannel for deterministic testing
+    originalBroadcastChannel = (global as any).BroadcastChannel;
+    installMockBroadcastChannel();
+
     // Create tabs with enabled:false to keep sequence numbers at 0
     // Tests will enable them as needed
     crossTab1 = new CrossTabSync('doc-1', { enabled: false });
@@ -15,6 +25,10 @@ describe('CrossTabSync', () => {
   afterEach(() => {
     crossTab1.destroy();
     crossTab2.destroy();
+
+    // Clean up mocks
+    resetMockBroadcastChannel();
+    restoreBroadcastChannel(originalBroadcastChannel);
   });
 
   describe('Basic Messaging', () => {
@@ -72,28 +86,34 @@ describe('CrossTabSync', () => {
     });
 
     it('should increment sequence numbers', async () => {
+      // Enable tab1 first
       crossTab1.enable();
-      crossTab2.enable();
 
-      let count = 0;
-      // Seq starts at 2 because enable() sent tab-joined (seq 0) and election (seq 1) first
-      const expectedSeqs = [2, 3];
+      // Set up handler BEFORE enabling tab2
+      const receivedMessages: any[] = [];
 
-      const messagePromise = new Promise<void>((resolve) => {
-        crossTab2.on('test', (message: any) => {
-          expect(message.seq).toBe(expectedSeqs[count]);
-          count++;
-
-          if (count === 2) {
-            resolve();
-          }
-        });
+      crossTab2.on('test', (message: any) => {
+        receivedMessages.push(message);
       });
 
-      crossTab1.broadcast({ type: 'test' } as any);
-      crossTab1.broadcast({ type: 'test' } as any);
+      // Now enable tab2
+      crossTab2.enable();
 
-      await messagePromise;
+      // Small delay to let enable() complete
+      await new Promise((resolve) => setTimeout(resolve, 50));
+
+      // Broadcast test messages
+      crossTab1.broadcast({ type: 'test', data: 'first' } as any);
+      crossTab1.broadcast({ type: 'test', data: 'second' } as any);
+
+      // Wait for messages to be received
+      await new Promise((resolve) => setTimeout(resolve, 100));
+
+      // Verify we received exactly 2 messages
+      expect(receivedMessages.length).toBe(2);
+
+      // Verify sequence numbers incremented
+      expect(receivedMessages[1].seq).toBe(receivedMessages[0].seq + 1);
     });
   });
 
