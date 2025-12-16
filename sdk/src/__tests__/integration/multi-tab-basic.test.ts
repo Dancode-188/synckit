@@ -161,7 +161,8 @@ test.describe('Multi-Tab Basic Integration', () => {
         const remainingTabs = tabs.filter((_, i) => i !== leaderIndex)
 
         // Wait for new leader election
-        await new Promise(resolve => setTimeout(resolve, 2000))
+        // Need to wait longer than heartbeatTimeout (5000ms) for followers to detect leader is dead
+        await new Promise(resolve => setTimeout(resolve, 6000))
 
         // Verify new leader elected
         const newStates = await Promise.all(remainingTabs.map(getTabState))

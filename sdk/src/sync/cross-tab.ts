@@ -122,6 +122,7 @@ export class CrossTabSync {
 
     if (this.isEnabled) {
       this.setupListeners();
+      this.setupBeforeUnloadHandler();
       this.announcePresence();
       this.startElection();
     }
@@ -307,6 +308,25 @@ export class CrossTabSync {
   }
 
   /**
+   * Setup beforeunload handler to broadcast tab-leaving message
+   */
+  private setupBeforeUnloadHandler(): void {
+    // Only set up in browser environment
+    if (typeof window === 'undefined') {
+      return;
+    }
+
+    // Send tab-leaving message before the page unloads
+    window.addEventListener('beforeunload', () => {
+      try {
+        this.broadcast({ type: 'tab-leaving', tabId: this.tabId } as any);
+      } catch (error) {
+        // Ignore errors during cleanup
+      }
+    });
+  }
+
+  /**
    * Handle incoming message from BroadcastChannel
    */
   private handleMessage(message: CrossTabMessage): void {
@@ -320,6 +340,8 @@ export class CrossTabSync {
       this.handleElectionMessage(message);
     } else if (message.type === 'heartbeat') {
       this.handleHeartbeatMessage(message);
+    } else if (message.type === 'tab-leaving') {
+      this.handleTabLeavingMessage(message);
     } else if (message.type === 'request-full-sync') {
       // Handle full sync request (leader only)
       const requestMessage = message as any;
@@ -518,6 +540,25 @@ export class CrossTabSync {
           this.requestFullSync(senderTabId);
         }
       }
+    }
+  }
+
+  /**
+   * Handle tab-leaving message
+   */
+  private handleTabLeavingMessage(message: CrossTabMessage): void {
+    if (message.type !== 'tab-leaving') return;
+
+    const leavingMessage = message as any;
+    const leavingTabId = leavingMessage.tabId || message.from;
+
+    // If the leaving tab is the current leader, trigger immediate re-election
+    if (leavingTabId === this.currentLeaderId) {
+      this.currentLeaderId = null;
+      this.lastLeaderHeartbeat = 0;
+
+      // Start new election immediately
+      this.startElection();
     }
   }
 
