@@ -8,6 +8,7 @@
 import React, { useEffect, useState, useRef } from 'react'
 import { SyncKit, SyncText, CrossTabSync, UndoManager, type Operation } from '@synckit-js/sdk'
 import { MemoryStorage } from '@synckit-js/sdk/lite'
+import * as SelectionUtils from '@synckit-js/sdk/cursor/selection'
 
 export function TestHarness() {
   const [text, setText] = useState('')
@@ -120,6 +121,7 @@ export function TestHarness() {
     ;(window as any).__synckit_undoStackSize = undoStackSize
     ;(window as any).__synckit_redoStackSize = redoStackSize
     ;(window as any).__synckit_documentText = text
+    ;(window as any).__synckit_selection = SelectionUtils
   })
 
   const handleTextChange = async (e: React.ChangeEvent<HTMLTextAreaElement>) => {

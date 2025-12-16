@@ -141,11 +141,12 @@ export function selectionsOverlap(
   const boundsB = getSelectionBounds(b)
 
   // Check if bounding boxes overlap
+  // Use <= to treat edge-touching as non-overlapping
   return !(
-    boundsA.left + boundsA.width < boundsB.left ||
-    boundsB.left + boundsB.width < boundsA.left ||
-    boundsA.top + boundsA.height < boundsB.top ||
-    boundsB.top + boundsB.height < boundsA.top
+    boundsA.left + boundsA.width <= boundsB.left ||
+    boundsB.left + boundsB.width <= boundsA.left ||
+    boundsA.top + boundsA.height <= boundsB.top ||
+    boundsB.top + boundsB.height <= boundsA.top
   )
 }
 
