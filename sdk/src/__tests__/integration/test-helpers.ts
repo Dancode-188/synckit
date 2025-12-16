@@ -89,7 +89,8 @@ export async function waitForConvergence(
 export async function typeText(tab: SyncKitTab, text: string): Promise<void> {
   const editor = tab.page.locator('[data-testid="editor"]')
   await editor.click()
-  await editor.clear()
+  // Select all existing text before filling to avoid triggering separate clear+fill events
+  await editor.selectText()
   await editor.fill(text)
   // Wait for the async delete/insert operations to complete
   await new Promise(resolve => setTimeout(resolve, 300))
