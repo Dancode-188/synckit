@@ -1,129 +1,131 @@
 # Migrating from Firebase/Firestore to SyncKit
 
-A comprehensive guide for migrating from Firebase/Firestore to SyncKit for true offline-first architecture and freedom from vendor lock-in.
+A comprehensive guide for migrating from Firebase/Firestore to SyncKit for true offline-first architecture and infrastructure control.
 
 ---
 
 ## Table of Contents
 
-1. [Why Migrate from Firebase?](#why-migrate-from-firebase)
-2. [Firebase vs SyncKit Comparison](#firebase-vs-synckit-comparison)
-3. [Migration Considerations](#migration-considerations)
-4. [Data Model Mapping](#data-model-mapping)
-5. [Code Migration Patterns](#code-migration-patterns)
-6. [Testing Strategy](#testing-strategy)
-7. [Deployment Plan](#deployment-plan)
-8. [Common Challenges](#common-challenges)
+1. [What Firebase Does Exceptionally Well](#what-firebase-does-exceptionally-well)
+2. [When to Consider SyncKit](#when-to-consider-synckit)
+3. [Firebase vs SyncKit Comparison](#firebase-vs-synckit-comparison)
+4. [Migration Considerations](#migration-considerations)
+5. [Data Model Mapping](#data-model-mapping)
+6. [Code Migration Patterns](#code-migration-patterns)
+7. [Testing Strategy](#testing-strategy)
+8. [Deployment Plan](#deployment-plan)
+9. [Common Challenges](#common-challenges)
 
 ---
 
-## Why Migrate from Firebase?
+## What Firebase Does Exceptionally Well
 
-### Top 5 Pain Points with Firebase
+Firebase is a complete backend-as-a-service platform that has powered millions of apps:
 
-#### 1. Vendor Lock-In Risk
+**Strengths:**
+- **Fully Managed Infrastructure:** Zero DevOps—Google handles scaling, backups, security updates, and uptime
+- **Generous Free Tier:** Start free, scale as you grow
+- **Built-in Authentication:** Email, Google, Facebook, Twitter, phone auth all included
+- **Real-time Database & Firestore:** Battle-tested real-time sync used by massive apps
+- **Cloud Functions:** Serverless backend code that scales automatically
+- **Firebase Storage:** File uploads with automatic CDN distribution
+- **Crashlytics & Analytics:** Production debugging and user insights
+- **ML Kit:** On-device machine learning without complexity
+- **App Distribution:** Beta testing and app delivery
+- **Complete Ecosystem:** Everything integrates seamlessly
 
-**Problem:** Deep integration with Google infrastructure makes migration difficult and expensive.
+**What makes Firebase special:**
 
-> "Firestore is the epitome of vendor lock-in. Everything from your data model to your security rules to your client code is Firebase-specific." — Spencer Pauly, Engineering Lead
+Firebase lets you ship a production app in hours, not weeks. Authentication, database, file storage, analytics, and serverless functions all work together out of the box. For startups and teams without dedicated DevOps, Firebase removes infrastructure complexity entirely.
 
-**Impact:**
-- Can't easily switch providers
-- Forced Google Cloud ecosystem
-- Migration costs escalate over time
-- Limited negotiating power on pricing
+**If managed infrastructure and rapid development are your priorities, Firebase is excellent.**
 
-#### 2. Unpredictable Pricing
+---
 
-**Problem:** Costs can spike unexpectedly with no change in usage patterns.
+## When to Consider SyncKit
 
-**Real-world example:**
-- **Before:** $25/month for production app
-- **After:** $2,000/month (7,000% increase!)
-- **Cause:** Document read charges, no usage change
-- **Source:** Medium case study, HackerNews discussions
+Firebase excels at managed infrastructure. However, certain scenarios benefit from SyncKit's approach:
 
-**Billing surprises:**
+### Scenario 1: Extended Offline Capability
+
+Firebase provides offline persistence, but with limitations:
+- Cache-based (not a true local database)
+- Storage limits (~40MB in practice)
+- Cleared on restart in some configurations
+
+**SyncKit approach:** IndexedDB-based storage (typically ~50GB+), persistent across restarts, true local-first database.
+
+**Consider SyncKit if:** Your users need unlimited offline storage or work extensively without connectivity.
+
+### Scenario 2: Cost Predictability at Scale
+
+Firebase pricing is usage-based:
 - Document reads: $0.036 per 100,000
 - Document writes: $0.108 per 100,000
 - Network egress: $0.12/GB
-- No spending caps available
 
-#### 3. Cache-Based "Offline" (Not True Offline-First)
+Costs scale with usage (which is good when starting, but can become unpredictable at scale).
 
-**Problem:** Firebase persistence is cache-based with strict limitations.
+**SyncKit approach:** Self-hosted, predictable infrastructure costs regardless of usage.
 
-**Limitations:**
-- **40MB cache limit** - Exceeded cache is evicted unpredictably
-- **500 offline mutations** - Exceeding causes errors
-- **Lost on restart** - Cache cleared when app restarts
-- **No unlimited storage** - Can't support large offline workloads
+**Consider SyncKit if:** You want fixed infrastructure costs or your Firebase bill is becoming unpredictable.
 
-**Compare to SyncKit:**
-- ✅ Unlimited storage (IndexedDB, ~50GB+ typical)
-- ✅ Persistent across restarts
-- ✅ Unlimited offline operations
-- ✅ True local database, not cache
+### Scenario 3: Data Sovereignty
 
-#### 4. Query Limitations
+Firebase stores data on Google Cloud:
+- Data center locations are limited
+- Google's infrastructure and compliance
+- Vendor-managed security
 
-**Problem:** Firestore queries have strict limitations that block common use cases.
+**SyncKit approach:** Host anywhere—your servers, your data centers, your compliance requirements.
 
-**Limitations:**
-- **Single-field range queries only** - Can't query `WHERE age > 18 AND score > 100`
-- **No OR queries** - Must use `IN` with array (max 10 values)
-- **No wildcard searches** - Full-text search requires Algolia ($)
-- **No JOIN operations** - Must denormalize data
+**Consider SyncKit if:** You need complete control over data location for regulatory compliance (GDPR, HIPAA, etc.).
 
-> "The range queries only on a single field limitation is irritating." — LeanCode Review
+### Scenario 4: Query Flexibility
 
-**SyncKit alternative:**
-- Query your own database (Postgres, SQLite, etc.)
-- No artificial query restrictions
-- Use SQL for complex queries
+Firestore has specific query constraints:
+- Range filters on single field only
+- OR queries require `IN` (limited to 10 values)
+- No native full-text search
+- No JOIN operations
 
-#### 5. Cold Start Issues
+**SyncKit approach:** Use your own database (Postgres, MySQL, SQLite) with full SQL capabilities.
 
-**Problem:** Initial load times can be **2-30 seconds** on poor connections.
-
-**GitHub Issue #4691** (8+ years old, 600+ comments):
-- "Initial load takes 2 mins for some users"
-- "No way to show progress to user"
-- "Can't optimize without CDN control"
-
-**SyncKit advantage:**
-- Data already local (IndexedDB)
-- <100ms initial load from local database
-- No network dependency for initial render
+**Consider SyncKit if:** Firestore's query limitations are blocking features you need.
 
 ---
 
 ## Firebase vs SyncKit Comparison
 
-| Feature | Firebase | SyncKit | Winner |
-|---------|----------|---------|--------|
-| **Offline Support** | ⚠️ Cache (40MB, 500 ops) | ✅ True offline-first (unlimited) | 🏆 SyncKit |
-| **Pricing** | 💰 Usage-based, unpredictable | ✅ Self-hosted, predictable | 🏆 SyncKit |
-| **Vendor Lock-in** | ❌ Deep Google integration | ✅ Open source, portable | 🏆 SyncKit |
-| **Query Capabilities** | ⚠️ Limited (single-field range) | ✅ Use any database (SQL, NoSQL) | 🏆 SyncKit |
-| **Bundle Size** | ~150KB gzipped | **~59KB** gzipped (~45KB lite) | 🏆 SyncKit (2.5x smaller) |
-| **Cold Start** | ⚠️ 2-30s on slow networks | ✅ <100ms (local data) | 🏆 SyncKit |
-| **Managed Backend** | ✅ Fully managed | ⚠️ Self-hosted (or managed soon) | 🏆 Firebase |
-| **Auth Integration** | ✅ Built-in | ⚠️ Bring your own (JWT) | 🏆 Firebase |
-| **Ecosystem** | ✅ Mature (Cloud Functions, etc.) | ⚠️ Growing | 🏆 Firebase |
-| **Data Sovereignty** | ❌ Google Cloud only | ✅ Your infrastructure | 🏆 SyncKit |
+Both handle real-time data, but optimize for different priorities:
 
-**When to migrate:**
-- ✅ **CRITICAL:** Cost unpredictability is business risk
-- ✅ **CRITICAL:** Regulatory compliance requires data sovereignty
-- ✅ **HIGH:** Extended offline capability required
-- ✅ **HIGH:** Query limitations blocking features
-- ✅ **MEDIUM:** Vendor lock-in concerns
+| Feature | Firebase | SyncKit v0.2.0 | Notes |
+|---------|----------|----------------|-------|
+| **Offline Support** | Cache-based (~40MB) | ✅ True local database (unlimited) | Firebase: limited cache. SyncKit: persistent storage. |
+| **Pricing** | Usage-based ($0.036/100k reads) | Self-hosted (fixed) | Firebase: scales with usage. SyncKit: predictable costs. |
+| **Infrastructure** | ✅ Fully managed | Self-hosted | Firebase: zero DevOps. SyncKit: you manage it. |
+| **Auth** | ✅ Built-in (many providers) | JWT-based (BYO) | Firebase has comprehensive auth. SyncKit: bring your own. |
+| **Bundle Size** | ~150-200KB | **154KB** (46KB lite) | Comparable sizes. |
+| **Query Capabilities** | Firestore queries | Your database (SQL, etc.) | Firebase: Firestore API. SyncKit: full database power. |
+| **Cloud Functions** | ✅ Built-in serverless | Use your backend | Firebase: integrated. SyncKit: you build it. |
+| **File Storage** | ✅ Built-in CDN | Use S3/your solution | Firebase: managed. SyncKit: bring your own. |
+| **Ecosystem** | ✅ Complete (Analytics, ML, etc.) | Sync only | Firebase is full-stack. SyncKit specializes in sync. |
+| **Data Sovereignty** | Google Cloud only | ✅ Host anywhere | Firebase: Google's infrastructure. SyncKit: your control. |
+| **Rich Text** | Build your own | ✅ Peritext + Quill | SyncKit includes collaborative editing. |
+| **Undo/Redo** | Build your own | ✅ Cross-tab | SyncKit's undo syncs across tabs. |
 
-**When to stay:**
-- ✅ **Budget <$100/month** and predictable usage
-- ✅ **Need managed backend** (no DevOps resources)
-- ✅ **Heavy Firebase ecosystem** usage (Functions, ML, etc.)
+### Trade-offs Summary
+
+**Firebase gives you:**
+- Managed infrastructure (no servers to manage)
+- Complete ecosystem (auth, storage, functions, analytics)
+- Rapid development (ship faster)
+
+**SyncKit gives you:**
+- Cost predictability (self-hosted)
+- Unlimited offline capability
+- Data sovereignty (host anywhere)
+- No vendor lock-in
 
 ---
 
@@ -147,10 +149,10 @@ firebase firestore:indexes
 
 1. **Data volume:** How many documents? Total size?
 2. **Read/write patterns:** Reads per day? Writes per day?
-3. **Query complexity:** Are you hitting query limitations?
+3. **Current costs:** Monthly Firebase bill? Is it predictable?
 4. **Offline requirements:** Do users need unlimited offline?
-5. **Current costs:** Monthly Firebase bill?
-6. **Team readiness:** DevOps resources for self-hosting?
+5. **Team readiness:** DevOps resources for self-hosting?
+6. **Ecosystem usage:** Using Cloud Functions, Storage, Analytics?
 
 ### Migration Strategies
 
@@ -277,20 +279,16 @@ await firebase.runTransaction(async (transaction) => {
 })
 ```
 
-**SyncKit (v0.1.0):**
+**SyncKit:**
 ```typescript
-// ⚠️ Note: Transactions not yet implemented in v0.1.0
-// Use optimistic updates with LWW conflict resolution
 const todo = sync.document<Todo>('todo-1')
 await todo.init()
 
 const currentData = todo.get()
 await todo.update({ count: currentData.count + 1 })
 
-// LWW automatically handles conflicts if multiple clients update simultaneously
+// Note: Uses LWW (Last-Write-Wins) for conflict resolution
 ```
-
-**Note:** True atomic transactions are planned for a future version. Currently, SyncKit uses LWW (Last-Write-Wins) for conflict resolution.
 
 ---
 
@@ -336,11 +334,7 @@ function TodoComponent({ id }: { id: string }) {
 }
 ```
 
-**Benefits:**
-- ✅ 60% less code
-- ✅ Automatic cleanup
-- ✅ Works offline immediately
-- ✅ Type-safe updates included
+Less code, works offline automatically.
 
 ### Pattern 2: Writing Data with Offline Support
 
@@ -376,11 +370,7 @@ async function updateTodo(id: string, updates: Partial<Todo>) {
 }
 ```
 
-**Benefits:**
-- ✅ Offline by default (no setup)
-- ✅ No cache limits (40MB → unlimited)
-- ✅ Simpler error handling
-- ✅ Persistent across restarts
+Simpler, offline by default.
 
 ### Pattern 3: Querying Data
 
@@ -421,10 +411,10 @@ const todos = await response.json()
 ```
 
 **Trade-offs:**
-- ⚠️ SyncKit doesn't include query language (use your database)
-- ✅ No query limitations (single-field range, OR, etc.)
-- ✅ Full SQL power if needed
-- ✅ Works offline (client-side filtering)
+- SyncKit doesn't include query language (use your database)
+- No Firestore query limitations
+- Full SQL power if needed
+- Works offline (client-side filtering)
 
 ---
 
@@ -480,7 +470,7 @@ describe('Migration parity tests', () => {
 ### Performance Comparison
 
 ```typescript
-test('SyncKit should be faster than Firebase for local reads', async () => {
+test('Compare local read performance', async () => {
   // Firebase read
   const firebaseStart = performance.now()
   await firebase.collection('todos').doc('todo-1').get()
@@ -493,9 +483,6 @@ test('SyncKit should be faster than Firebase for local reads', async () => {
 
   console.log(`Firebase: ${firebaseDuration.toFixed(2)}ms`)
   console.log(`SyncKit: ${synckitDuration.toFixed(2)}ms`)
-
-  // SyncKit should be significantly faster (local IndexedDB)
-  expect(synckitDuration).toBeLessThan(firebaseDuration / 2)
 })
 ```
 
@@ -597,14 +584,14 @@ npm uninstall firebase
 
 **Validation:**
 - ✅ No Firebase code remaining
-- ✅ Bundle size reduced
+- ✅ Bundle size potentially reduced
 - ✅ All features working
 
 ---
 
 ## Common Challenges
 
-### Challenge 1: Firebase Security Rules → JWT Auth
+### Challenge 1: Firebase Security Rules → Your Backend Auth
 
 **Firebase:**
 ```javascript
@@ -619,9 +606,8 @@ service cloud.firestore {
 }
 ```
 
-**SyncKit (v0.1.0):**
+**SyncKit:**
 ```typescript
-// ✅ Network sync is fully available in v0.1.0
 const sync = new SyncKit({
   storage: 'indexeddb',
   name: 'my-app',
@@ -629,14 +615,13 @@ const sync = new SyncKit({
 })
 await sync.init()
 
-// Note: Implement authentication/authorization in your backend API endpoints
+// Implement authentication in your backend API
 // SyncKit focuses on sync; you control auth (JWT, sessions, etc.)
 ```
 
 **Migration approach:**
-- Implement authentication in your backend API (SyncKit doesn't enforce auth)
-- SyncKit handles offline-first local storage AND network sync
-- Use WebSocket for real-time synchronization across clients
+- Implement authentication in your backend
+- SyncKit handles sync, you handle auth
 
 ### Challenge 2: Firebase Cloud Functions → Your Backend
 
@@ -651,13 +636,9 @@ exports.onTodoCreate = functions.firestore
   })
 ```
 
-**SyncKit (v0.1.0):**
+**SyncKit:**
 ```typescript
-// ⚠️ Note: Event system not yet implemented in v0.1.0
-// Future: Will support document lifecycle events
-
-// Current v0.1.0 approach: Implement webhooks in your backend API
-// Example: Express.js endpoint
+// Implement in your backend API
 app.post('/api/todos', async (req, res) => {
   const todo = req.body
 
@@ -671,7 +652,7 @@ app.post('/api/todos', async (req, res) => {
 })
 ```
 
-**Migration note:** In v0.1.0, implement server-side logic in your own backend. Document lifecycle events will be added in a future version.
+**Trade-off:** You manage the backend, but you control the logic.
 
 ### Challenge 3: Firebase Hosting → Your Hosting
 
@@ -694,48 +675,61 @@ npm run build
 aws s3 sync dist/ s3://my-bucket
 ```
 
+Many excellent alternatives available.
+
 ---
 
 ## Summary
 
-**Migration Decision Matrix:**
+### What SyncKit v0.2.0 Includes
 
-| Factor | Migrate if... |
-|--------|---------------|
-| **Cost** | Firebase bill >$500/month OR unpredictable spikes |
-| **Offline** | Need unlimited offline storage/operations |
-| **Compliance** | Data sovereignty required (GDPR, HIPAA) |
-| **Queries** | Hitting Firebase query limitations |
-| **Vendor lock-in** | Strategic concern about Google dependency |
-| **Bundle size** | Need <50KB bundle (mobile) |
+- **Unlimited offline storage:** IndexedDB-based, not limited cache
+- **Collaborative editing:** Rich text with Peritext, undo/redo across tabs
+- **Real-time presence:** See who's editing, where they're typing
+- **Your infrastructure:** Self-host or deploy anywhere
+- **Bundle: 154KB** (Firebase is ~150-200KB, comparable)
+- **Cost: Predictable** (self-hosted) vs Firebase's usage-based
 
-**Expected Benefits After Migration:**
+### When to Migrate
 
-| Metric | Before (Firebase) | After (SyncKit) | Improvement |
-|--------|-------------------|-----------------|-------------|
-| **Bundle size** | ~150KB | **~59KB** (~45KB lite) | 61% smaller |
-| **Offline storage** | 40MB (cache) | Unlimited (IndexedDB) | ∞ |
-| **Monthly cost** | $25-$2,000+ | $0 (self-hosted) | 100% savings |
-| **Initial load** | 2-30s | <100ms | 20-300x faster |
-| **Vendor lock-in** | High | None | Free to migrate |
+| Your Situation | Recommendation |
+|----------------|----------------|
+| **Firebase bill is unpredictable** | Consider SyncKit—fixed infrastructure costs |
+| **Need unlimited offline** | Migrate—SyncKit's local-first is unlimited |
+| **Data sovereignty required** | Migrate—host anywhere you need |
+| **Query limitations blocking you** | Consider SyncKit—use any database |
+| **Happy with Firebase** | Stick with it—Firebase is excellent for many use cases |
 
-**Typical Migration Timeline:**
+### Migration Timeline
 
-- **Week 1:** Dual-write setup
-- **Week 2:** Validation and testing
-- **Week 3:** Cutover to SyncKit
-- **Week 4:** Cleanup and decommission Firebase
+Most teams complete Firebase migrations in 3-4 weeks:
 
-**Total: 4 weeks with zero downtime**
+1. **Week 1:** Set up SyncKit, implement dual-write
+2. **Week 2:** Test everything, validate data consistency
+3. **Week 3:** Switch traffic to SyncKit
+4. **Week 4:** Optional—decommission Firebase
 
-**Next Steps:**
+Zero downtime. Gradual rollout. Low risk.
 
-1. Analyze your Firebase usage and costs
-2. Set up SyncKit in parallel (dual-write mode)
-3. Run validation tests
-4. Gradually cutover traffic
-5. Monitor and optimize
+### What You'll Need to Replace
+
+Be realistic about what Firebase provides:
+
+- **Managed infrastructure:** You'll run your own backend
+- **Built-in auth:** Use Auth0, Clerk, Supabase Auth, or build your own
+- **Cloud Functions:** Move to your backend or edge functions (Vercel, Cloudflare)
+- **Firebase Storage:** Use S3, Cloudflare R2, or similar
+- **Analytics:** Use your preferred analytics service
+
+If these are critical and working well, maybe Firebase is the right choice. But if costs are unpredictable or you need true offline, SyncKit provides an alternative.
+
+### Next Steps
+
+1. Assess your Firebase usage and costs
+2. Try the [Getting Started Guide](./getting-started.md)
+3. Set up parallel testing (dual-write)
+4. Migrate when ready
 
 ---
 
-**Freedom from vendor lock-in awaits! 🚀**
+**Control your infrastructure. Control your costs. 🚀**

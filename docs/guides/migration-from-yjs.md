@@ -1,142 +1,205 @@
 # Migrating from Yjs/Automerge to SyncKit
 
-A comprehensive guide for migrating from CRDT libraries (Yjs, Automerge) to SyncKit's simplified offline-first architecture.
+Thinking about switching to SyncKit? This guide walks you through what changes, what stays the same, and when it makes sense to migrate.
 
 ---
 
 ## Table of Contents
 
-1. [Why Migrate from Yjs/Automerge?](#why-migrate-from-yjsautomerge)
-2. [Yjs vs SyncKit Comparison](#yjs-vs-synckit-comparison)
-3. [Automerge vs SyncKit Comparison](#automerge-vs-synckit-comparison)
-4. [Migration Considerations](#migration-considerations)
-5. [Core Concepts Mapping](#core-concepts-mapping)
-6. [Code Migration Patterns](#code-migration-patterns)
-7. [Performance Optimization](#performance-optimization)
-8. [Testing & Validation](#testing--validation)
+1. [When to Choose SyncKit Over Yjs/Automerge](#when-to-choose-synckit-over-yjsautomerge)
+2. [What Yjs Does Exceptionally Well](#what-yjs-does-exceptionally-well)
+3. [What Automerge Does Exceptionally Well](#what-automerge-does-exceptionally-well)
+4. [Design Philosophy: Modular vs Integrated](#design-philosophy-modular-vs-integrated)
+5. [Yjs vs SyncKit Comparison](#yjs-vs-synckit-comparison)
+6. [Automerge vs SyncKit Comparison](#automerge-vs-synckit-comparison)
+7. [Migration Considerations](#migration-considerations)
+8. [Core Concepts Mapping](#core-concepts-mapping)
+9. [Code Migration Patterns](#code-migration-patterns)
+10. [Performance Optimization](#performance-optimization)
+11. [Testing & Validation](#testing--validation)
 
 ---
 
-## Why Migrate from Yjs/Automerge?
+## When to Choose SyncKit Over Yjs/Automerge
 
-### Yjs Pain Points
+**Choose SyncKit if you want:**
+- Rich text editing with proper conflict resolution (Peritext) built-in
+- Cross-tab undo/redo without custom implementation
+- Framework adapters (React, Vue, Svelte) maintained and tested for you
+- Production features that work together immediately
+- A complete solution in one package (154KB)
 
-#### 1. Node.js/TypeScript Issues
+**Choose Yjs if:**
+- Bundle size is your absolute top priority (65KB vs 154KB)
+- You need CodeMirror or Monaco editor integration
+- You prefer building custom integrations yourself
+- Your team has deep CRDT expertise
 
-**Problem:** Yjs has persistent Node.js and TypeScript compatibility issues.
+**Choose Automerge if:**
+- You need specific CRDT types (lists, complex nested structures)
+- Time-travel debugging is critical for your use case
+- You're already invested in the Automerge ecosystem
 
-**GitHub Issues:**
-- #460: "Cannot use import statement outside a module"
-- #425: "Yjs cannot be imported in Node.js with ESM"
-- #384: "TypeScript types are incorrect/missing"
+---
 
+## What Yjs Does Exceptionally Well
+
+Yjs is a brilliantly optimized CRDT library that's been battle-tested in production:
+
+**Strengths:**
+- **Minimal bundle size:** At ~65KB (core), it's the smallest production-ready CRDT library
+- **Battle-tested:** Used by thousands of apps in production for years
+- **Efficient sync:** State vector approach minimizes network overhead
+- **Flexible architecture:** Modular design lets you build exactly what you need
+- **Editor ecosystem:** Bindings for ProseMirror, Monaco, CodeMirror, Quill, and more
+- **WebRTC support:** Peer-to-peer sync without a server
+- **Mature community:** Large ecosystem of providers and extensions
+
+**What makes Yjs special:**
+
+Yjs has been refined over years to be incredibly efficient. The core team's focus on minimalism means every byte is optimized. If you only need basic text sync and want maximum control over your integration, Yjs is an excellent choice.
+
+**If these match your priorities, stick with Yjs.**
+
+---
+
+## What Automerge Does Exceptionally Well
+
+Automerge is a powerful CRDT library with unique capabilities:
+
+**Strengths:**
+- **Rich CRDT types:** Comprehensive support for lists, maps, text, and nested structures
+- **Time-travel debugging:** Built-in operation history lets you inspect every change
+- **Conflict visibility:** See exactly how conflicts were resolved
+- **Mature core:** Stable, well-tested CRDT implementation
+- **Academic foundation:** Built on solid CRDT research
+- **Portable format:** WASM implementation works everywhere
+- **Complete history:** Maintains full operation graph for auditing
+
+**What makes Automerge special:**
+
+Automerge prioritizes correctness and capability. If you need to inspect every change, debug conflicts, or work with complex nested data structures, Automerge gives you powerful tools.
+
+**If these match your priorities, stick with Automerge.**
+
+---
+
+## Design Philosophy: Modular vs Integrated
+
+Yjs, Automerge, and SyncKit solve similar problems but make different trade-offs.
+
+### Yjs Philosophy: Modular Core
+
+**Approach:** Minimal core (65KB) + community ecosystem
+
+**What this gives you:**
+- Maximum flexibility to build exactly what you need
+- Smaller bundle if you only need basic features
+- Choose your own framework integration approach
+- Fine-grained control over sync, persistence, and awareness
+
+**Trade-off:** You assemble the pieces yourself. Setting up sync requires choosing and configuring providers (WebSocket, WebRTC, IndexedDB). Framework integration is your responsibility.
+
+### Automerge Philosophy: Complete History
+
+**Approach:** Full operation history + rich CRDT types
+
+**What this gives you:**
+- Time-travel debugging through the entire document history
+- Complex data structures (lists, maps, nested objects) with conflict resolution
+- Explicit conflict visibility for auditing
+- Portable WASM implementation
+
+**Trade-off:** Larger bundle (~300KB+) to maintain complete operation graph. Immutable API requires understanding change functions.
+
+### SyncKit Philosophy: Integrated Solution
+
+**Approach:** Batteries included (154KB) with everything tested together
+
+**What this gives you:**
+- Framework adapters (React, Vue, Svelte) built-in and maintained
+- Rich text (Peritext), undo/redo, presence work together out of the box
+- Quill binding ships in the package
+- Zero configuration—sync, persistence, and awareness included
+
+**Trade-off:** Larger bundle than Yjs (154KB vs 65KB) since everything's included. Less flexibility than building your own integration.
+
+---
+
+## Yjs vs SyncKit: Comparison
+
+Both libraries handle collaborative editing. Here's how they differ:
+
+| Feature | Yjs | SyncKit v0.2.0 | Notes |
+|---------|-----|---------------|-------|
+| **Bundle Size** | ~65KB (core) | **154KB** (46KB lite) | Yjs is smaller. SyncKit includes text, rich text, undo, presence, cursors, framework adapters. |
+| **Setup** | Manual (providers, persistence) | Built-in | Yjs: choose providers. SyncKit: works immediately. |
+| **Text Editing** | Y.Text (mature, fast) | SyncText + RichText | Both work well. Yjs is more mature. |
+| **Rich Text** | Requires bindings (y-prosemirror, y-quill) | Built-in with Quill binding | Yjs: install separately. SyncKit: included with Peritext. |
+| **Undo/Redo** | Y.UndoManager | UndoManager (cross-tab) | Both have it. SyncKit's syncs across tabs. |
+| **Framework Support** | Community packages | React, Vue 3, Svelte 5 included | Yjs: build your own. SyncKit: maintained adapters. |
+| **Editor Bindings** | ProseMirror, Monaco, CodeMirror, Quill | Quill | Yjs has more editor support. |
+| **Maturity** | Battle-tested, years in production | Production-ready, growing | Yjs has more production years. |
+| **TypeScript** | Community types | Native TypeScript | SyncKit is TypeScript-first. |
+
+### Setting Up React Integration
+
+**Yjs approach:**
 ```typescript
-// ❌ Common Yjs error
+// You build this yourself
+import { useEffect, useState } from 'react'
 import * as Y from 'yjs'
-// Error: Cannot use import statement outside a module
+
+function useSyncedState(yText) {
+  const [value, setValue] = useState(yText.toString())
+
+  useEffect(() => {
+    const observer = () => setValue(yText.toString())
+    yText.observe(observer)
+    return () => yText.unobserve(observer)
+  }, [yText])
+
+  return [value, (newValue) => {
+    yText.delete(0, yText.length)
+    yText.insert(0, newValue)
+  }]
+}
 ```
 
-**SyncKit solution:** Native TypeScript, zero configuration, works everywhere.
-
-#### 2. Steep Learning Curve
-
-**Problem:** Understanding Yjs requires learning CRDT internals.
-
-**Concepts to master:**
-- Y.Doc structure
-- Y.Map, Y.Array, Y.Text differences
-- Providers (WebRTC, WebSocket, IndexedDB)
-- Awareness protocol
-- Transactions and subdocuments
-- Undo/redo manager
-
-**SyncKit solution:** Simple document API, CRDTs handled internally.
-
-#### 3. Manual Provider Setup
-
-**Problem:** Must manually wire up providers for sync, persistence, awareness.
-
+**SyncKit approach:**
 ```typescript
-// ❌ Yjs requires manual provider setup
-import * as Y from 'yjs'
-import { WebsocketProvider } from 'y-websocket'
-import { IndexeddbPersistence } from 'y-indexeddb'
+// Built-in hook
+import { useSyncText } from '@synckit/react'
 
-const ydoc = new Y.Doc()
-
-// Set up persistence
-const persistence = new IndexeddbPersistence('my-doc', ydoc)
-
-// Set up WebSocket sync
-const provider = new WebsocketProvider('ws://localhost:1234', 'my-room', ydoc)
-
-// Set up awareness
-const awareness = provider.awareness
+function MyComponent() {
+  const [text, setText] = useSyncText('doc-id')
+  return <input value={text} onChange={(e) => setText(e.target.value)} />
+}
 ```
 
-**SyncKit solution:** All built-in, zero configuration.
+Both work. Yjs gives you control. SyncKit gives you convenience.
 
-#### 4. Performance Degradation with Many Clients
+---
 
-**Problem:** Yjs sync performance degrades O(n) with client count.
+## Automerge vs SyncKit: Comparison
 
-**Benchmarks:**
-- 10 clients: ~50ms sync
-- 100 clients: ~500ms sync
-- 1000 clients: ~5000ms sync
+Both aim for production-ready collaboration. Here's where they differ:
 
-**SyncKit solution:** Server-side delta computation, constant performance.
+| Feature | Automerge | SyncKit v0.2.0 | Notes |
+|---------|-----------|---------------|-------|
+| **Bundle Size** | **300KB+** with ecosystem | 154KB (46KB lite) | SyncKit is smaller. |
+| **API Style** | Immutable updates, change functions | Mutable document API | Automerge: functional. SyncKit: familiar JavaScript. |
+| **CRDT Features** | Lists, maps, text, rich arrays | Text, RichText, Counter, Set | Automerge has more CRDT types. |
+| **Rich Text** | Supported | Peritext with Quill binding | Both support rich text. |
+| **Undo/Redo** | Available | Built-in, cross-tab | SyncKit makes it simpler. |
+| **Framework Support** | Build your own | React, Vue, Svelte included | SyncKit ships adapters. |
+| **History** | Complete operation graph | Current state only | Automerge: time-travel. SyncKit: current state. |
+| **Production Status** | Stable core, evolving ecosystem | Production-ready | Both are solid. |
 
-### Automerge Pain Points
+### State Updates
 
-#### 1. Large Bundle Size
-
-**Problem:** Automerge is **~60-78KB gzipped** (similar to SyncKit).
-
-**Size comparison (gzipped):**
-- Yjs: **~19KB** (pure JavaScript)
-- SyncKit Lite: **~45KB** (WASM + JS)
-- SyncKit Default: **~59KB** (WASM + JS)
-- Automerge: **~60-78KB** (WASM + JS)
-
-**Impact:**
-- Bundle size similar to SyncKit
-- Different trade-offs: Automerge = rich CRDTs, SyncKit = structured data sync
-
-**SyncKit solution:** ~59KB total, competitive size, simpler API for most use cases.
-
-#### 2. Alpha/Beta Status
-
-**Problem:** Automerge 2.0 still in alpha/beta after 2+ years.
-
-**Risks:**
-- ⚠️ Breaking API changes
-- ⚠️ Production stability unknown
-- ⚠️ Limited enterprise support
-- ⚠️ Sparse ecosystem
-
-**SyncKit solution:** Production-ready v0.1.0, stable API.
-
-#### 3. Severe Performance Issues
-
-**Problem:** Automerge is **86x slower** than Yjs for common operations.
-
-**Benchmarks (1000 text edits):**
-- Yjs: ~11ms
-- Automerge: ~950ms (86x slower!)
-
-**Memory usage:**
-- Yjs: ~683KB
-- Automerge: ~180MB (263x more!)
-
-**SyncKit solution:** Fast LWW merge (~74µs), optimized WASM.
-
-#### 4. Complex API
-
-**Problem:** Automerge API requires understanding CRDT operations.
-
+**Automerge approach:**
 ```typescript
-// ❌ Automerge requires explicit CRDT operations
 import { change, from } from '@automerge/automerge'
 
 let doc = from({ todos: [] })
@@ -148,60 +211,23 @@ doc = change(doc, doc => {
 // Must understand immutable updates and change functions
 ```
 
-**SyncKit solution:** Simple update API, no CRDT knowledge needed.
+**SyncKit approach:**
+```typescript
+const todoList = sync.document<TodoList>('todos')
+await todoList.init()
 
----
+const currentData = todoList.get()
+await todoList.update({
+  todos: [
+    ...(currentData.todos || []),
+    { id: 'todo-1', text: 'Buy milk', done: false }
+  ]
+})
 
-## Yjs vs SyncKit Comparison
+// Mutable API, familiar JavaScript
+```
 
-| Feature | Yjs | SyncKit | Winner |
-|---------|-----|---------|--------|
-| **Bundle Size (gzipped)** | **~19KB** | ~59KB (~45KB lite) | 🏆 Yjs (3.1x smaller) |
-| **Learning Curve** | ⚠️ Steep (CRDT internals) | ✅ Simple (document API) | 🏆 SyncKit |
-| **Setup Complexity** | ⚠️ Manual providers | ✅ Zero config | 🏆 SyncKit |
-| **TypeScript Support** | ⚠️ Issues (#460, #425) | ✅ Native TS | 🏆 SyncKit |
-| **Node.js Support** | ⚠️ ESM issues | ✅ Works everywhere | 🏆 SyncKit |
-| **Text CRDT Performance** | ✅ Excellent | ✅ Good | 🏆 Yjs |
-| **Multi-client Performance** | ⚠️ O(n) degradation | ✅ Constant | 🏆 SyncKit |
-| **Ecosystem** | ✅ Mature (CodeMirror, etc.) | ⚠️ Growing | 🏆 Yjs |
-| **Conflict Resolution** | ✅ Automatic CRDT | ✅ Automatic LWW | 🤝 Tie |
-
-**When to migrate from Yjs:**
-- ✅ **HIGH:** Hitting TypeScript/Node.js issues
-- ✅ **HIGH:** Need simpler API for team
-- ✅ **HIGH:** Need WASM portability for multi-language servers
-- ✅ **MEDIUM:** Don't need character-level text CRDTs
-
-**When to stay with Yjs:**
-- ✅ Heavy collaborative text editing (CodeMirror integration)
-- ✅ Need battle-tested CRDT library
-- ✅ Team has CRDT expertise
-
----
-
-## Automerge vs SyncKit Comparison
-
-| Feature | Automerge | SyncKit | Winner |
-|---------|-----------|---------|--------|
-| **Bundle Size (gzipped)** | ~60-78KB | ~59KB (~45KB lite) | 🏆 SyncKit (slightly smaller) |
-| **Stability** | ⚠️ Alpha/Beta | ✅ Production-ready | 🏆 SyncKit |
-| **Performance** | ⚠️ Slower for text ops | ✅ <1ms LWW operations | 🏆 SyncKit (for structured data) |
-| **Memory Usage** | ⚠️ Higher for large docs | ✅ Optimized for LWW | 🏆 SyncKit (for structured data) |
-| **API Simplicity** | ⚠️ Complex (change functions) | ✅ Simple (document.update) | 🏆 SyncKit |
-| **CRDT Features** | ✅ Rich (lists, maps, text) | ⚠️ LWW (Text CRDT coming v0.2.0) | 🏆 Automerge |
-| **Conflict Resolution** | ✅ Automatic CRDT | ✅ Automatic LWW | 🤝 Tie (different approaches) |
-| **Ecosystem** | ⚠️ Limited | ⚠️ Growing | 🤝 Tie |
-
-**When to migrate from Automerge:**
-- ✅ **HIGH:** Need simpler API for structured data
-- ✅ **HIGH:** Alpha/beta status concerning
-- ✅ **MEDIUM:** Want slightly smaller bundle
-- ✅ **MEDIUM:** Performance matters for your use case
-
-**When to stay with Automerge:**
-- ✅ Need specific Automerge CRDT features
-- ✅ Already invested heavily in Automerge
-- ✅ Performance not critical
+Both handle conflicts. Automerge gives you explicit control. SyncKit handles it automatically.
 
 ---
 
@@ -211,31 +237,31 @@ doc = change(doc, doc => {
 
 #### Migrating from Yjs
 
-**❌ Lose:**
-- Complex CRDTs (Y.Map, Y.Array, Y.Xml)
-- Fine-grained text CRDT features
-- CodeMirror/Monaco integrations
-- Mature ecosystem
+**Trade-offs:**
+- Complex CRDTs (Y.Map, Y.Array, Y.Xml) → Use document fields
+- Editor integrations (Monaco, CodeMirror) → Quill only (for now)
+- Peer-to-peer WebRTC → Server-based sync
+- Fine-grained control over providers → Integrated sync
 
-**✅ Gain:**
-- Simpler API (80% less code)
-- Smaller bundle (3.6x reduction)
-- Better TypeScript support
-- Zero configuration
+**What you gain:**
+- Simpler API (less code to maintain)
+- Framework adapters included
+- Rich text formatting built-in
+- Cross-tab undo/redo
 
 #### Migrating from Automerge
 
-**❌ Lose:**
-- Rich CRDT types (lists, maps, etc.)
-- Explicit conflict visibility
-- Time-travel debugging
-- Complete operation history
+**Trade-offs:**
+- Time-travel debugging → Current state only
+- Rich CRDT types (lists, maps) → Specialized types (Text, Counter, Set)
+- Explicit conflict visibility → Automatic resolution
+- Complete operation history → Efficient current state
 
-**✅ Gain:**
-- Similar bundle size, simpler API
-- Optimized for structured data sync
-- Production stability
-- Easier to learn and maintain
+**What you gain:**
+- Smaller bundle (154KB vs 300KB+)
+- Simpler API (mutable updates)
+- Framework adapters included
+- Production-tested features
 
 ### What You'll Keep
 
@@ -301,9 +327,7 @@ todo.subscribe((data) => {
 await todo.update({ completed: true })
 ```
 
-### Yjs Y.Text → SyncKit Text CRDT ⚠️ (Coming in Future Version)
-
-**Note:** Text CRDT is not yet implemented in v0.1.0. This feature is planned for a future release.
+### Yjs Y.Text → SyncKit Text CRDT ✅ (Available in v0.2.0)
 
 **Yjs:**
 ```typescript
@@ -317,9 +341,8 @@ ytext.insert(0, 'Hello ')
 ytext.insert(6, 'World')
 ```
 
-**SyncKit (planned future version):**
+**SyncKit v0.2.0 (Plain Text):**
 ```typescript
-// ⚠️ NOT YET FUNCTIONAL in v0.1.0
 const text = sync.text('content')
 
 text.subscribe((content) => {
@@ -330,16 +353,19 @@ await text.insert(0, 'Hello ')
 await text.insert(6, 'World')
 ```
 
-**Current v0.1.0 workaround:** Store text content as a document field:
+**SyncKit v0.2.0 (Rich Text with Formatting):**
 ```typescript
-const doc = sync.document<{ content: string }>('text-doc')
-await doc.init()
+import { QuillBinding } from '@synckit-js/sdk/integrations/quill'
 
-doc.subscribe((data) => {
-  console.log('Text changed:', data.content)
-})
+// Rich text with Peritext formatting
+const richText = sync.richText('document')
 
-await doc.update({ content: 'Hello World' })
+// Bind to Quill editor—formatting handled automatically
+const binding = new QuillBinding(richText, quillInstance)
+
+// Or apply formatting programmatically
+await richText.format(0, 5, { bold: true })
+await richText.format(6, 11, { italic: true, color: '#0066cc' })
 ```
 
 ### Automerge change() → SyncKit update()
@@ -418,7 +444,7 @@ ymap.set('todo-1', { text: 'Buy milk', completed: false })
 ```typescript
 // Create and configure (all built-in)
 const sync = new SyncKit({
-  serverUrl: 'ws://localhost:8080',  // ✅ Enables WebSocket sync (optional)
+  serverUrl: 'ws://localhost:8080',
   storage: 'indexeddb',
   name: 'my-app'
 })
@@ -437,13 +463,7 @@ todo.subscribe((data) => {
 await todo.update({ completed: true })
 ```
 
-**Note:** Network sync is fully available in v0.1.0. Configure serverUrl to enable real-time synchronization across clients.
-
-**Benefits:**
-- ✅ 80% less code
-- ✅ No provider management
-- ✅ Simpler mental model
-- ✅ Better TypeScript support
+Less code, same functionality.
 
 ### Pattern 2: State Management (Automerge)
 
@@ -491,33 +511,26 @@ await todoList.update({
 const data = todoList.get()
 console.log(data.todos['todo-1'].text)
 
-// Merge happens automatically (no manual merge)
+// Merge happens automatically
 ```
 
-**Benefits:**
-- ✅ Familiar mutable API
-- ✅ No change functions
-- ✅ Automatic merge
-- ✅ Simpler state management
+Familiar API, automatic merge.
 
-### Pattern 3: Text Editing (Yjs) ⚠️ (Coming in Future Version)
-
-**Note:** Text CRDT is not yet implemented in v0.1.0. This pattern shows planned future functionality.
+### Pattern 3: Text Editing ✅ (Available in v0.2.0)
 
 **Before (Yjs):**
 ```typescript
 import * as Y from 'yjs'
+import { MonacoBinding } from 'y-monaco'
 
 const ydoc = new Y.Doc()
 const ytext = ydoc.getText('content')
 
-// Insert text
+// Insert and delete
 ytext.insert(0, 'Hello ')
-
-// Delete text
 ytext.delete(0, 6)
 
-// Observe changes
+// Listen to changes
 ytext.observe((event) => {
   event.delta.forEach(op => {
     if (op.insert) console.log('Inserted:', op.insert)
@@ -525,7 +538,7 @@ ytext.observe((event) => {
   })
 })
 
-// Bind to editor (Monaco/CodeMirror)
+// Bind to Monaco editor
 const binding = new MonacoBinding(
   ytext,
   editor.getModel(),
@@ -534,103 +547,68 @@ const binding = new MonacoBinding(
 )
 ```
 
-**After (SyncKit - planned future version):**
+**After (SyncKit v0.2.0):**
 ```typescript
-// ⚠️ NOT YET FUNCTIONAL in v0.1.0
+import { QuillBinding } from '@synckit-js/sdk/integrations/quill'
+import { UndoManager } from '@synckit-js/sdk'
+
+// Plain text for simple cases
 const text = sync.text('content')
 
-// Insert text
 await text.insert(0, 'Hello ')
-
-// Delete text
 await text.delete(0, 6)
 
-// Subscribe to changes
 text.subscribe((content) => {
-  editor.setValue(content)
+  console.log('Text changed:', content)
 })
 
-// Editor binding (simpler)
-editor.onDidChangeContent(() => {
-  text.set(editor.getValue())
-})
+// Rich text with Quill for production apps
+const richText = sync.richText('document')
+const binding = new QuillBinding(richText, quillInstance)
+
+// Undo/redo just works (even across tabs!)
+const undoManager = new UndoManager(sync, 'document')
+await undoManager.undo()
+await undoManager.redo()
 ```
 
-**Current v0.1.0 workaround:** Store text as a document field with Last-Write-Wins:
-```typescript
-const doc = sync.document<{ content: string }>('text-doc')
-await doc.init()
-
-// Subscribe to changes
-doc.subscribe((data) => {
-  if (data.content) {
-    editor.setValue(data.content)
-  }
-})
-
-// Editor binding
-editor.onDidChangeContent(() => {
-  doc.update({ content: editor.getValue() })
-})
-```
-
-**Trade-offs:**
-- ⚠️ Text CRDT not in v0.1.0 (planned for future release)
-- ⚠️ Current workaround uses LWW (last write wins) for entire text field
-- ✅ Simpler API when Text CRDT is released
-- ✅ No binding library needed
+Both handle text editing. Yjs has more editor bindings. SyncKit includes rich text formatting and cross-tab undo.
 
 ---
 
 ## Performance Optimization
 
-### From Yjs to SyncKit
+### Design Difference: Client-Side vs Server-Side Merging
 
-**Yjs performance bottlenecks:**
-```typescript
-// ❌ O(n) sync with many clients
-// Every client receives full update from every other client
-// 100 clients = 10,000 sync messages!
-```
+**Yjs approach:**
 
-**SyncKit solution:**
-```typescript
-// ✅ Server-side delta computation
-// Server merges updates and broadcasts once
-// 100 clients = 100 sync messages
-```
+Yjs uses an efficient state vector protocol to minimize network traffic. The client receives operations and merges them locally. This works great for most scenarios.
 
-**Benchmark comparison:**
+**Consideration:** With many concurrent users (50+ simultaneous editors), the client's main thread processes every operation. On lower-end devices or after being offline, catching up can be CPU-intensive.
 
-| Clients | Yjs Sync Time | SyncKit Sync Time | Improvement |
-|---------|---------------|-------------------|-------------|
-| 10 | 50ms | 10ms | 5x faster |
-| 100 | 500ms | 15ms | 33x faster |
-| 1000 | 5000ms | 25ms | 200x faster |
+**SyncKit approach:**
 
-**v0.1.0 performance:** Local-first operations with <1ms update latency PLUS network sync with WebSocket for real-time synchronization across clients.
+SyncKit's Last-Write-Wins architecture lets the server merge operations before sending to clients:
+- **Yjs:** Client receives 50 operations → Client computes final state
+- **SyncKit:** Server merges 50 operations → Client receives 1 snapshot
 
-### From Automerge to SyncKit
+**Trade-off:** SyncKit requires a server (can't do peer-to-peer like Yjs WebRTC). Benefit: Less CPU work on the client.
 
-**Automerge performance issues:**
-```typescript
-// ❌ Slow operations (86x slower than Yjs)
-for (let i = 0; i < 1000; i++) {
-  doc = change(doc, doc => {
-    doc.text.splice(i, 0, 'a')
-  })
-}
-// Takes ~950ms
-```
+**Performance characteristics:**
+- **Local operations:** Both are fast (<1ms)
+- **Network sync:** Yjs sends operation history, SyncKit sends snapshots
+- **Initial load:** SyncKit is faster when catching up with lots of missed updates
 
-**SyncKit performance:**
-```typescript
-// ✅ Fast operations (<1ms each)
-for (let i = 0; i < 1000; i++) {
-  await text.insert(i, 'a')
-}
-// Takes ~74ms total (13x faster than Automerge)
-```
+### Automerge Considerations
+
+Automerge maintains a complete operation history for time-travel debugging. This is incredibly powerful but has trade-offs:
+
+**Bundle size:** ~300KB+ vs SyncKit's 154KB
+**Memory:** Full history graph vs current state
+
+**When to use what:**
+- **Automerge:** You need the history graph for auditing or debugging
+- **SyncKit:** You just want the current state to sync efficiently
 
 ---
 
@@ -723,49 +701,50 @@ test('both should handle conflicts gracefully', async () => {
 
 ## Summary
 
-**Key Takeaways:**
+### What SyncKit v0.2.0 Includes
 
-1. **Yjs → SyncKit:** Trade character-level CRDTs for simpler API (good for structured data)
-2. **Automerge → SyncKit:** Similar size, simpler API, production stability
-3. **Keep Yjs if:** Need character-level text CRDTs (smallest bundle at ~19KB)
-4. **Keep Automerge if:** Need specific rich CRDT features
+- **Text editing:** Fugue CRDT for plain text, Peritext for rich formatting
+- **Undo/redo:** Works across tabs and sessions
+- **Real-time presence:** See who's online, where they're typing
+- **Framework adapters:** React, Vue 3, Svelte 5 included
+- **Quill integration:** Production-ready rich text editor binding
+- **Bundle: 154KB** (or 46KB lite for basic sync)
 
-**Migration Checklist:**
+### When to Choose SyncKit
 
-- ✅ Assess CRDT feature usage (do you need full CRDTs?)
-- ✅ Benchmark bundle size impact (mobile friendly?)
-- ✅ Test performance requirements (operations/second)
-- ✅ Plan gradual migration (parallel testing)
-- ✅ Update team documentation (simpler API)
+**Choose SyncKit if you want:**
+- Rich text with proper conflict resolution
+- Undo/redo that syncs everywhere
+- Framework adapters maintained for you
+- Production features that just work
+- Vue or Svelte support (Yjs doesn't have official adapters)
 
-**Expected Improvements:**
+**Stick with Yjs if:**
+- Bundle size is your top priority (65KB vs 154KB)
+- You need CodeMirror or Monaco integration
+- You prefer building custom integrations yourself
+- Peer-to-peer WebRTC sync is important
 
-| Metric | Yjs → SyncKit | Automerge → SyncKit |
-|--------|---------------|---------------------|
-| **Bundle size** | +211% (~19KB → ~59KB) | Smaller (~60-78KB → ~59KB) |
-| **Setup complexity** | -80% (no providers) | -70% (simpler API) |
-| **Learning curve** | Much easier | Much easier |
-| **TypeScript support** | Better | Similar |
-| **Trade-offs** | Larger bundle for WASM portability | Simpler API, production-ready |
+**Stick with Automerge if:**
+- Time-travel debugging is critical
+- You need specific CRDT types SyncKit doesn't have yet
+- You're deeply invested in the Automerge ecosystem
 
-**Typical Migration Timeline:**
+### Migration Path
 
-- **Week 1-2:** Learn SyncKit API, parallel implementation
-- **Week 3-4:** Migrate non-critical features
-- **Week 5-6:** Migrate critical features
-- **Week 7:** Testing and validation
-- **Week 8:** Remove old library
+1. **Week 1:** Run SyncKit alongside your current setup (dual-write)
+2. **Week 2-3:** Migrate one feature at a time
+3. **Week 4:** Test thoroughly, fix any edge cases
+4. **Week 5:** Remove old library when confident
 
-**Total: 6-8 weeks with gradual rollout**
+Most teams finish in 4-6 weeks.
 
-**Next Steps:**
+### What's Next
 
-1. Review [Getting Started Guide](./getting-started.md)
-2. Test SyncKit with your use case
-3. Implement parallel (Yjs/Automerge + SyncKit)
-4. Migrate feature by feature
-5. Remove old library when confident
+- Read the [Getting Started Guide](./getting-started.md) for a 5-minute quickstart
+- Check out the [Rich Text Guide](./rich-text-editing.md) to see formatting in action
+- Try the [Undo/Redo Guide](./undo-redo.md) for cross-tab time travel
 
 ---
 
-**Simpler, smaller, faster! 🚀**
+**Ready to ship faster? Let's go. 🚀**
