@@ -1,23 +1,21 @@
 # Offline-First Patterns with SyncKit
 
-**⚠️ IMPORTANT - v0.1.0 STATUS:**
+**v0.2.0 Production Status**
 
-SyncKit v0.1.0 provides **complete offline-first architecture with network sync**.
+SyncKit v0.2.0 provides complete offline-first architecture for production apps.
 
-**What works now:**
-- ✅ IndexedDB/Memory storage
-- ✅ All CRUD operations work offline
-- ✅ Data persists across restarts
-- ✅ **Network sync with WebSocket**
-- ✅ **Offline queue with auto-replay**
-- ✅ **Network status tracking APIs**
-- ✅ **Cross-tab synchronization via BroadcastChannel API**
+**Available Now:**
+- ✅ **IndexedDB/Memory storage** - Persistent local-first data
+- ✅ **All CRUD operations offline** - Zero network dependency
+- ✅ **Text & Rich Text** - Fugue and Peritext CRDTs work offline
+- ✅ **Counters & Sets** - PN-Counter and OR-Set offline-capable
+- ✅ **Network sync** - WebSocket with automatic reconnection
+- ✅ **Offline queue** - Operations replay automatically when online
+- ✅ **Network status tracking** - Monitor connection state
+- ✅ **Cross-tab sync** - BroadcastChannel for multi-tab coordination
+- ✅ **Undo/Redo** - Works offline, syncs across tabs
 
-**Not yet implemented:**
-- ❌ Sync strategies (eager/lazy/manual sync modes)
-- ❌ Query API for filtering documents
-
-**Use now for:** Offline-first apps with optional real-time sync across clients.
+Build apps that work perfectly on planes, trains, and coffee shops with spotty WiFi.
 
 ---
 

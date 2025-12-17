@@ -16,6 +16,7 @@ import { SyncDocument } from './document'
 import { SyncCounter } from './counter'
 import { SyncSet } from './set'
 import { SyncText } from './text'
+import { RichText } from './crdt/richtext'
 import { Awareness } from './awareness'
 import { createStorage } from './storage'
 import { initWASM } from './wasm-loader'
@@ -32,6 +33,7 @@ export class SyncKit {
   private counters = new Map<string, SyncCounter>()
   private sets = new Map<string, SyncSet<any>>()
   private texts = new Map<string, SyncText>()
+  private richTexts = new Map<string, RichText>()
   private awarenessInstances = new Map<string, Awareness>()
   private config: SyncKitConfig
 
@@ -258,6 +260,35 @@ export class SyncKit {
     })
 
     return text
+  }
+
+  /**
+   * Create or get a rich text CRDT
+   * Rich texts are cached per ID
+   */
+  richText(id: string): RichText {
+    if (!this.initialized) {
+      throw new SyncKitError(
+        'SyncKit not initialized. Call init() first.',
+        'NOT_INITIALIZED'
+      )
+    }
+
+    // Return cached rich text if exists
+    if (this.richTexts.has(id)) {
+      return this.richTexts.get(id)!
+    }
+
+    // Create new rich text
+    const richText = new RichText(id, this.clientId, this.storage, this.syncManager)
+    this.richTexts.set(id, richText)
+
+    // Initialize rich text asynchronously
+    richText.init().catch(error => {
+      console.error(`Failed to initialize rich text ${id}:`, error)
+    })
+
+    return richText
   }
 
   /**

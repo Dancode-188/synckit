@@ -379,10 +379,10 @@ function TodoApp() {
 ```typescript
 // Import only Text CRDT (no RichText)
 import { SyncKit, SyncText } from '@synckit-js/sdk'
-import { useText } from '@synckit-js/sdk/react'
+import { useSyncText } from '@synckit-js/sdk/react'
 
 function NotesApp() {
-  const [note, { insert, delete: del }] = useText('note-456')
+  const [note, { insert, delete: del }] = useSyncText('note-456')
   // ...
 }
 ```

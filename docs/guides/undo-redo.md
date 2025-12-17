@@ -62,9 +62,30 @@ function EditorWithUndo() {
 
 ```vue
 <script setup lang="ts">
-import { useText, useUndo } from '@synckit-js/sdk/vue'
+import { useSyncKit, useUndo } from '@synckit-js/sdk/vue'
+import { ref, onMounted, onUnmounted } from 'vue'
 
-const { text, insert, deleteText } = useText('doc-123')
+// Note: Vue adapter does not include useText - use vanilla SDK
+const synckit = useSyncKit()
+const text = ref('')
+
+let textInstance: SyncText
+let unsubscribe: (() => void) | null = null
+
+onMounted(() => {
+  textInstance = synckit.text('doc-123')
+  unsubscribe = textInstance.subscribe((value) => {
+    text.value = value
+  })
+})
+
+onUnmounted(() => {
+  unsubscribe?.()
+})
+
+const insert = (pos: number, content: string) => textInstance.insert(pos, content)
+const deleteText = (start: number, length: number) => textInstance.delete(start, length)
+
 const { canUndo, canRedo, undo, redo, add } = useUndo('doc-123')
 
 async function handleInput(value: string) {
@@ -333,7 +354,7 @@ clear()
 Track text operations:
 
 ```typescript
-const [text, textActions] = useText('doc-123')
+const [text, textActions] = useSyncText('doc-123')
 const { undo, redo, add } = useUndo('doc-123')
 
 // Insert text
@@ -415,7 +436,7 @@ function handleUndo() {
 Track counter changes:
 
 ```typescript
-const [count, counterActions] = useCounter('likes-123')
+const [count, counterActions] = useSyncCounter('likes-123')
 const { undo, redo, add } = useUndo('likes-123')
 
 async function increment(amount = 1) {

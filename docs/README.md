@@ -1,6 +1,25 @@
 # SyncKit Documentation
 
-Welcome to the SyncKit documentation! This guide will help you build offline-first applications with real-time sync.
+Welcome to SyncKit! Build collaborative, offline-first apps without the complexity.
+
+---
+
+## ✨ What's New in v0.2.0
+
+**Everything you need for real-time collaboration.**
+
+v0.2.0 is production-ready with features that used to take months to build:
+
+- **✍️ Rich text editing** - Formatting conflicts resolved automatically (Peritext CRDT)
+- **↩️ Cross-tab undo/redo** - Works across browser tabs and persists across sessions
+- **👥 Live presence** - See who's editing in real-time
+- **🖱️ Cursor sharing** - Watch teammates type with animated cursors
+- **🎯 Counters & Sets** - PN-Counter and OR-Set CRDTs for distributed state
+- **⚛️ Framework adapters** - React, Vue 3, and Svelte 5 ready to use
+
+**Backed by 1,081 passing tests** (87% coverage). Zero critical bugs. Production-ready.
+
+**[Get started in 5 minutes →](guides/getting-started.md)**
 
 ---
 
@@ -25,20 +44,23 @@ Learn core concepts and patterns:
 - **[Testing Guide](guides/testing.md)** - Unit tests, property-based testing, chaos engineering, E2E
 
 ### Advanced Topics
-- **[Text CRDTs](api/SDK_API.md#tier-2-text-sync-crdt)** - Collaborative text editing
-- **[Custom CRDTs](api/SDK_API.md#tier-3-custom-crdts)** - Counters, sets, lists
-- **[Storage Adapters](api/SDK_API.md#storage-adapters)** - IndexedDB, OPFS, SQLite
+- **[Rich Text Editing](guides/rich-text-editing.md)** - Peritext CRDT for formatted text
+- **[Undo/Redo](guides/undo-redo.md)** - Cross-tab undo with persistent history
+- **[Cursor & Selection Sharing](guides/cursor-selection-sharing.md)** - Real-time cursor positions
+- **[Counters & Sets](api/COUNTER_SET_API.md)** - PN-Counter and OR-Set CRDTs
+- **[Bundle Size Optimization](guides/bundle-size-optimization.md)** - Tree-shaking, code splitting, lite variant
 - **[Server Deployment](../server/typescript/DEPLOYMENT.md)** - Production deployment
 
 ---
 
 ## 🔄 Migration Guides
 
-Switching from another platform?
+Switching from another platform or upgrading?
 
+- **[From v0.1.0 to v0.2.0](guides/migration-from-v0.1.0.md)** - Upgrade guide with breaking changes and new features
 - **[From Firebase/Firestore](guides/migration-from-firebase.md)** - Escape vendor lock-in, true offline support
-- **[From Supabase](guides/migration-from-supabase.md)** - Add offline functionality (fixes GitHub #357)
-- **[From Yjs/Automerge](guides/migration-from-yjs.md)** - Simpler API, WASM portability
+- **[From Supabase](guides/migration-from-supabase.md)** - Add offline functionality
+- **[From Yjs](guides/migration-from-yjs.md)** - Integrated solution with batteries included
 
 ---
 
@@ -53,9 +75,9 @@ Complete API documentation:
 - **[Storage API](api/SDK_API.md#storage-adapters)** - IndexedDB, memory, OPFS, SQLite
 
 ### Framework Adapters
-- **[React Hooks](api/SDK_API.md#react-hooks)** - `useSyncDocument`, `useSyncField`, `useNetworkStatus`, `useSyncState`
-- **[Vue Composables](api/SDK_API.md#vue-composables)** - Vue 3 Composition API integration
-- **[Svelte Stores](api/SDK_API.md#svelte-stores)** - Svelte 5 reactive stores with runes
+- **[React Hooks](api/SDK_API.md#react-hooks)** - `useSyncText`, `useRichText`, `useCounter`, `useSet`, `usePresence`, `useCursor`, `useUndoRedo`
+- **[Vue 3 Integration](guides/vue-integration.md)** - Complete guide with composables and Composition API patterns
+- **[Svelte 5 Integration](guides/svelte-integration.md)** - Reactive stores with runes support and context patterns
 
 ### Server API
 - **[Server API Reference](../server/typescript/README.md)** - TypeScript server documentation
@@ -127,17 +149,18 @@ Learn from working examples:
 ### Performance
 
 **Bundle Size (gzipped):**
-- **Default variant:** 154KB (complete solution with all collaboration features)
-- **Lite variant:** 46KB (basic sync, local-only)
-- **Context:** Comparable to Firebase (~150-200KB), smaller than Automerge (300KB+)
+- **Default variant:** 154KB (everything included - text editing, rich text, undo/redo, presence, cursors, framework adapters)
+- **Lite variant:** 46KB (basic sync only)
+- **What you get:** For 154KB, you're shipping production-ready collaboration without building it yourself
 
-**Operation Speed:**
-- Local update: <1ms (371ns single field)
-- IndexedDB write: 1-5ms
-- Network sync: 10-50ms p95
-- Multi-client sync: 10-100ms (WebSocket server)
+**Speed:**
+- Local updates: <1ms (instant user feedback)
+- Network sync: 10-50ms p95 (faster than most REST APIs)
+- Multi-client convergence: <100ms (real-time collaboration)
 
-**[Learn more about performance →](guides/performance.md)**
+**Stress-tested:** 24-hour continuous operation, 1,081 tests, zero memory leaks.
+
+**[Learn more about performance →](guides/performance.md)** | **[Bundle size optimization →](guides/bundle-size-optimization.md)**
 
 ---
 

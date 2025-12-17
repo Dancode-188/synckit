@@ -2,11 +2,11 @@
 
 **Build offline-first apps in 5 minutes.**
 
-SyncKit is a production-ready sync engine that makes building local-first applications trivial. No vendor lock-in, true offline support, and automatic conflict resolution—all in a ~59KB gzipped bundle.
+SyncKit is a production-ready sync engine that makes building local-first applications trivial. No vendor lock-in, true offline support, and automatic conflict resolution.
 
 > **What you'll build:** A todo app that works offline, persists data locally, and syncs in real-time with a server—in just 5 minutes.
 >
-> **v0.1.0 Note:** This version includes local-first storage, persistence, network sync with WebSocket, and cross-tab synchronization via BroadcastChannel API.
+> **v0.2.0 includes:** Text editing (Fugue), rich text (Peritext), undo/redo, presence tracking, cursor sharing, counters, sets, and framework adapters for React, Vue 3, and Svelte 5.
 
 ---
 
@@ -42,7 +42,11 @@ bun add @synckit-js/sdk
 
 **For React projects**, the React hooks are included in the SDK package (no separate install needed).
 
-> **Note:** Vue and Svelte adapters are coming soon! For now, you can use the core SDK with any framework.
+**For Vue 3 or Svelte 5**, the composables and stores are also included in the SDK:
+```typescript
+import { useText, useCounter } from '@synckit-js/sdk/vue'       // Vue 3
+import { textStore, counterStore } from '@synckit-js/sdk/svelte' // Svelte 5
+```
 
 ---
 
@@ -169,9 +173,9 @@ console.log('Todo still here:', data)
 
 ---
 
-### Step 5: Multi-Tab Sync ✅ (Works in v0.1.0!)
+### Step 5: Multi-Tab Sync ✅
 
-**Cross-tab synchronization IS implemented in v0.1.0 via BroadcastChannel API!**
+**Cross-tab synchronization works automatically via BroadcastChannel API:**
 
 Open your app in **two browser tabs**. Changes in one tab will appear instantly in the other!
 
@@ -208,7 +212,7 @@ await todo.update({ text: 'Hello from Tab 2!' })
 
 **You just built offline-first, persistent storage in 5 minutes!**
 
-Here's what your app can do in v0.1.0:
+Here's what your app can do:
 - ✅ **Works completely offline** - No server needed
 - ✅ **Instant updates** - <1ms local operations
 - ✅ **Persists data** - Survives browser restarts
@@ -295,7 +299,7 @@ Now that you've mastered the basics, here's what to explore next:
 
 ### 🔌 Connect to a Backend Server
 
-Network sync is fully implemented in v0.1.0 with WebSocket support!
+Network sync works over WebSocket for real-time collaboration:
 
 ```typescript
 const sync = new SyncKit({
@@ -392,7 +396,7 @@ if (navigator.storage && navigator.storage.persist) {
 
 ### Changes not syncing across tabs
 
-**✅ Cross-tab synchronization IS implemented in v0.1.0!**
+**✅ Cross-tab synchronization works automatically!**
 
 Changes should sync automatically between tabs via BroadcastChannel API. If not working:
 
@@ -451,10 +455,10 @@ Need assistance?
 |---------|:-------:|:--------:|:--------:|:---:|:---------:|
 | **True Offline-First** | ✅ Native | ⚠️ Cache only | ❌ None | ✅ Full | ✅ Full |
 | **Works Without Server** | ✅ Yes | ❌ No | ❌ No | ✅ Yes | ✅ Yes |
-| **Bundle Size** | **~59KB** (~45KB lite) | ~150KB | ~45KB | ~19KB | ~60-78KB |
-| **Automatic Conflicts** | ✅ LWW | ✅ LWW | ⚠️ Manual | ✅ CRDT | ✅ CRDT |
+| **Bundle Size** | **154KB** (46KB lite) | ~150-200KB | ~45KB | ~65KB (core) | 300KB+ |
+| **Text Editing** | ✅ Fugue + Peritext | ❌ None | ❌ None | ✅ Y.Text | ✅ Yes |
+| **Framework Adapters** | ✅ React, Vue, Svelte | ❌ None | ❌ None | ⚠️ React only | ❌ None |
 | **Self-Hosted** | ✅ Yes | ❌ No | ✅ Yes | ✅ Yes | ✅ Yes |
-| **Multi-Language Server** | ✅ Yes | ❌ No | ⚠️ Postgres | ❌ No | ❌ No |
 
 **SyncKit = True offline-first + No vendor lock-in + Production ready**
 

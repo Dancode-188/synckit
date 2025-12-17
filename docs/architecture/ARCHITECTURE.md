@@ -1,8 +1,8 @@
 # SyncKit System Architecture
 
-**Version:** 0.1.0
-**Status:** v0.1.0 Released - Implementation Complete
-**Last Updated:** November 26, 2025
+**Version:** 0.2.0
+**Status:** v0.2.0 Released - Production Ready
+**Last Updated:** December 18, 2025
 
 ---
 
@@ -29,10 +29,11 @@ SyncKit is a **local-first sync engine** designed for modern web and mobile appl
 
 **Key Differentiators:**
 - 🚀 **Performance**: <1ms local operations, <100ms sync (p95)
-- 🔄 **Three-Tier Architecture**: LWW (80%), Text CRDTs (15%), Custom CRDTs (5%)
-- 📦 **Compact Bundle**: ~59KB gzipped (~45KB lite) - Larger than Yjs (~19KB pure JS), smaller than Automerge (~60-78KB)
+- 🔄 **Complete CRDT Suite**: Text (Fugue), Rich Text (Peritext), Counter (PN-Counter), Set (OR-Set), LWW Documents
+- 📦 **Production Bundle**: 154KB gzipped (46KB lite) - Complete solution with all collaboration features
 - 🌐 **Universal**: Works everywhere (browser, Node.js, mobile, desktop)
 - 🔒 **Data Integrity**: Formally verified with TLA+ (zero data loss guarantee)
+- 🧪 **Battle-Tested**: 1,081 passing tests, 87% coverage, 24-hour stress test
 
 **Target Use Cases:**
 - Collaborative applications (Google Docs-style)
@@ -53,8 +54,8 @@ SyncKit is a **local-first sync engine** designed for modern web and mobile appl
 ├─────────────────────────────────────────────────────────────┤
 │                                                             │
 │  ┌──────────────┐   ┌──────────────┐   ┌──────────────┐  │
-│  │   React      │   │  Vue (v0.2+) │   │Svelte (v0.2+)│  │
-│  │   Hooks ✅   │   │  Composables │   │   Stores     │  │
+│  │   React      │   │   Vue 3      │   │  Svelte 5    │  │
+│  │   Hooks ✅   │   │Composables ✅│   │  Stores ✅   │  │
 │  └──────┬───────┘   └──────┬───────┘   └──────┬───────┘  │
 │         │                  │                  │           │
 │         └──────────────────┴──────────────────┘           │

@@ -76,13 +76,13 @@ await likesCounter.reset()
 
 ---
 
-### React Hook: `useCounter`
+### React Hook: `useSyncCounter`
 
 ```typescript
-import { useCounter } from '@synckit-js/sdk/react'
+import { useSyncCounter } from '@synckit-js/sdk/react'
 
 function LikeButton({ postId }: { postId: string }) {
-  const [likes, { increment, decrement, reset }] = useCounter(`likes-${postId}`)
+  const [likes, { increment, decrement }] = useSyncCounter(`likes-${postId}`)
 
   return (
     <div className="like-button">
@@ -99,25 +99,46 @@ function LikeButton({ postId }: { postId: string }) {
 
 **API Signature:**
 ```typescript
-function useCounter(id: string): [
+function useSyncCounter(id: string): [
   number,  // Current count
   {
     increment: (delta?: number) => Promise<void>
     decrement: (delta?: number) => Promise<void>
-    reset: () => Promise<void>
-  }
+  },
+  SyncCounter  // Counter instance (for advanced usage like reset())
 ]
 ```
 
 ---
 
-### Vue Composable: `useCounter`
+### Vue Usage (Vanilla SDK)
+
+**Note:** Vue adapter does not include a counter composable. Use the vanilla SDK directly:
 
 ```vue
 <script setup lang="ts">
-import { useCounter } from '@synckit-js/sdk/vue'
+import { useSyncKit } from '@synckit-js/sdk/vue'
+import { ref, onMounted, onUnmounted } from 'vue'
 
-const { count, increment, decrement } = useCounter('vote-count')
+const synckit = useSyncKit()
+const count = ref(0)
+
+let counter: SyncCounter
+let unsubscribe: (() => void) | null = null
+
+onMounted(async () => {
+  counter = synckit.counter('vote-count')
+  unsubscribe = counter.subscribe((value) => {
+    count.value = value
+  })
+})
+
+onUnmounted(() => {
+  unsubscribe?.()
+})
+
+const increment = () => counter.increment()
+const decrement = () => counter.decrement()
 </script>
 
 <template>
@@ -138,45 +159,47 @@ const { count, increment, decrement } = useCounter('vote-count')
 </style>
 ```
 
-**API Signature:**
-```typescript
-function useCounter(id: string): {
-  count: Ref<number>
-  increment: (delta?: number) => Promise<void>
-  decrement: (delta?: number) => Promise<void>
-  reset: () => Promise<void>
-}
-```
-
 ---
 
-### Svelte Store: `counterStore`
+### Svelte Usage (Vanilla SDK)
+
+**Note:** Svelte adapter does not include a counter store. Use the vanilla SDK with a custom store:
 
 ```svelte
 <script lang="ts">
-  import { counterStore } from '@synckit-js/sdk/svelte'
+  import { getContext, onMount } from 'svelte'
+  import { writable } from 'svelte/stores'
+  import type { SyncKit } from '@synckit-js/sdk'
 
-  const likes = counterStore('likes')
+  const synckit = getContext<SyncKit>('synckit')
+  const likes = writable(0)
+
+  let counter: SyncCounter
+  let unsubscribe: (() => void) | null = null
+
+  onMount(() => {
+    counter = synckit.counter('likes')
+    unsubscribe = counter.subscribe((value) => {
+      likes.set(value)
+    })
+
+    return () => {
+      unsubscribe?.()
+    }
+  })
+
+  const increment = () => counter.increment()
+  const decrement = () => counter.decrement()
 </script>
 
 <div class="counter">
-  <button onclick={() => likes.increment()}>
+  <button onclick={increment}>
     👍 {$likes}
   </button>
-  <button onclick={() => likes.decrement()}>
+  <button onclick={decrement}>
     Remove Like
   </button>
 </div>
-```
-
-**API Signature:**
-```typescript
-function counterStore(id: string): {
-  subscribe: (callback: (value: number) => void) => Unsubscribe
-  increment: (delta?: number) => Promise<void>
-  decrement: (delta?: number) => Promise<void>
-  reset: () => Promise<void>
-}
 ```
 
 ---
@@ -273,13 +296,13 @@ await tags.clear()
 
 ---
 
-### React Hook: `useSet`
+### React Hook: `useSyncSet`
 
 ```typescript
-import { useSet } from '@synckit-js/sdk/react'
+import { useSyncSet } from '@synckit-js/sdk/react'
 
 function TagManager({ documentId }: { documentId: string }) {
-  const [tags, { add, remove, has, clear }] = useSet<string>(`tags-${documentId}`)
+  const [tags, { add, remove, clear }] = useSyncSet<string>(`tags-${documentId}`)
   const [newTag, setNewTag] = useState('')
 
   const handleAdd = () => {
@@ -320,29 +343,49 @@ function TagManager({ documentId }: { documentId: string }) {
 
 **API Signature:**
 ```typescript
-function useSet<T>(id: string): [
-  Set<T>,  // Current set items
+function useSyncSet<T>(id: string): [
+  Set<T>,  // Current set items (use tags.has() to check membership)
   {
     add: (item: T) => Promise<void>
     addAll: (items: T[]) => Promise<void>
     remove: (item: T) => Promise<void>
-    has: (item: T) => boolean
     clear: () => Promise<void>
-  }
+  },
+  SyncSet<T>  // Set instance (for advanced usage)
 ]
 ```
 
 ---
 
-### Vue Composable: `useSet`
+### Vue Usage (Vanilla SDK)
+
+**Note:** Vue adapter does not include a set composable. Use the vanilla SDK directly:
 
 ```vue
 <script setup lang="ts">
-import { useSet } from '@synckit-js/sdk/vue'
-import { ref } from 'vue'
+import { useSyncKit } from '@synckit-js/sdk/vue'
+import { ref, onMounted, onUnmounted } from 'vue'
 
-const { items, add, remove, has } = useSet<string>('participants')
+const synckit = useSyncKit()
+const items = ref<Set<string>>(new Set())
 const newParticipant = ref('')
+
+let set: SyncSet<string>
+let unsubscribe: (() => void) | null = null
+
+onMounted(() => {
+  set = synckit.set<string>('participants')
+  unsubscribe = set.subscribe((value) => {
+    items.value = value
+  })
+})
+
+onUnmounted(() => {
+  unsubscribe?.()
+})
+
+const add = (item: string) => set.add(item)
+const remove = (item: string) => set.remove(item)
 
 function addParticipant() {
   if (newParticipant.value.trim()) {
@@ -375,35 +418,48 @@ function addParticipant() {
 </template>
 ```
 
-**API Signature:**
-```typescript
-function useSet<T>(id: string): {
-  items: Ref<Set<T>>
-  add: (item: T) => Promise<void>
-  addAll: (items: T[]) => Promise<void>
-  remove: (item: T) => Promise<void>
-  has: (item: T) => boolean
-  clear: () => Promise<void>
-}
-```
-
 ---
 
-### Svelte Store: `setStore`
+### Svelte Usage (Vanilla SDK)
+
+**Note:** Svelte adapter does not include a set store. Use the vanilla SDK with a custom store:
 
 ```svelte
 <script lang="ts">
-  import { setStore } from '@synckit-js/sdk/svelte'
+  import { getContext, onMount } from 'svelte'
+  import { writable } from 'svelte/stores'
+  import type { SyncKit } from '@synckit-js/sdk'
 
-  const selectedItems = setStore<string>('selection')
+  const synckit = getContext<SyncKit>('synckit')
+  const selectedItems = writable<Set<string>>(new Set())
+
+  let set: SyncSet<string>
+  let unsubscribe: (() => void) | null = null
+
+  onMount(() => {
+    set = synckit.set<string>('selection')
+    unsubscribe = set.subscribe((value) => {
+      selectedItems.set(value)
+    })
+
+    return () => {
+      unsubscribe?.()
+    }
+  })
+
+  const add = (item: string) => set.add(item)
+  const remove = (item: string) => set.remove(item)
 
   function toggleItem(item: string) {
     if ($selectedItems.has(item)) {
-      selectedItems.remove(item)
+      remove(item)
     } else {
-      selectedItems.add(item)
+      add(item)
     }
   }
+
+  // Sample items for demo
+  const items = ['Item 1', 'Item 2', 'Item 3']
 </script>
 
 <div class="item-list">
@@ -426,18 +482,6 @@ function useSet<T>(id: string): {
     color: white;
   }
 </style>
-```
-
-**API Signature:**
-```typescript
-function setStore<T>(id: string): {
-  subscribe: (callback: (items: Set<T>) => void) => Unsubscribe
-  add: (item: T) => Promise<void>
-  addAll: (items: T[]) => Promise<void>
-  remove: (item: T) => Promise<void>
-  has: (item: T) => boolean
-  clear: () => Promise<void>
-}
 ```
 
 ---
@@ -482,11 +526,11 @@ class SyncSet<T> {
 ### Example 1: Like Counter with Analytics
 
 ```typescript
-import { useCounter } from '@synckit-js/sdk/react'
+import { useSyncCounter } from '@synckit-js/sdk/react'
 import { useEffect } from 'react'
 
 function LikeButtonWithAnalytics({ postId }: { postId: string }) {
-  const [likes, { increment }] = useCounter(`likes-${postId}`)
+  const [likes, { increment }] = useSyncCounter(`likes-${postId}`)
 
   useEffect(() => {
     // Track likes in analytics
@@ -515,10 +559,10 @@ function LikeButtonWithAnalytics({ postId }: { postId: string }) {
 ### Example 2: Inventory Counter
 
 ```typescript
-import { useCounter } from '@synckit-js/sdk/react'
+import { useSyncCounter } from '@synckit-js/sdk/react'
 
 function InventoryManager({ productId }: { productId: string }) {
-  const [stock, { increment, decrement }] = useCounter(`inventory-${productId}`)
+  const [stock, { increment, decrement }] = useSyncCounter(`inventory-${productId}`)
 
   const addStock = (quantity: number) => increment(quantity)
   const removeStock = (quantity: number) => decrement(quantity)
@@ -555,11 +599,11 @@ function InventoryManager({ productId }: { productId: string }) {
 ### Example 3: Tag System with Autocomplete
 
 ```typescript
-import { useSet } from '@synckit-js/sdk/react'
+import { useSyncSet } from '@synckit-js/sdk/react'
 import { useState } from 'react'
 
 function TagEditor({ documentId }: { documentId: string }) {
-  const [tags, { add, remove }] = useSet<string>(`tags-${documentId}`)
+  const [tags, { add, remove }] = useSyncSet<string>(`tags-${documentId}`)
   const [input, setInput] = useState('')
 
   // Common tags for autocomplete
@@ -619,7 +663,7 @@ function TagEditor({ documentId }: { documentId: string }) {
 ### Example 4: Multi-User Selection
 
 ```typescript
-import { useSet } from '@synckit-js/sdk/react'
+import { useSyncSet } from '@synckit-js/sdk/react'
 
 interface Item {
   id: string
@@ -627,10 +671,10 @@ interface Item {
 }
 
 function CollaborativeSelection({ roomId, items }: { roomId: string; items: Item[] }) {
-  const [selectedIds, { add, remove, has }] = useSet<string>(`selection-${roomId}`)
+  const [selectedIds, { add, remove }] = useSyncSet<string>(`selection-${roomId}`)
 
   const toggleSelection = (itemId: string) => {
-    if (has(itemId)) {
+    if (selectedIds.has(itemId)) {
       remove(itemId)
     } else {
       add(itemId)
@@ -642,11 +686,11 @@ function CollaborativeSelection({ roomId, items }: { roomId: string; items: Item
       {items.map(item => (
         <div
           key={item.id}
-          className={`item ${has(item.id) ? 'selected' : ''}`}
+          className={`item ${selectedIds.has(item.id) ? 'selected' : ''}`}
           onClick={() => toggleSelection(item.id)}
         >
           <div className="checkbox">
-            {has(item.id) && '✓'}
+            {selectedIds.has(item.id) && '✓'}
           </div>
           <div className="name">{item.name}</div>
         </div>
@@ -665,15 +709,15 @@ function CollaborativeSelection({ roomId, items }: { roomId: string; items: Item
 ### Example 5: Voting System
 
 ```typescript
-import { useCounter, useSet } from '@synckit-js/sdk/react'
+import { useSyncCounter, useSyncSet } from '@synckit-js/sdk/react'
 
 function VotingPoll({ pollId }: { pollId: string }) {
-  const [upvotes, { increment: upvote }] = useCounter(`upvotes-${pollId}`)
-  const [downvotes, { increment: downvote }] = useCounter(`downvotes-${pollId}`)
-  const [voters, { add: addVoter, has: hasVoted }] = useSet<string>(`voters-${pollId}`)
+  const [upvotes, { increment: upvote }] = useSyncCounter(`upvotes-${pollId}`)
+  const [downvotes, { increment: downvote }] = useSyncCounter(`downvotes-${pollId}`)
+  const [voters, { add: addVoter }] = useSyncSet<string>(`voters-${pollId}`)
 
   const userId = getCurrentUserId()
-  const userHasVoted = hasVoted(userId)
+  const userHasVoted = voters.has(userId)
 
   const handleVote = async (type: 'up' | 'down') => {
     if (userHasVoted) return
@@ -745,30 +789,17 @@ export interface SyncCounter {
 }
 
 // React hook return type
-export type UseCounterReturn = [
-  number,
+export type UseSyncCounterReturn = [
+  number,  // Current count
   {
     increment: (delta?: number) => Promise<void>
     decrement: (delta?: number) => Promise<void>
-    reset: () => Promise<void>
-  }
+  },
+  SyncCounter  // Counter instance (for advanced usage like reset())
 ]
 
-// Vue composable return type
-export interface UseCounterComposable {
-  count: Ref<number>
-  increment: (delta?: number) => Promise<void>
-  decrement: (delta?: number) => Promise<void>
-  reset: () => Promise<void>
-}
-
-// Svelte store type
-export interface CounterStore {
-  subscribe(callback: (value: number) => void): () => void
-  increment(delta?: number): Promise<void>
-  decrement(delta?: number): Promise<void>
-  reset(): Promise<void>
-}
+// NOTE: Vue and Svelte do not have counter composables/stores
+// Use vanilla SDK: synckit.counter(id) with manual subscription
 ```
 
 ### Set Types
@@ -788,36 +819,19 @@ export interface SyncSet<T> {
 }
 
 // React hook return type
-export type UseSetReturn<T> = [
-  Set<T>,
+export type UseSyncSetReturn<T> = [
+  Set<T>,  // Current set items (use .has() to check membership)
   {
     add: (item: T) => Promise<void>
     addAll: (items: T[]) => Promise<void>
     remove: (item: T) => Promise<void>
-    has: (item: T) => boolean
     clear: () => Promise<void>
-  }
+  },
+  SyncSet<T>  // Set instance (for advanced usage)
 ]
 
-// Vue composable return type
-export interface UseSetComposable<T> {
-  items: Ref<Set<T>>
-  add: (item: T) => Promise<void>
-  addAll: (items: T[]) => Promise<void>
-  remove: (item: T) => Promise<void>
-  has: (item: T) => boolean
-  clear: () => Promise<void>
-}
-
-// Svelte store type
-export interface SetStore<T> {
-  subscribe(callback: (items: Set<T>) => void): () => void
-  add(item: T): Promise<void>
-  addAll(items: T[]): Promise<void>
-  remove(item: T): Promise<void>
-  has(item: T): boolean
-  clear(): Promise<void>
-}
+// NOTE: Vue and Svelte do not have set composables/stores
+// Use vanilla SDK: synckit.set<T>(id) with manual subscription
 ```
 
 ---

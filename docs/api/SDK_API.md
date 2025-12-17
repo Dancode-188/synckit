@@ -696,13 +696,13 @@ function RichEditor({ id }: { id: string }) {
 }
 ```
 
-### useCounter ✅ v0.2.0
+### useSyncCounter ✅ v0.2.0
 
 ```typescript
-import { useCounter } from '@synckit-js/sdk/react'
+import { useSyncCounter } from '@synckit-js/sdk/react'
 
 function LikeButton({ postId }: { postId: string }) {
-  const [likes, { increment, decrement }] = useCounter(`likes-${postId}`)
+  const [likes, { increment, decrement }] = useSyncCounter(`likes-${postId}`)
 
   return (
     <div>
@@ -713,23 +713,23 @@ function LikeButton({ postId }: { postId: string }) {
 }
 
 // API signature
-function useCounter(id: string): [
+function useSyncCounter(id: string): [
   number,  // Current count
   {
     increment: (delta?: number) => Promise<void>
     decrement: (delta?: number) => Promise<void>
-    reset: () => Promise<void>
-  }
+  },
+  SyncCounter  // Counter instance (for advanced usage like reset())
 ]
 ```
 
-### useSet ✅ v0.2.0
+### useSyncSet ✅ v0.2.0
 
 ```typescript
-import { useSet } from '@synckit-js/sdk/react'
+import { useSyncSet } from '@synckit-js/sdk/react'
 
 function TagList({ docId }: { docId: string }) {
-  const [tags, { add, remove, has }] = useSet<string>(`tags-${docId}`)
+  const [tags, { add, remove }] = useSyncSet<string>(`tags-${docId}`)
 
   return (
     <div>
@@ -745,15 +745,15 @@ function TagList({ docId }: { docId: string }) {
 }
 
 // API signature
-function useSet<T>(id: string): [
-  Set<T>,  // Current set items
+function useSyncSet<T>(id: string): [
+  Set<T>,  // Current set items (use tags.has() to check membership)
   {
     add: (item: T) => Promise<void>
     addAll: (items: T[]) => Promise<void>
     remove: (item: T) => Promise<void>
-    has: (item: T) => boolean
     clear: () => Promise<void>
-  }
+  },
+  SyncSet<T>  // Set instance (for advanced usage)
 ]
 ```
 
@@ -885,23 +885,33 @@ const { data: todo, update, set } = useDocument<Todo>('todo-1')
 </template>
 ```
 
-### useText ✅ v0.2.0
+### Counter & Set (Use Vanilla SDK) ⚠️
+
+**Note:** Vue adapter does not include `useText`, `useCounter`, or `useSet` composables. For these CRDTs, use the vanilla SDK:
 
 ```vue
 <script setup lang="ts">
-import { useText } from '@synckit-js/sdk/vue'
+import { useSyncKit } from '@synckit-js/sdk/vue'
+import { ref, onMounted, onUnmounted } from 'vue'
 
-const { text, insert, delete: del } = useText('note-1')
-</script>
-```
+const synckit = useSyncKit()
+const count = ref(0)
 
-### useCounter ✅ v0.2.0
+let counter: SyncCounter
+let unsubscribe: (() => void) | null = null
 
-```vue
-<script setup lang="ts">
-import { useCounter } from '@synckit-js/sdk/vue'
+onMounted(() => {
+  counter = synckit.counter('likes')
+  unsubscribe = counter.subscribe((value) => {
+    count.value = value
+  })
+})
 
-const { count, increment, decrement } = useCounter('likes')
+onUnmounted(() => {
+  unsubscribe?.()
+})
+
+const increment = () => counter.increment()
 </script>
 
 <template>
@@ -909,24 +919,7 @@ const { count, increment, decrement } = useCounter('likes')
 </template>
 ```
 
-### useSet ✅ v0.2.0
-
-```vue
-<script setup lang="ts">
-import { useSet } from '@synckit-js/sdk/vue'
-
-const { items, add, remove } = useSet<string>('tags')
-</script>
-
-<template>
-  <div>
-    <span v-for="tag in items" :key="tag">
-      {{ tag }}
-      <button @click="remove(tag)">×</button>
-    </span>
-  </div>
-</template>
-```
+**Available Vue composables:** `useSyncDocument`, `useSyncField`, `useRichText`, `usePresence`, `useOthers`, `useSelf`, `useUndo`, `useSelection`
 
 ---
 
@@ -981,31 +974,40 @@ const { items, add, remove } = useSet<string>('tags')
 <textarea bind:value={$note} />
 ```
 
-### counterStore ✅ v0.2.0
+### Counter & Set (Use Vanilla SDK) ⚠️
 
-```svelte
-<script>
-  import { counterStore } from '@synckit-js/sdk/svelte'
-
-  const likes = counterStore('likes')
-</script>
-
-<button on:click={() => likes.increment()}>👍 {$likes}</button>
-```
-
-### setStore ✅ v0.2.0
+**Note:** Svelte adapter does not include `counterStore` or `setStore`. For these CRDTs, use the vanilla SDK with custom stores:
 
 ```svelte
 <script lang="ts">
-  import { setStore } from '@synckit-js/sdk/svelte'
+  import { getContext, onMount } from 'svelte'
+  import { writable } from 'svelte/stores'
+  import type { SyncKit } from '@synckit-js/sdk'
 
-  const tags = setStore<string>('tags')
+  const synckit = getContext<SyncKit>('synckit')
+  const likes = writable(0)
+
+  let counter: SyncCounter
+  let unsubscribe: (() => void) | null = null
+
+  onMount(() => {
+    counter = synckit.counter('likes')
+    unsubscribe = counter.subscribe((value) => {
+      likes.set(value)
+    })
+
+    return () => {
+      unsubscribe?.()
+    }
+  })
+
+  const increment = () => counter.increment()
 </script>
 
-{#each Array.from($tags) as tag}
-  <span>{tag} <button on:click={() => tags.remove(tag)}>×</button></span>
-{/each}
+<button onclick={increment}>👍 {$likes}</button>
 ```
+
+**Available Svelte stores:** `syncDocument`, `syncText`, `richText`, `undo`, `presence`, `others`, `self`, `syncStatus`, `selectionStore`
 
 ---
 
@@ -1103,8 +1105,8 @@ export {
   useSyncField,
   useSyncText,
   useSyncRichText,
-  useCounter,
-  useSet,
+  useSyncCounter,
+  useSyncSet,
   useUndoRedo,
   usePresence,
   useCursor,
@@ -1113,27 +1115,30 @@ export {
 } from '@synckit-js/sdk/react'
 
 // ✅ Vue composables (requires Vue 3)
+// NOTE: Vue does NOT export useText, useCounter, or useSet - use vanilla SDK for those
 export {
-  useDocument,
-  useText,
+  useSyncDocument,
+  useSyncField,
   useRichText,
-  useCounter,
-  useSet,
-  useUndoRedo,
   usePresence,
-  useCursor
+  useOthers,
+  useSelf,
+  useUndo,
+  useSelection
 } from '@synckit-js/sdk/vue'
 
 // ✅ Svelte stores (requires Svelte 5)
+// NOTE: Svelte does NOT export counterStore or setStore - use vanilla SDK for those
 export {
-  documentStore,
-  textStore,
-  richTextStore,
-  counterStore,
-  setStore,
-  undoRedoStore,
-  presenceStore,
-  cursorStore
+  syncDocument,
+  syncText,
+  richText,
+  undo,
+  presence,
+  others,
+  self,
+  syncStatus,
+  selectionStore
 } from '@synckit-js/sdk/svelte'
 ```
 

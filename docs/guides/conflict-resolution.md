@@ -1,32 +1,20 @@
 # Conflict Resolution in SyncKit
 
-**⚠️ IMPORTANT - v0.1.0 STATUS:**
+**v0.2.0 Production Status**
 
-This guide describes SyncKit's conflict resolution architecture. **v0.1.0 includes automatic LWW conflict resolution with network sync support.**
+SyncKit v0.2.0 provides complete conflict resolution for all data types:
 
-**What works now in v0.1.0:**
-- ✅ LWW (Last-Write-Wins) CRDT conflict resolution (automatic, built into documents)
-- ✅ **Network sync with WebSocket (real-time conflict resolution across clients)**
-- ✅ **Offline queue with persistent storage (conflicts resolve when reconnected)**
-- ✅ Local-first data storage
-- ✅ Manual document merging via `doc.merge(otherDoc)`
-- ✅ Field-level granularity for updates
+**Available Now:**
+- ✅ **LWW (Last-Write-Wins)** - Automatic conflict resolution for document fields
+- ✅ **Text CRDT (Fugue)** - Character-level conflict-free text editing
+- ✅ **Rich Text (Peritext)** - Formatting conflicts resolved automatically
+- ✅ **PN-Counter** - Distributed counter with conflict-free increment/decrement
+- ✅ **OR-Set** - Conflict-free set operations (add/remove)
+- ✅ **Network sync** - Real-time conflict resolution across clients
+- ✅ **Offline queue** - Conflicts resolve automatically when reconnected
+- ✅ **Cross-tab sync** - Conflicts resolved across browser tabs
 
-**Not yet implemented (coming in future version):**
-- ❌ Conflict detection callbacks (`onConflict` method)
-- ❌ Custom conflict handlers (`conflictHandlers` option)
-- ❌ Conflict interface and conflict event objects
-- ❌ Text CRDT (`sync.text()` method)
-- ❌ Counter and Set CRDTs
-
-**How to use this guide:**
-- Sections marked with **"❌ NOT IN v0.1.0"** describe future APIs (conflict callbacks, Text CRDT)
-- Network sync IS available - conflicts resolve automatically across connected clients
-- Examples showing `onConflict`, `conflictHandlers`, `sync.text()` are for future versions only
-
----
-
-Learn how SyncKit handles conflicts automatically, and when to implement custom resolution logic.
+Learn how SyncKit handles conflicts automatically across all CRDT types.
 
 ---
 
@@ -116,10 +104,11 @@ await task.update({
 - **~95% of real-world conflicts**
 
 **When LWW doesn't work:**
-- Text editing (Text CRDT needed - not in v0.1.0)
-- Counters (PN-Counter needed - not in v0.1.0)
-- Financial calculations
-- Cumulative data (logs, analytics)
+- **Text editing** - Use `sync.text()` (Fugue CRDT) or `sync.richText()` (Peritext) instead
+- **Counters** - Use `sync.counter()` (PN-Counter) for distributed counting
+- **Sets** - Use `sync.set()` (OR-Set) for add/remove operations
+- **Financial calculations** - Need custom logic for precision
+- **Cumulative data** - Logs and analytics need append-only structures
 
 ---
 
@@ -254,18 +243,18 @@ await task.update({ title: 'New title' })
 
 **Note:** LWW is built-in and automatic. There is no `conflictResolution` config option in v0.1.0.
 
-### Detecting Conflicts ❌ NOT IN v0.1.0
+### Detecting Conflicts (Future Enhancement)
 
-**⚠️ This feature is not yet implemented in v0.1.0. Coming in a future version.**
+**Note:** This feature is planned for a future version.
 
 Proposed API for getting notified when conflicts occur:
 
 ```typescript
-// ❌ NOT IMPLEMENTED - This code will NOT work in v0.1.0
+// Proposed API for future version
 const task = sync.document<Task>('task-123')
 
-// Subscribe to conflict events (NOT YET AVAILABLE)
-task.onConflict((conflict) => {  // ❌ onConflict() doesn't exist
+// Subscribe to conflict events
+task.onConflict((conflict) => {
   console.log('Conflict detected!')
   console.log('Local value:', conflict.local)
   console.log('Remote value:', conflict.remote)
@@ -273,9 +262,9 @@ task.onConflict((conflict) => {  // ❌ onConflict() doesn't exist
 })
 ```
 
-**Proposed Conflict object (for future version):**
+**Proposed Conflict object:**
 ```typescript
-// ❌ NOT IMPLEMENTED - Planned interface
+// Planned interface for future version
 interface Conflict<T> {
   field: keyof T           // Field that conflicted
   local: any               // Your local value
@@ -286,17 +275,17 @@ interface Conflict<T> {
 }
 ```
 
-### Logging Conflicts ❌ NOT IN v0.1.0
+### Logging Conflicts (Future Enhancement)
 
-**⚠️ This feature is not yet implemented in v0.1.0. Coming in a future version.**
+**Note:** This feature is planned for a future version.
 
 Proposed API for tracking conflicts for debugging or analytics:
 
 ```typescript
-// ❌ NOT IMPLEMENTED - This code will NOT work in v0.1.0
+// Proposed API for future version
 const conflicts: Conflict[] = []
 
-task.onConflict((conflict) => {  // ❌ onConflict() doesn't exist
+task.onConflict((conflict) => {
   conflicts.push(conflict)
 
   // Log to analytics
@@ -311,16 +300,16 @@ task.onConflict((conflict) => {  // ❌ onConflict() doesn't exist
 console.log(`${conflicts.length} conflicts in last hour`)
 ```
 
-### Custom Conflict Handlers ❌ NOT IN v0.1.0
+### Custom Conflict Handlers (Future Enhancement)
 
-**⚠️ This feature is not yet implemented in v0.1.0. Coming in a future version.**
+**Note:** This feature is planned for a future version.
 
 Proposed API for implementing custom resolution logic for specific fields:
 
 ```typescript
-// ❌ NOT IMPLEMENTED - This code will NOT work in v0.1.0
-const task = sync.document<Task>('task-123', {  // ❌ document() only takes id parameter
-  conflictHandlers: {  // ❌ conflictHandlers option doesn't exist
+// Proposed API for future version
+const task = sync.document<Task>('task-123', {
+  conflictHandlers: {
     // Custom handler for priority field
     priority: (local, remote, localTime, remoteTime) => {
       // Always prefer 'critical' priority
@@ -345,11 +334,11 @@ const task = sync.document<Task>('task-123', {  // ❌ document() only takes id 
 })
 ```
 
-**Current v0.1.0 workaround:** Conflicts resolve automatically with LWW. For custom logic, implement it in your application code before calling `update()`.
+**Current workaround:** Conflicts resolve automatically with LWW. For custom logic, implement it in your application code before calling `update()`.
 
-### Manual Conflict Resolution ❌ NOT IN v0.1.0
+### Manual Conflict Resolution (Future Enhancement)
 
-**⚠️ This feature is not yet implemented in v0.1.0. Coming in a future version.**
+**Note:** This feature is planned for a future version.
 
 Proposed API for resolving conflicts manually in complex scenarios:
 
@@ -396,11 +385,9 @@ console.log(docA.get())  // Has both changes merged
 
 ---
 
-## Text Editing with CRDTs ❌ NOT IN v0.1.0
+## Text Editing with CRDTs ✅ AVAILABLE
 
-**⚠️ Text CRDT is not yet implemented in v0.1.0. Coming in a future version.**
-
-For **collaborative text editing**, LWW doesn't work—you need a **Text CRDT**.
+For **collaborative text editing**, LWW doesn't work—you need a **Text CRDT**. SyncKit v0.2.0 includes both Fugue (plain text) and Peritext (rich text).
 
 ### Why LWW Fails for Text
 
@@ -416,33 +403,47 @@ For **collaborative text editing**, LWW doesn't work—you need a **Text CRDT**.
 // LWW result: One insertion lost! ❌
 ```
 
-### Proposed SyncKit Text CRDT API (Future)
+### SyncKit Text CRDT (Fugue)
 
 ```typescript
-// ❌ NOT IMPLEMENTED - This code will NOT work in v0.1.0
 // Use Text CRDT for collaborative editing
-const doc = sync.text('document-123')  // ❌ text() method doesn't exist
+const doc = sync.text('document-123')
 
 // Subscribe to changes
 doc.subscribe((content) => {
   editor.setValue(content)
 })
 
-// Insert text at position
+// Both clients insert at position 6
+// Client A
 await doc.insert(6, 'Brave ')
+
+// Client B
+await doc.insert(6, 'Beautiful ')
 
 // Both inserts preserved: "Hello Brave Beautiful World" ✅
 ```
 
-**Text CRDT guarantees (when implemented):**
+### Rich Text with Peritext
+
+```typescript
+// Use Peritext for formatted text
+const doc = sync.richText('document-123')
+
+// Insert formatted text
+await doc.insert(0, 'Hello', { bold: true })
+await doc.insert(5, ' World', { italic: true })
+
+// Formatting conflicts resolved automatically
+```
+
+**Text CRDT guarantees:**
 - ✅ **All edits preserved** - No character loss
 - ✅ **Conflict-free** - Automatic merge
 - ✅ **Convergence** - All clients reach same state
 - ✅ **Intention preserved** - Character positions maintained
 
-**Current v0.1.0 workaround:** For simple text fields, use LWW documents and accept that last-write-wins. For collaborative editing, consider using a third-party library like Yjs or Automerge until Text CRDT is implemented.
-
-**See:** [Collaborative Editor Example](../../examples/collaborative-editor/) (uses document-level sync, not character-level)
+**[Learn more about Text CRDTs →](rich-text-editing.md)** | **[Counter & Set API →](../api/COUNTER_SET_API.md)**
 
 ---
 
@@ -584,7 +585,7 @@ async function testMerge() {
 }
 ```
 
-### 5. Show Conflict Indicators ❌ NOT IN v0.1.0
+### 5. Show Conflict Indicators (Future Enhancement)
 
 **⚠️ Conflict detection callbacks are not yet implemented in v0.1.0.**
 
@@ -749,7 +750,7 @@ class SumCounter {
 
 **Solutions:**
 1. **Use field-level ownership** - Assign specific fields to specific users
-2. **Implement custom handler** - Preserve important data (not in v0.1.0 - coming in future version)
+2. **Implement custom handler** - Preserve important data (planned for future version)
 3. **Use optimistic locking** - Warn users about concurrent edits (example below)
 
 ```typescript
@@ -774,7 +775,7 @@ async function updateTask(sync: SyncKit, task: Task, updates: Partial<Task>) {
 }
 ```
 
-### Issue: "Conflicts not detected" ❌ NOT IN v0.1.0
+### Issue: "Conflicts not detected" (Future Feature)
 
 **⚠️ Conflict detection callbacks are not yet implemented in v0.1.0.**
 
@@ -800,11 +801,11 @@ task.subscribe((data) => {
 })
 ```
 
-### Issue: "Text editing loses characters" ❌ NOT IN v0.1.0
+### Issue: "Text editing loses characters"
 
 **Cause:** Using LWW for text fields instead of Text CRDT
 
-**⚠️ Text CRDT is not yet implemented in v0.1.0.**
+**Solution:** Use `sync.text()` (Fugue) or `sync.richText()` (Peritext) for collaborative text editing.
 
 **Proposed solution (for future version):**
 ```typescript
@@ -836,15 +837,19 @@ await description.insert(position, newText)
 **Key Takeaways for Future Versions:**
 
 3. **Test offline scenarios** - Most conflicts occur when users work offline (requires network sync)
-4. **Text is special** - Use Text CRDT for collaborative editing (coming in v0.2.0)
-5. **Know when to intervene** - Custom handlers for business logic (coming soon)
+4. **Text is special** - Use Text CRDT for collaborative editing (`sync.text()` or `sync.richText()`)
+5. **Know when to intervene** - Custom handlers for business logic (future enhancement)
 6. **Show users what happened** - Conflict indicators build trust (requires onConflict callbacks)
 
-**v0.1.0 Conflict Resolution Decision Tree:**
+**Conflict Resolution Decision Tree:**
 
 ```
 Is it collaborative text editing?
-  → YES: Wait for Text CRDT (v0.2.0) or use Yjs/Automerge
+  → YES: Use sync.text() (Fugue) or sync.richText() (Peritext)
+  → NO: Continue
+
+Is it a counter or set?
+  → YES: Use sync.counter() (PN-Counter) or sync.set() (OR-Set)
   → NO: Continue
 
 Is data additive (logs, comments)?
@@ -856,8 +861,8 @@ Do different users own different fields?
   → NO: Continue
 
 Are conflicts acceptable (last write wins)?
-  → YES: Use default LWW (automatic in v0.1.0)
-  → NO: Wait for custom handlers (future version) or implement logic in app code
+  → YES: Use default LWW (automatic with sync.document())
+  → NO: Implement custom logic in app code or wait for custom handlers (future version)
 ```
 
 **Next Steps:**

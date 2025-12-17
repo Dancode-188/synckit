@@ -98,8 +98,11 @@ function toggleBold(start: number, end: number) {
 ```svelte
 <script lang="ts">
 import { richText } from '@synckit-js/sdk/svelte'
+import { getContext } from 'svelte'
+import type { SyncKit } from '@synckit-js/sdk'
 
-const editor = richText('doc-123')
+const synckit = getContext<SyncKit>('synckit')
+const editor = richText(synckit, 'doc-123', 'content')
 const { ranges, text, format, insert } = editor
 
 function applyBold(start: number, end: number) {
@@ -646,8 +649,11 @@ function addMention(username: string) {
 ```svelte
 <script lang="ts">
 import { richText } from '@synckit-js/sdk/svelte'
+import { getContext } from 'svelte'
+import type { SyncKit } from '@synckit-js/sdk'
 
-const doc = richText('note-456')
+const synckit = getContext<SyncKit>('synckit')
+const doc = richText(synckit, 'note-456', 'content')
 const { ranges, text, format, insert } = doc
 
 // Auto-format markdown syntax
