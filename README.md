@@ -7,7 +7,7 @@
 [![npm version](https://badge.fury.io/js/%40synckit-js%2Fsdk.svg)](https://www.npmjs.com/package/@synckit-js/sdk)
 [![Build Status](https://img.shields.io/github/actions/workflow/status/Dancode-188/synckit/ci.yml?branch=main)](https://github.com/Dancode-188/synckit/actions)
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
-[![Bundle Size](https://img.shields.io/badge/bundle%20size-~59KB%20(~45KB%20lite)-brightgreen)](https://bundlephobia.com)
+[![Bundle Size](https://img.shields.io/badge/bundle%20size-154KB%20(46KB%20lite)-brightgreen)](https://bundlephobia.com)
 [![TypeScript](https://img.shields.io/badge/TypeScript-5.0+-blue)](https://www.typescriptlang.org/)
 [![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](CONTRIBUTING.md)
 
@@ -19,13 +19,17 @@
 
 ## 🎯 What is SyncKit?
 
-SyncKit is a **production-ready sync engine** that makes building local-first applications trivial.
+**Build collaborative apps in hours, not months.**
+
+SyncKit is a **production-ready sync engine** that gives you everything for local-first collaboration:
+- Rich text editing with conflict resolution (Peritext + Fugue CRDTs)
+- Undo/redo that syncs across tabs and sessions
+- Live presence and cursor sharing
+- Framework adapters for React, Vue, and Svelte
 
 > "Add `sync.document()` to your app, get real-time sync automatically."
 
-**The problem:** Building sync from scratch takes months. Existing solutions are complex (Yjs), expensive (Firebase), or don't work offline (Supabase).
-
-**The solution:** SyncKit gives you production-ready sync in 3 lines of code.
+**The reality:** Building sync from scratch takes months. SyncKit gives you production-ready collaboration in 3 lines of code.
 
 ```typescript
 const sync = new SyncKit()
@@ -48,26 +52,24 @@ await doc.update({ completed: true })
 ### 🚀 **Works When Internet Doesn't**
 True offline-first architecture—not just caching. Your app works perfectly on planes, trains, tunnels, and coffee shops with spotty WiFi.
 
-### 📦 **Enterprise Features, Startup Bundle**
+### 📦 **Production-Ready, Feature-Complete**
 
-**~59 KB gzipped** (10KB SDK + 49KB WASM) - Complete WASM-based sync engine with TypeScript SDK.
+**154KB gzipped** - Complete local-first sync solution with everything you need.
 
-Current features (v0.1.0):
-- ✅ Offline-first sync (LWW)
-- ✅ Real-time collaboration
-- ✅ Network protocol support
-- ✅ IndexedDB persistence
-- ✅ Cross-tab sync (see [example](examples/project-management))
+**What you get:**
+- ✅ Text editing (Fugue CRDT) - Collaborative editing that just works
+- ✅ Rich text formatting (Peritext) - Bold, italic, links with conflict resolution
+- ✅ Undo/redo - Syncs across tabs, persists across sessions
+- ✅ Real-time presence - See who's online, what they're editing
+- ✅ Cursor sharing - Watch teammates type in real-time
+- ✅ Counters & Sets - Distributed data structures for app state
+- ✅ Framework adapters - React, Vue, Svelte (choose what you need)
+- ✅ Offline-first sync - Works perfectly without internet
+- ✅ IndexedDB persistence - Unlimited local storage
 
-Coming in v0.2.0 (In Progress):
-- ⚡ **Text CRDTs** (Fugue algorithm) - **Core complete, optimization in progress**
-  - ✅ Works great for small-medium documents (<1000 chars)
-  - 🚧 Performance optimization needed for large documents (Phase 1.5)
-- 🚧 Counters, Sets (distributed data structures)
+**Size-critical apps?** Use Lite variant (46KB gzipped, basic sync only)
 
-**Size-critical apps?** Use Lite variant (~45 KB gzipped: 1.5KB SDK + 44KB WASM, local-only)
-
-**Competitive bundle size:** Larger than Yjs (~19KB pure JS), smaller than Automerge (~60-78KB).
+**The trade-off:** Yjs is a minimal core (65KB, assembled). SyncKit is complete (154KB, production features included).
 
 ### 🔓 **Your Data, Your Rules**
 Open source and self-hostable. No vendor lock-in, no surprise $2,000/month bills, complete data sovereignty.
@@ -75,40 +77,13 @@ Open source and self-hostable. No vendor lock-in, no surprise $2,000/month bills
 ### ⚡ **Fast by Design**
 - <1ms local operations (~5-20μs single field update)
 - <100ms sync latency (10-50ms p95)
-- ~59KB bundle (10KB SDK + 49KB WASM), ~45KB lite option
-- Sub-200KB total with React
+- 154KB bundle (complete solution), 46KB lite option
+- ~310KB total with React (comparable to React alone)
 
 ### 🛡️ **Data Integrity Guaranteed**
 - Zero data loss with automatic conflict resolution (Last-Write-Wins)
 - Formal verification with TLA+ (3 bugs found and fixed)
-- 700+ comprehensive tests across TypeScript and Rust (unit, integration, chaos, load)
-
----
-
-## 🆚 Comparison
-
-| Feature | SyncKit | Firebase | Supabase | Yjs | Automerge |
-|---------|:-------:|:--------:|:--------:|:---:|:---------:|
-| **True Offline-First** | ✅ Native | ⚠️ Cache only<br/>(40MB limit) | ❌ None<br/>([#357](https://github.com/supabase/supabase/issues/357) - 4+ years) | ✅ Full | ✅ Full |
-| **Works Without Server** | ✅ Yes | ❌ No | ❌ No | ✅ Yes | ✅ Yes |
-| **Bundle Size (gzipped)** | **~59KB**<br/>(45KB lite) | ~150KB | ~45KB | **~19KB** | ~60-78KB |
-| **Text CRDT** | 🚧 v0.2.0 | ❌ No | ❌ No | ✅ Yes | ✅ Yes |
-| **Counters/Sets** | 🚧 v0.2.0 | ❌ No | ❌ No | ✅ Yes | ✅ Yes |
-| **Automatic Conflicts** | ✅ LWW | ✅ LWW | ⚠️ Manual | ✅ CRDT | ✅ CRDT |
-| **Self-Hosted** | ✅ Yes | ❌ No | ✅ Yes | ✅ Yes | ✅ Yes |
-| **Multi-Language Server** | ✅ TS<br/>🚧 Py/Go/Rust | ❌ No | ⚠️ Postgres only | ❌ JS only | ❌ JS only |
-| **Pricing** | Free (self-host) | $25-$2,000+/mo | $0-$25/mo | Free | Free |
-| **TypeScript Support** | ✅ Native | ✅ Good | ✅ Good | ⚠️ Issues | ✅ Good |
-| **Learning Curve** | ✅ 5 minutes | ⚠️ Medium | ⚠️ Medium | ⚠️ Steep | ⚠️ Complex |
-| **Production Status** | ✅ v0.1.0 ready | ✅ Mature | ✅ Mature | ✅ Mature | ⚠️ Alpha/Beta |
-
-**TL;DR:**
-- **vs Firebase:** No vendor lock-in, true offline, predictable costs
-- **vs Supabase:** Actually works offline (their [#1 issue](https://github.com/supabase/supabase/issues/357) for 4+ years)
-- **vs Yjs:** WASM-based for multi-language server support, simpler API for structured data
-- **vs Automerge:** Smaller bundle, faster performance, production-ready
-
-**[See detailed migration guides →](docs/guides/)**
+- 1,081+ comprehensive tests across TypeScript and Rust (unit, integration, chaos, load)
 
 ---
 
@@ -162,9 +137,9 @@ function TodoApp() {
 - ✅ Persists data in IndexedDB
 - ✅ Resolves conflicts automatically
 
-**Bundle:** SyncKit (~59 KB gzipped) + React (~130 KB) = **~189 KB total**
+**Bundle:** SyncKit (154KB gzipped) + React (156KB) = **~310KB total**
 
-**Size-critical?** `import { SyncKit } from '@synckit-js/sdk/lite'` (~45 KB gzipped, local-only)
+**Size-critical?** `import { SyncKit } from '@synckit-js/sdk/lite'` (46KB gzipped, local-only)
 
 **[Full tutorial (5 minutes) →](docs/guides/getting-started.md)**
 
@@ -172,35 +147,30 @@ function TodoApp() {
 
 ## 🎓 Features
 
+### Text Editing & Collaboration
+
+- **✍️ Text CRDT (Fugue)** - Collaborative editing with conflict-free convergence
+- **🎨 Rich Text (Peritext)** - Bold, italic, links with proper formatting merge
+- **↩️ Undo/Redo** - Cross-tab undo that syncs everywhere
+- **👥 Awareness & Presence** - See who's online and what they're editing
+- **🖱️ Cursor Sharing** - Real-time cursor positions with smooth animations
+- **🔢 Counters & Sets** - Distributed counters (PN-Counter) and sets (OR-Set)
+
+### Framework Integration
+
+- **⚛️ React Hooks** - Complete hook library for all features
+- **🟢 Vue Composables** - Idiomatic Vue 3 Composition API integration
+- **🔶 Svelte Stores** - Reactive Svelte 5 stores with runes support
+
 ### Core Capabilities
 
 - **🔄 Real-Time Sync** - WebSocket-based instant sync across devices
 - **📴 Offline-First** - Works perfectly with zero connectivity
 - **🗄️ Local Persistence** - IndexedDB storage, unlimited capacity
-- **🔀 Conflict Resolution** - Automatic Last-Write-Wins (LWW) merge
+- **🔀 Conflict Resolution** - Automatic Last-Write-Wins (LWW) merge for documents, CRDTs for collaboration
 - **⚡ Fast Operations** - <1ms local updates, <100ms sync latency
-- **📦 Compact Bundle** - ~59KB gzipped (10KB SDK + 49KB WASM)
+- **📦 Production Bundle** - 154KB gzipped (complete) or 46KB (lite)
 - **🔐 Secure** - JWT authentication, RBAC permissions
-
-### Framework Integration
-
-- **⚛️ React Hooks** - `useSyncDocument`, `useSyncField`, `SyncProvider`
-- **🌐 TypeScript Server** - Bun + Hono reference implementation
-- **📦 Multi-Variant** - Default (~59KB gzipped) or Lite (~45KB gzipped) builds
-
-### Coming in v0.2.0
-
-- **✍️ Text CRDTs (Fugue Algorithm)** - Collaborative text editing ⚡ **Core Complete!**
-  - ✅ Full Rust implementation with WASM bindings
-  - ✅ TypeScript SDK & React hooks (`useSyncText`)
-  - ✅ 76 tests passing (CRDT correctness validated)
-  - ✅ Optimized for small-medium documents (<1000 chars)
-  - 🚧 Performance optimization in progress for large documents (Phase 1.5)
-  - See [v0.2.0 Roadmap](analysis/v0.2.0_ROADMAP.md) for details
-- **🔢 Counters** - Conflict-free increment/decrement
-- **📋 Sets & Lists** - Observed-Remove Sets for collections
-- **🎨 Framework Adapters** - Vue composables, Svelte stores
-- **🌐 Multi-Language Servers** - Python, Go, Rust implementations
 
 ---
 
@@ -272,6 +242,9 @@ graph TD
 **Perfect for:** Task apps, CRMs, project management, note apps (80% of applications)
 
 ```typescript
+import { SyncKit } from '@synckit-js/sdk'
+import { useSyncDocument } from '@synckit-js/sdk/react'
+
 // Initialize once
 const sync = new SyncKit()
 await sync.init()
@@ -282,26 +255,64 @@ await doc.update({ status: 'completed' })
 // Conflicts resolved automatically with Last-Write-Wins
 ```
 
-### Tier 2: Collaborative Text Editing *(Coming Soon)*
+### Tier 2: Collaborative Text Editing
 **Perfect for:** Collaborative editors, documentation, notes
 
 ```typescript
-// Note: Text CRDT API is planned for v0.2.0
-const text = sync.text('document-456')
-await text.insert(0, 'Hello ')
-text.subscribe(content => editor.setValue(content))
+import { useSyncText } from '@synckit-js/sdk/react'
+
+const [text, { insert, delete: del }] = useSyncText('document-456')
+await insert(0, 'Hello ')
 // Character-level sync, conflict-free convergence
 ```
 
-### Tier 3: Custom CRDTs *(Coming Soon)*
-**Perfect for:** Whiteboards, design tools, specialized apps
+### Tier 3: Counters & Sets
+**Perfect for:** Likes, votes, tags, participants
 
 ```typescript
-// Note: Counter API is planned for v0.2.0
-const counter = sync.counter('likes-789')
-await counter.increment()
-// Conflict-free counter (additions never conflict)
+import { useCounter, useSet } from '@synckit-js/sdk/react'
+
+const [count, { increment, decrement }] = useCounter('likes-789')
+await increment()  // Conflict-free counter
+
+const [tags, { add, remove }] = useSet<string>('post-tags')
+await add('typescript')  // Observed-remove set
 ```
+
+---
+
+## 🌐 How SyncKit Fits the Ecosystem
+
+Different libraries make different trade-offs. Here's how SyncKit compares:
+
+| Feature | SyncKit | Firebase | Supabase | Yjs | Automerge |
+|---------|:-------:|:--------:|:--------:|:---:|:---------:|
+| **Bundle Size (gzipped)** | **154KB**<br/>(46KB lite) | ~150–200KB<br/>(typical client) | ~45KB<br/>(JS client) | **65KB**<br/>(core) | 300KB+<br/>(JS/WASM) |
+| **Text CRDT** | ✅ Fugue | ❌ No | ❌ No | ✅ Y.Text | ✅ Yes |
+| **Rich Text** | ✅ Peritext | ❌ No | ❌ No | ⚠️ Limited | ✅ Yes |
+| **Undo/Redo** | ✅ Cross-tab | ❌ No | ❌ No | ⚠️ Basic | ✅ Yes |
+| **Awareness/Cursors** | ✅ Built-in | ❌ No | ❌ No | ⚠️ Extension | ❌ No |
+| **Framework Adapters** | ✅ React/Vue/Svelte | ❌ No | ❌ No | ⚠️ Community | ❌ No |
+| **True Offline-First** | ✅ Native | ⚠️ Cache only | ❌ None | ✅ Full | ✅ Full |
+| **Works Without Server** | ✅ Yes | ❌ No | ❌ No | ✅ Yes | ✅ Yes |
+| **Self-Hosted** | ✅ Yes | ❌ No | ✅ Yes | ✅ Yes | ✅ Yes |
+| **TypeScript Support** | ✅ Native | ✅ Good | ✅ Good | ⚠️ Issues | ✅ Good |
+| **Production Status** | ✅ v0.2.0 | ✅ Mature | ✅ Mature | ✅ Mature | ⚠️ Stable core,<br/>evolving ecosystem |
+
+### When to Choose SyncKit
+
+**Choose SyncKit if:**
+- ✅ You need rich text, undo/redo, cursors, and framework adapters included
+- ✅ You want Vue or Svelte support (not just React)
+- ✅ You value shipping fast over optimizing every byte
+- ✅ You want true offline-first without vendor lock-in
+
+**Choose alternatives if:**
+- **Firebase/Supabase:** You need a full backend-as-a-service (auth, storage, functions) and offline sync isn't critical
+- **Yjs:** Minimal bundle size is your #1 priority and you're okay wiring up separate plugins for undo, presence, and framework support.
+- **Automerge:** You need JSON patching or unique Automerge features (and can accept 300KB+ bundle)
+
+**[See detailed migration guides →](docs/guides/)**
 
 ---
 
@@ -310,7 +321,9 @@ await counter.increment()
 ### Core
 - **`@synckit-js/sdk`** - Core SDK (TypeScript) + WASM engine
 - **`@synckit-js/sdk/react`** - React hooks and components (export from SDK)
-- **`@synckit-js/sdk/lite`** - Lightweight version (local-only, 45KB gzipped)
+- **`@synckit-js/sdk/vue`** - Vue 3 composables (export from SDK)
+- **`@synckit-js/sdk/svelte`** - Svelte 5 stores with runes (export from SDK)
+- **`@synckit-js/sdk/lite`** - Lightweight version (local-only, 46KB gzipped)
 
 ### Servers
 - **`@synckit-js/server`** - Bun + Hono reference server (production-ready)
@@ -319,30 +332,36 @@ await counter.increment()
 
 ## 🚦 Status
 
-**Current Version:** v0.1.0
-**Production Ready:** Core sync engine, React hooks, TypeScript server ✅
+**Current Version:** v0.2.0
+**Production Ready:** Complete local-first collaboration platform ✅
 
 ### What's Complete ✅
 
-- ✅ **Core Rust Engine** - LWW sync engine with CRDT foundation
-- ✅ **WASM Compilation** - 59KB gzipped (45KB lite), optimized performance
-- ✅ **TypeScript SDK** - Document API, IndexedDB storage, offline queue
-- ✅ **Cross-Tab Sync** - Server-mediated sync with operation buffering for multi-tab coordination
-- ✅ **React Integration** - `useSyncDocument`, `useSyncField`, `SyncProvider` hooks
+- ✅ **Text CRDT (Fugue)** - Collaborative text editing with conflict-free convergence
+- ✅ **Rich Text (Peritext)** - Bold, italic, links with formatting conflict resolution
+- ✅ **Undo/Redo** - Cross-tab undo with persistent history
+- ✅ **Awareness & Presence** - Real-time user tracking
+- ✅ **Cursor Sharing** - Live cursor positions with animations
+- ✅ **Counters & Sets** - PN-Counter and OR-Set CRDTs
+- ✅ **Vue 3 Adapter** - Complete composables with Composition API
+- ✅ **Svelte 5 Adapter** - Reactive stores with runes support
+- ✅ **Core Rust Engine** - LWW sync engine with full CRDT suite
+- ✅ **WASM Compilation** - 154KB gzipped (46KB lite), optimized performance
+- ✅ **TypeScript SDK** - Document, Text, RichText, Counter, Set APIs
+- ✅ **Cross-Tab Sync** - BroadcastChannel + server-mediated sync
+- ✅ **React Integration** - Complete hook library for all features
 - ✅ **TypeScript Server** - WebSocket sync server with Bun + Hono
-- ✅ **Example Applications** - Todo app, collaborative editor, project management demos
-- ✅ **Documentation** - Comprehensive guides and API reference
+- ✅ **Example Applications** - Todo app, collaborative editor, project management
+- ✅ **1,081+ Tests** - Comprehensive test coverage (87%)
+- ✅ **Documentation** - Complete guides and API reference
 - ✅ **Build System** - Complete toolchain with benchmarks and CI
 
 ### What's Next 🚧
 
-- 🚧 **Text CRDTs** - Collaborative text editing (`useText` hook) for character-level sync
-- 🚧 **Counter CRDTs** - Distributed counters (`useCounter` hook) for conflict-free increments
-- 🚧 **BroadcastChannel Cross-Tab** - Direct client-to-client sync without server (offline multi-tab)
-- 🚧 **Framework Adapters** - Vue composables (`@synckit-js/sdk/vue`), Svelte stores (`@synckit-js/sdk/svelte`)
-- 🚧 **Multi-Language Servers** - Python, Go, Rust server implementations (TypeScript complete)
+- 🚧 **Multi-Language Servers** - Python, Go, Rust implementations
 - 🚧 **Advanced Storage** - OPFS (Origin Private File System), SQLite adapter
-- 🚧 **Conflict UI** - Visual conflict resolution interface for complex merge scenarios
+- 🚧 **Conflict UI** - Visual conflict resolution interface
+- 🚧 **Performance** - Large document optimization (>10K chars)
 
 **[Full roadmap →](ROADMAP.md)**
 
@@ -380,11 +399,11 @@ Need enterprise support?
 
 ### Bundle Size (gzipped)
 ```
-Yjs:                ~19 KB ████
-SyncKit (lite):     ~45 KB █████████
-SyncKit (default):  ~59 KB ████████████
-Automerge:       ~60-78 KB ████████████████
-Firebase:          ~150 KB ████████████████████████████████
+SyncKit (lite):      46 KB ████████
+Yjs (assembled):     65 KB ███████████
+SyncKit (default):  154 KB ████████████████████████████
+Firebase:           150 KB ████████████████████████████
+Automerge:          300 KB ████████████████████████████████████████████████████████
 ```
 
 ### Sync Performance

@@ -54,8 +54,8 @@ Complete API documentation:
 
 ### Framework Adapters
 - **[React Hooks](api/SDK_API.md#react-hooks)** - `useSyncDocument`, `useSyncField`, `useNetworkStatus`, `useSyncState`
-- **[Vue Composables](api/SDK_API.md#vue-composables)** - Vue 3 integration *(coming soon)*
-- **[Svelte Stores](api/SDK_API.md#svelte-stores)** - Svelte integration *(coming soon)*
+- **[Vue Composables](api/SDK_API.md#vue-composables)** - Vue 3 Composition API integration
+- **[Svelte Stores](api/SDK_API.md#svelte-stores)** - Svelte 5 reactive stores with runes
 
 ### Server API
 - **[Server API Reference](../server/typescript/README.md)** - TypeScript server documentation
@@ -127,9 +127,9 @@ Learn from working examples:
 ### Performance
 
 **Bundle Size (gzipped):**
-- **Default variant:** ~59KB (document sync with network protocol)
-- **Lite variant:** ~45KB (local-only, no network protocol)
-- **Competitive:** Larger than Yjs (~19KB), smaller than Automerge (~60-78KB), much smaller than Firebase (~150KB)
+- **Default variant:** 154KB (complete solution with all collaboration features)
+- **Lite variant:** 46KB (basic sync, local-only)
+- **Context:** Comparable to Firebase (~150-200KB), smaller than Automerge (300KB+)
 
 **Operation Speed:**
 - Local update: <1ms (371ns single field)
@@ -178,7 +178,7 @@ if (navigator.storage && navigator.storage.persist) {
 
 **Changes not syncing across tabs**
 ```typescript
-// ✅ Cross-tab sync via BroadcastChannel IS implemented in v0.1.0
+// ✅ Cross-tab sync via BroadcastChannel is fully implemented
 // Changes sync automatically across tabs via BroadcastChannel API
 // Multi-tab scenarios work both locally (BroadcastChannel) and via server
 const todo = sync.document<Todo>('todo-1')  // Same ID in both tabs - syncs automatically!
@@ -224,29 +224,35 @@ We welcome contributions!
 
 ## 📊 Status
 
-**Current Release:** v0.1.0 (November 2025)
-**Next Phase:** Phase 10 - Launch Preparation
+**Current Release:** v0.2.0 (December 2025)
+**Production Ready:** Complete local-first collaboration platform ✅
 
 ### What's Complete ✅
 
-- ✅ Core Rust engine (LWW sync, Text CRDT, protocol)
-- ✅ TypeScript SDK (Document API, storage, React hooks)
+- ✅ **Text CRDT (Fugue)** - Collaborative text editing with conflict-free convergence
+- ✅ **Rich Text (Peritext)** - Bold, italic, links with formatting conflict resolution
+- ✅ **Undo/Redo** - Cross-tab undo with persistent history
+- ✅ **Awareness & Presence** - Real-time user tracking
+- ✅ **Cursor Sharing** - Live cursor positions with animations
+- ✅ **Counters & Sets** - PN-Counter and OR-Set CRDTs
+- ✅ **Vue 3 Adapter** - Complete composables with Composition API
+- ✅ **Svelte 5 Adapter** - Reactive stores with runes support
+- ✅ Core Rust engine (LWW sync, full CRDT suite, protocol)
+- ✅ TypeScript SDK (Document, Text, RichText, Counter, Set APIs)
 - ✅ Network sync layer (WebSocket, offline queue, auto-reconnect)
-- ✅ Cross-tab sync (BroadcastChannel for local multi-tab synchronization)
-- ✅ React integration (`useSyncDocument`, `useSyncField`, `useNetworkStatus`, `useSyncState`)
+- ✅ Cross-tab sync (BroadcastChannel + server-mediated)
+- ✅ React integration (complete hook library for all features)
 - ✅ TypeScript server (WebSocket sync, JWT auth, PostgreSQL)
 - ✅ Example applications (todo app, collaborative editor, project management)
-- ✅ Testing infrastructure (100% pass rate, 100 tests)
-- ✅ Documentation (API reference, guides, migration docs)
+- ✅ **1,081+ tests** (87% coverage)
+- ✅ Documentation (complete API reference, guides, migration docs)
 - ✅ Formal verification (TLA+, 118K states explored)
 
 ### What's Next 🚧
 
 - 🚧 Multi-language servers (Python, Go, Rust)
-- 🚧 Vue & Svelte adapters
 - 🚧 Advanced storage adapters (OPFS, SQLite)
-- 🚧 Production deployment guides
-- 🚧 NPM package publication
+- 🚧 Performance optimization (large documents >10K chars)
 
 **[Full roadmap →](../ROADMAP.md)**
 
