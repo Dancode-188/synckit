@@ -1,73 +1,49 @@
-# React + TypeScript + Vite
+# React Test Harness (Internal)
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+**⚠️ This is NOT a user-facing example - it's internal testing infrastructure.**
 
-Currently, two official plugins are available:
+This React app serves as a test harness for Playwright chaos testing scenarios. It exposes SyncKit internals (leader election, undo/redo state, cross-tab sync) for automated testing.
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Babel](https://babeljs.io/) (or [oxc](https://oxc.rs) when used in [rolldown-vite](https://vite.dev/guide/rolldown)) for Fast Refresh
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/) for Fast Refresh
+## Purpose
 
-## React Compiler
+Used by SDK tests to verify:
+- CrossTabSync leader election
+- UndoManager state across tabs
+- Selection utilities
+- Chaos testing scenarios (network partitions, concurrent edits)
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+## For Users
 
-## Expanding the ESLint configuration
+If you're looking for **real examples**, check out:
+- `todo-app/` - Simple getting started example
+- `collaborative-editor/` - Production-ready editor with CodeMirror
+- `project-management/` - Kanban board with drag-and-drop
+- `react-cursors/` - Cursor and selection sharing
+- `vue-collaborative-editor/` - Vue 3 adapter example
+- `svelte-collaborative-editor/` - Svelte 5 adapter example
 
-If you are developing a production application, we recommend updating the configuration to enable type-aware lint rules:
+## Running This Test Harness
 
-```js
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-
-      // Remove tseslint.configs.recommended and replace with this
-      tseslint.configs.recommendedTypeChecked,
-      // Alternatively, use this for stricter rules
-      tseslint.configs.strictTypeChecked,
-      // Optionally, add this for stylistic rules
-      tseslint.configs.stylisticTypeChecked,
-
-      // Other configs...
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
+```bash
+npm install
+npm run dev
 ```
 
-You can also install [eslint-plugin-react-x](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-x) and [eslint-plugin-react-dom](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-dom) for React-specific lint rules:
+Then open multiple tabs and run Playwright tests against it.
 
-```js
-// eslint.config.js
-import reactX from 'eslint-plugin-react-x'
-import reactDom from 'eslint-plugin-react-dom'
+## Dependencies
 
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-      // Enable lint rules for React
-      reactX.configs['recommended-typescript'],
-      // Enable lint rules for React DOM
-      reactDom.configs.recommended,
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
-```
+This test harness uses:
+- `@synckit-js/sdk` - Core SDK
+- `@synckit-js/sdk/lite` - MemoryStorage for simpler testing
+- `@synckit-js/sdk/cursor/selection` - SelectionUtils
+- React 19 + Vite
+
+## Exposed State for Testing
+
+The harness exposes these data attributes for Playwright to query:
+- `data-text` - Current text content
+- `data-is-leader` - Leader election status
+- `data-tab-id` - Current tab identifier
+- `data-undo-stack-size` - Undo stack size
+- `data-redo-stack-size` - Redo stack size
