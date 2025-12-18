@@ -1,8 +1,8 @@
 [package]
 name = "synckit-core"
-version = "0.1.0"
+version = "0.2.0"
 edition = "2021"
-authors = ["SyncKit Contributors"]
+authors = ["Daniel Bitengo"]
 description = "High-performance sync engine for local-first applications"
 license = "MIT"
 repository = "https://github.com/Dancode-188/synckit"
