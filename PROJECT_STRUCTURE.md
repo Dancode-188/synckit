@@ -63,9 +63,6 @@ core/
 │   ├── lww_bench.rs
 │   ├── vector_clock_bench.rs
 │   └── delta_bench.rs
-├── scripts/                    # Build scripts
-│   ├── build-wasm.sh           # Build WASM (Linux/Mac)
-│   └── build-wasm.ps1          # Build WASM (Windows)
 └── Cargo.toml                  # Rust package configuration
 ```
 
@@ -292,24 +289,25 @@ tests/
 
 ## 🛠️ `scripts/` - Build and Utility Scripts
 
-Automation scripts for building WASM variants.
+Automation scripts for building WASM and verifying bundle sizes.
 
 ```
 scripts/
-├── build-wasm.sh               # Build WASM (both variants)
-└── build-all-variants.sh       # Build default + lite variants
+├── build-wasm.sh               # Build WASM (lite or default variant)
+└── check-sizes.sh              # Verify bundle sizes (gzipped vs uncompressed)
 ```
 
-**Additional Build Scripts:**
-- `core/scripts/build-wasm.sh` - Core WASM build (Linux/Mac)
-- `core/scripts/build-wasm.ps1` - Core WASM build (Windows)
+**Usage:**
+- `./scripts/build-wasm.sh lite` - Build lite variant (46KB)
+- `./scripts/build-wasm.sh default` - Build default variant (154KB)
+- `./scripts/check-sizes.sh` - Report actual bundle sizes for documentation
 - `npm run build` - Build SDK
 - `npm test` - Run all tests (SDK + core + server)
 
 **Key Responsibilities:**
-- ✅ Automate WASM builds
-- ✅ Build both default and lite variants
-- ✅ Consistent cross-platform builds
+- ✅ Build optimized WASM with wasm-opt
+- ✅ Support both lite and default variants
+- ✅ Verify bundle sizes match documentation claims
 
 ---
 
@@ -385,8 +383,7 @@ cd server/typescript && bun install && cd ../..
 
 # 3. Build WASM (optional - pre-built WASM included)
 # Only needed if modifying Rust code
-cd core && bash scripts/build-wasm.sh && cd ..
-# Windows: cd core && .\scripts\build-wasm.ps1 && cd ..
+./scripts/build-wasm.sh default  # or "lite" for lite variant
 
 # 4. Build SDK
 npm run build
