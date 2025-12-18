@@ -1,21 +1,28 @@
-# SyncKit WASM Module
+# SyncKit WASM Core
 
-WebAssembly bindings for the SyncKit sync engine, enabling high-performance local-first sync in JavaScript/TypeScript applications.
+> **Note:** This document is for contributors building the WASM core from source.
+> End users should use the TypeScript SDK (`@synckit-js/sdk`) instead.
+> See [Getting Started](../docs/guides/getting-started.md) for user documentation.
 
-## 🎯 Features
+WebAssembly core for SyncKit's sync engine, providing high-performance CRDT implementations and conflict resolution algorithms.
 
-- **Document Sync**: LWW (Last-Write-Wins) document synchronization
-- **Vector Clocks**: Causal consistency tracking
-- **Delta Computation**: Efficient change detection and sync
-- **TypeScript Support**: Full TypeScript definitions included
-- **Cross-Platform**: Works in browsers and Node.js
+## 🎯 What's Included
 
-## 📦 Build
+The WASM core implements SyncKit's performance-critical components:
 
-### Prerequisites
+- **Fugue Text CRDT** - Collaborative text editing with maximal non-interleaving
+- **Peritext Rich Text CRDT** - Text formatting that handles conflicts correctly
+- **PN-Counter** - Distributed increment/decrement operations
+- **OR-Set** - Conflict-free add/remove operations
+- **Vector Clocks** - Causal consistency tracking
+- **LWW Resolution** - Last-Write-Wins conflict resolution
+- **Protocol Buffers** - Efficient network serialization
+
+## 📦 Build Prerequisites
 
 - Rust 1.83+ with `wasm32-unknown-unknown` target
 - `wasm-bindgen-cli` version 0.2.105
+- `wasm-opt` from Binaryen toolkit (for optimization)
 
 ```bash
 # Install wasm32 target
@@ -23,104 +30,123 @@ rustup target add wasm32-unknown-unknown
 
 # Install wasm-bindgen-cli
 cargo install wasm-bindgen-cli --version 0.2.105
+
+# Install wasm-opt (optional but recommended)
+# macOS: brew install binaryen
+# Ubuntu: apt install binaryen
+# Windows: Download from https://github.com/WebAssembly/binaryen/releases
 ```
 
-### Build for Web (Browser)
+## 🔨 Building
+
+### Quick Build (Recommended)
+
+Use the root-level build script:
 
 ```bash
-# Using PowerShell script (Windows)
-powershell -ExecutionPolicy Bypass -File scripts/build-wasm.ps1
+# Build default variant (full features)
+./scripts/build-wasm.sh default
 
-# Or manually:
-cargo build --target wasm32-unknown-unknown --release --features wasm
-wasm-bindgen target/wasm32-unknown-unknown/release/synckit_core.wasm \
-  --out-dir pkg \
+# Build lite variant (minimal features)
+./scripts/build-wasm.sh lite
+```
+
+The script handles compilation, wasm-bindgen, and wasm-opt optimization automatically.
+
+### Manual Build
+
+If you need fine-grained control:
+
+```bash
+# Step 1: Build Rust to WASM
+cd core
+cargo build \
+  --target wasm32-unknown-unknown \
+  --profile wasm-release \
+  --features wasm,full \
+  --no-default-features
+
+# Step 2: Generate JavaScript bindings
+wasm-bindgen \
+  target/wasm32-unknown-unknown/wasm-release/synckit_core.wasm \
+  --out-dir ../pkg-default \
   --target web
+
+# Step 3: Optimize with wasm-opt
+wasm-opt -Oz \
+  --strip-debug \
+  --strip-producers \
+  ../pkg-default/synckit_core_bg.wasm \
+  -o ../pkg-default/synckit_core_bg.wasm
 ```
 
-### Build for Node.js
+## 📊 Bundle Sizes (v0.2.0)
 
-```bash
-cargo build --target wasm32-unknown-unknown --release --features wasm
-wasm-bindgen target/wasm32-unknown-unknown/release/synckit_core.wasm \
-  --out-dir pkg-nodejs \
-  --target nodejs
+Production sizes with all optimizations applied:
+
+### Default Variant (Full Features)
+
 ```
+Raw WASM:      330.6 KB
+Gzipped:       141.1 KB
+```
+
+**Includes:** Fugue Text CRDT, Peritext Rich Text, PN-Counter, OR-Set, Vector Clocks, Protocol Buffers, Network sync
+
+### Lite Variant (Minimal)
+
+```
+Raw WASM:       79.2 KB
+Gzipped:        43.8 KB
+```
+
+**Includes:** LWW resolution, Vector Clocks, Local sync only (no network, no CRDTs)
+
+### Complete SDK Sizes
+
+These WASM binaries are part of the full SDK package:
+
+- **Default SDK**: 154 KB gzipped (141 KB WASM + 13 KB JS)
+- **Lite SDK**: 46 KB gzipped (44 KB WASM + 2 KB JS)
+
+See [BUNDLE_SIZE.md](../analysis/BUNDLE_SIZE.md) for detailed breakdown.
 
 ## 🧪 Testing
-
-### Node.js Test
-
-```bash
-# Build first (nodejs target)
-cargo build --target wasm32-unknown-unknown --release --features wasm
-wasm-bindgen target/wasm32-unknown-unknown/release/synckit_core.wasm \
-  --out-dir pkg-nodejs \
-  --target nodejs
-
-# Run test
-node tests/wasm_test.mjs
-```
 
 ### Browser Test
 
 ```bash
-# Build first (web target)
-powershell -ExecutionPolicy Bypass -File scripts/build-wasm.ps1
+# Build first
+./scripts/build-wasm.sh default
 
-# Start a local server
-cd pkg
+# The build output includes test files
+cd pkg-default
 node server.js
 
 # Open http://localhost:8000/test.html
 ```
 
-Or copy `tests/wasm_test.html` to the `pkg/` directory after building.
+### Node.js Test
 
-## 📊 Bundle Size
+```bash
+# Build with Node.js target
+cd core
+cargo build --target wasm32-unknown-unknown --release --features wasm,full
+wasm-bindgen \
+  target/wasm32-unknown-unknown/release/synckit_core.wasm \
+  --out-dir ../pkg-nodejs \
+  --target nodejs
 
-Production-ready sizes (as of Phase 5):
+# Run test
+cd ..
+node tests/wasm_test.mjs
+```
 
-- **Raw WASM**: 114 KB
-- **Gzipped**: 49 KB WASM (competitive with Yjs: ~19KB pure JS, Automerge: ~60-78KB WASM+JS)
+## 📚 Low-Level API Usage
 
-This includes a **complete feature set**:
-- Full Document sync with LWW
-- Vector Clock implementation
-- Delta computation
-- PN-Counter CRDT
-- OR-Set CRDT
-- Fractional Index
-- Text CRDT (YATA) - typically 20-30KB alone
-- Protocol serialization
+> **Note:** Most developers should use the high-level TypeScript SDK instead of calling WASM directly.
 
-**Design Philosophy**: Ship production-ready features over minimal size. 49KB WASM core (59KB full SDK) is competitive with industry leaders while providing complete CRDT functionality.
-
-### Future Optimization Path (v0.2.0+)
-
-Optional optimization strategies for those who need smaller bundles:
-
-1. **wasm-opt** (from binaryen): ~30% reduction → 36KB
-   ```bash
-   wasm-opt -Oz pkg/synckit_core_bg.wasm -o pkg/synckit_core_bg.wasm
-   ```
-
-2. **wasm-snip** (remove panic infrastructure): ~10KB reduction
-   ```bash
-   wasm-snip pkg/synckit_core_bg.wasm -o pkg/synckit_core_bg.wasm
-   ```
-
-3. **Tiered builds** (available in v0.1.0):
-   - `synckit-lite`: Offline-only with LWW sync (45KB gzipped full SDK: 44KB WASM + 1.5KB JS)
-   - `synckit-default`: Full SDK with network sync + offline queue (59KB gzipped full SDK: 49KB WASM + 10KB JS)
-
-**Note:** The WASM core includes Text CRDT, Counters, and Sets implementations, but these are not yet exposed in the SDK API in v0.1.0 (planned for v0.2.0). The default build includes the complete WASM core with network protocol support.
-
-**Note**: Most users prefer full functionality over minimal size. We optimize for features first, then size.
-
-## 📚 API Usage
-
-### Basic Document Operations
+### Document Operations
 
 ```javascript
 import init, { WasmDocument } from './synckit_core.js';
@@ -139,12 +165,11 @@ doc.setField('age', JSON.stringify(30), 2n, 'client-1');
 const name = doc.getField('name');
 console.log(JSON.parse(name)); // "Alice"
 
-// Export to JSON
-const json = doc.toJSON();
-console.log(json);
-
 // Merge documents
 doc.merge(otherDoc);
+
+// Export to JSON
+const json = doc.toJSON();
 ```
 
 ### Vector Clock
@@ -173,63 +198,121 @@ console.log(`Changes: ${delta.changeCount()}`);
 delta.applyTo(doc1, 'client-1');
 ```
 
-## 🔧 Development
+## 🔧 Cargo Features
 
-### Project Structure
+Control what gets included in the WASM binary:
 
+- `wasm` - Enable WASM bindings (required)
+- `full` - Include all CRDTs and network protocol
+- `core-lite` - Minimal build (LWW + Vector Clock only)
+- `text-crdt` - Include Fugue Text CRDT
+- `rich-text` - Include Peritext Rich Text CRDT
+- `counters` - Include PN-Counter
+- `sets` - Include OR-Set
+
+### Build Variants
+
+```bash
+# Default: All features
+cargo build --features wasm,full
+
+# Lite: Minimal features
+cargo build --features wasm,core-lite
+
+# Custom: Only what you need
+cargo build --features wasm,text-crdt,counters
 ```
-core/
-├── src/
-│   └── wasm/
-│       ├── mod.rs          # Module entry point
-│       ├── bindings.rs     # JavaScript bindings
-│       └── utils.rs        # WASM utilities
-├── scripts/
-│   └── build-wasm.ps1      # Build script
-├── tests/
-│   ├── wasm_test.mjs       # Node.js test
-│   └── wasm_test.html      # Browser test
-├── pkg/                    # Web build output (gitignored)
-└── pkg-nodejs/             # Node.js build output (gitignored)
+
+## 🎛️ Build Profiles
+
+The `Cargo.toml` includes optimized profiles:
+
+### `wasm-release` (Recommended)
+
+```toml
+[profile.wasm-release]
+inherits = "release"
+opt-level = "z"           # Optimize for size
+lto = "fat"               # Aggressive link-time optimization
+codegen-units = 1         # Better optimization (slower build)
+panic = "abort"           # Smaller binary
+strip = "symbols"         # Remove debug symbols
 ```
 
-### Cargo Features
+### `release` (Standard)
 
-- `wasm`: Enable WASM bindings (includes wasm-bindgen, web-sys, js-sys)
+```toml
+[profile.release]
+opt-level = 3             # Optimize for speed
+lto = "thin"
+```
 
-### Build Profiles
+## 🔍 Optimization Pipeline
 
-The `Cargo.toml` includes optimized build profiles:
+Our build uses a 3-stage optimization pipeline:
 
-- `release`: Standard optimizations
-- `wasm-release`: Size-optimized for WASM (opt-level = "z")
+1. **Rust compiler** - `opt-level = "z"` for size optimization
+2. **Link-time optimization (LTO)** - `lto = "fat"` for cross-crate optimization
+3. **wasm-opt** - `-Oz` for aggressive post-processing
 
-## 🚀 Next Steps (Phase 6)
-
-Phase 6 will build the TypeScript SDK on top of this WASM module, providing:
-
-- High-level TypeScript API
-- Storage adapters (IndexedDB, OPFS, SQLite)
-- Offline queue
-- Framework integrations (React, Vue, Svelte)
-
-## 📝 Notes
-
-- Clock values use `BigInt` in JavaScript (must use `1n` syntax)
-- Field values must be serialized as JSON strings
-- Memory management is automatic via wasm-bindgen
-- Use `init_panic_hook()` for better error messages in development
+This achieves **~57% size reduction** from unoptimized builds.
 
 ## 🐛 Troubleshooting
 
 ### "Module not found" errors
 
-Ensure you've built the WASM module first and are importing from the correct path.
+Ensure you've built the WASM module and are importing from the correct path:
+
+```javascript
+// ✅ Correct: Import from build output
+import init from './pkg-default/synckit_core.js'
+
+// ❌ Wrong: Import from source
+import init from './core/src/wasm/mod.rs'
+```
 
 ### Version mismatch errors
 
-Make sure `wasm-bindgen-cli` version matches the `wasm-bindgen` crate version in `Cargo.toml` (currently 0.2.105).
+The `wasm-bindgen-cli` version must match the `wasm-bindgen` crate version in `Cargo.toml` (currently 0.2.105):
+
+```bash
+cargo install wasm-bindgen-cli --version 0.2.105 --force
+```
 
 ### CORS errors in browser
 
-WASM files must be served via HTTP(S), not `file://`. Use the provided server.js or any HTTP server.
+WASM files must be served via HTTP(S), not `file://`:
+
+```bash
+# Use the provided server
+cd pkg-default
+node server.js
+
+# Or use any HTTP server
+npx http-server pkg-default
+python -m http.server 8000
+```
+
+### Build is slow
+
+WASM builds are slower than regular Rust builds due to optimization:
+
+- **Development:** Use `--release` profile (~30s build)
+- **Production:** Use `--profile wasm-release` (~2-3 min build)
+
+Optimization time is worth it - you get 57% smaller binaries.
+
+## 📝 Technical Notes
+
+- Clock values use `BigInt` in JavaScript (use `1n` syntax)
+- Field values must be serialized as JSON strings
+- Memory management is automatic via wasm-bindgen
+- Use `init_panic_hook()` for better error messages in development
+- WASM binaries are deterministic (same input = same output)
+
+## 🔗 See Also
+
+- [Bundle Size Analysis](../analysis/BUNDLE_SIZE.md) - Detailed size breakdown
+- [SDK Documentation](../docs/guides/getting-started.md) - High-level TypeScript API
+- [Architecture](../docs/architecture/ARCHITECTURE.md) - How WASM fits into SyncKit
+- [Contributing Guide](../CONTRIBUTING.md) - How to contribute to the core
