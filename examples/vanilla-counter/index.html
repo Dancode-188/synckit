@@ -1,0 +1,59 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>SyncKit Counter</title>
+  <style>
+  body {
+    font-family: system-ui;
+    max-width: 400px;
+    margin: 40px auto;
+    padding: 20px;
+  }
+
+  button {
+    font-size: 18px;
+    margin: 5px;
+    padding: 8px 16px;
+  }
+
+  #count {
+    font-size: 48px;
+    color: #2563eb;
+  }
+</style>
+
+</head>
+<body>
+  <h1>Counter: <span id="count">0</span></h1>
+  <button id="inc">+1</button>
+  <button id="dec">-1</button>
+  <button id="reset">Reset</button>
+
+  <script type="module">
+    import { SyncKit, MemoryStorage } from 'https://esm.sh/@synckit-js/sdk@latest';
+
+    // Create SyncKit instance using in-memory storage
+    const sync = new SyncKit({ storage: new MemoryStorage() });
+    await sync.init();
+
+    // Create or load document
+    const doc = sync.document('vanilla-counter');
+
+    // Initialize count once
+    if (doc.get().count === undefined) await doc.set('count', 0);
+
+    // Update UI on data change
+    const render = () =>
+      document.getElementById('count').textContent = doc.get().count || 0;
+
+    doc.subscribe(render);
+
+    // Button actions
+    inc.onclick = async () => doc.set('count', (doc.get().count || 0) + 1);
+    dec.onclick = async () => doc.set('count', (doc.get().count || 0) - 1);
+    reset.onclick = async () => doc.set('count', 0);
+
+    render();
+  </script>
+</body>
+</html>

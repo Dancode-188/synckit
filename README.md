@@ -246,6 +246,7 @@ graph TD
 - **[From Yjs/Automerge](docs/guides/migration-from-yjs.md)** - Simplify your stack
 
 ### Examples
+- **[Vanilla Counter](examples/vanilla-counter/)** - Minimal example with no build tools (just open in browser!)
 - **[Todo App](examples/todo-app/)** - Simple CRUD with filters
 - **[Collaborative Editor](examples/collaborative-editor/)** - Real-time text editing with CodeMirror 6
 - **[Project Management](examples/project-management/)** - Production-grade kanban app with drag-and-drop
