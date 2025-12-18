@@ -2,7 +2,7 @@
 
 ## Executive Summary
 
-Fugue's core CRDT properties have been **formally verified** using TLA+ model checking. The verification proves:
+We've **formally verified** Fugue's core CRDT properties using TLA+ model checking. Here's what we verified:
 
 ✅ **Fugue is a correct CRDT** - Eventual consistency, type safety, and proper operation semantics
 ✅ **Fugue's key innovation works** - Maximal non-interleaving property verified across 5.6M+ states
@@ -27,7 +27,7 @@ Fugue's core CRDT properties have been **formally verified** using TLA+ model ch
 - `ReplicaStateInvariant` - State consistency maintained
 - `CausalDelivery` - Operations respect causal ordering
 
-**Significance**: Proves Fugue implements a correct Conflict-free Replicated Data Type with strong eventual consistency guarantees.
+**Why this matters**: This proves Fugue implements a correct Conflict-free Replicated Data Type with strong eventual consistency guarantees.
 
 ---
 
@@ -46,7 +46,7 @@ Fugue's core CRDT properties have been **formally verified** using TLA+ model ch
 - `StrongEventualConsistency` - Convergence with non-interleaving
 - `ReplicaStateInvariant` - Consistency during concurrent operations
 
-**Significance**: Proves Fugue's **key differentiator** - the maximal non-interleaving property that prevents character interleaving during concurrent edits. This is what makes Fugue superior to other text CRDTs like Yjs, Automerge, or RGA.
+**Why this matters**: This proves Fugue's **key differentiator** - the maximal non-interleaving property that prevents character interleaving during concurrent edits. This design choice prioritizes merge quality and user intent preservation, distinguishing Fugue from other text CRDTs like Yjs, Automerge, and RGA.
 
 **Note**: Verification did not complete due to large state space (276K states remaining in queue), but **zero violations across 5.6M explored states** provides strong evidence of correctness.
 
@@ -67,7 +67,7 @@ Fugue's core CRDT properties have been **formally verified** using TLA+ model ch
 - `NodeIdTransitive` - Ordering is transitive
 - `NodeIdOrderingCorrectness` - Overall ordering correctness
 
-**Significance**: These properties ensure deterministic conflict resolution, which is a corollary of the non-interleaving property already verified.
+**Why this matters**: These properties ensure deterministic conflict resolution, which is a corollary of the non-interleaving property already verified.
 
 ---
 
@@ -85,7 +85,7 @@ Fugue's core CRDT properties have been **formally verified** using TLA+ model ch
 - `DeletedBlocksNotInRope` - Deleted text doesn't appear in output
 - Tombstone-based deletion correctness
 
-**Significance**: Ensures deletion semantics are correct and preserve CRDT properties through tombstone-based soft deletion.
+**Why this matters**: Ensures deletion semantics are correct and preserve CRDT properties through tombstone-based soft deletion.
 
 ---
 
@@ -126,7 +126,7 @@ Fugue's core CRDT properties have been **formally verified** using TLA+ model ch
 ### For Fugue's Innovation:
 - **Maximal non-interleaving property** holds under concurrent edits
 - Characters from different clients don't get interleaved
-- This provides superior merge behavior compared to traditional text CRDTs
+- This design choice prioritizes merge quality and preserves user intent better than CRDTs that allow interleaving
 - 5.6M+ states with zero violations strongly supports the claim
 
 ### For Implementation Quality:
@@ -137,7 +137,58 @@ Fugue's core CRDT properties have been **formally verified** using TLA+ model ch
 
 ---
 
+## Trade-offs and Considerations
+
+### What This Verification Tells Us (and What It Doesn't)
+
+**What we verified:**
+- Core CRDT properties hold across 5.6M+ states
+- Non-interleaving property works as designed
+- Type safety and convergence are guaranteed
+
+**What remains unverified:**
+- Full state space for non-interleaving (only partial coverage due to computational limits)
+- Performance characteristics (TLA+ verifies correctness, not efficiency)
+- Real-world edge cases beyond modeled scenarios
+
+### Implementation Complexity
+
+Fugue's non-interleaving property comes with trade-offs:
+- **More complex implementation** compared to simpler CRDTs like RGA
+- **Larger state space** for formal verification (hence partial verification of some specs)
+- **Additional metadata** required per character to maintain ordering guarantees
+
+These trade-offs are worthwhile for applications where merge quality matters, but simpler CRDTs may be better fits for basic use cases where character interleaving is acceptable.
+
+---
+
 ## Comparison with Other Text CRDTs
+
+### What Other Text CRDTs Excel At
+
+Before comparing verification results, it's worth acknowledging what each approach does well:
+
+**Yjs**:
+- Battle-tested in thousands of production applications worldwide
+- Extremely efficient state vector synchronization minimizes network overhead
+- Minimal bundle size (~19KB core) ideal for size-constrained applications
+- Large ecosystem with bindings for multiple languages and editors
+- Excellent performance characteristics for basic text editing
+
+**Automerge**:
+- Rich data model beyond text (maps, lists, nested structures)
+- Strong academic foundation with extensive research backing
+- Mature JSON CRDT implementation with broad applicability
+- Handles complex document structures elegantly
+- Active research community pushing CRDT boundaries
+
+**RGA (Replicated Growable Array)**:
+- Simple, well-understood algorithm that's easy to reason about
+- Straightforward implementation suitable for educational purposes
+- Good performance characteristics for basic collaborative text
+- Foundational algorithm that influenced many modern text CRDTs
+
+### Verification Comparison
 
 | Property | Fugue | Yjs | Automerge | RGA |
 |----------|-------|-----|-----------|-----|
@@ -145,6 +196,8 @@ Fugue's core CRDT properties have been **formally verified** using TLA+ model ch
 | Non-interleaving | ✅ **Verified** | ❌ | ❌ | ❌ |
 | Formal Verification | ✅ **TLA+** | ❌ | Partial | ❌ |
 | States Verified | **5.6M+** | - | ~1000 | - |
+
+**Note**: All listed CRDTs are production-quality implementations. This comparison focuses specifically on formal verification coverage, not overall quality or suitability.
 
 ---
 
@@ -159,14 +212,14 @@ Fugue's core CRDT properties have been **formally verified** using TLA+ model ch
 
 ## Conclusion
 
-Fugue's formal verification demonstrates:
+Here's what Fugue's formal verification shows:
 
 1. ✅ **Correctness**: Fugue is a correct CRDT (convergence spec fully verified)
 2. ✅ **Innovation**: Maximal non-interleaving works (5.6M+ states, zero violations)
 3. ✅ **Quality**: All specs parse and initialize correctly
 4. ✅ **Rigor**: Formal methods applied to critical properties
 
-**This level of formal verification is rare in text CRDT implementations and provides strong evidence of Fugue's correctness and superior design.**
+**This level of formal verification is rare in text CRDT implementations and provides strong evidence of Fugue's correctness and design quality.**
 
 ---
 
