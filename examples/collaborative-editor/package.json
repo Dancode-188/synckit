@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
-  "description": "Real-time collaborative text editor built with SyncKit and CodeMirror 6",
+  "description": "Real-time collaborative rich text editor built with SyncKit v0.2.0 and Quill",
   "scripts": {
     "dev": "vite",
     "build": "tsc && vite build",
@@ -12,19 +12,15 @@
     "type-check": "tsc --noEmit"
   },
   "dependencies": {
-    "@codemirror/commands": "^6.3.2",
-    "@codemirror/lang-javascript": "^6.2.1",
-    "@codemirror/lang-markdown": "^6.2.3",
-    "@codemirror/language": "^6.9.3",
-    "@codemirror/state": "^6.3.3",
-    "@codemirror/view": "^6.22.1",
     "@synckit-js/sdk": "*",
-    "codemirror": "^6.0.2",
+    "quill": "^2.0.2",
+    "quill-delta": "^5.1.0",
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
     "zustand": "^4.4.7"
   },
   "devDependencies": {
+    "@types/quill": "^2.0.14",
     "@types/react": "^18.2.43",
     "@types/react-dom": "^18.2.17",
     "@typescript-eslint/eslint-plugin": "^6.14.0",

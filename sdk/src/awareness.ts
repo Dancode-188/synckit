@@ -83,8 +83,15 @@ export class Awareness {
   private subscribers = new Set<AwarenessCallback>()
   private cachedStates = new Map<string, AwarenessState>()
   private onChangeCallback?: (update: AwarenessUpdate) => void
+  private crossTabSync?: any
 
-  constructor(private readonly clientId: string) {}
+  constructor(
+    private readonly clientId: string,
+    private readonly documentId?: string,
+    crossTabSync?: any
+  ) {
+    this.crossTabSync = crossTabSync
+  }
 
   /**
    * Set callback to be called when local state changes
@@ -112,6 +119,37 @@ export class Awareness {
     }
 
     this.wasmAwareness = new (wasm as any).WasmAwareness(this.clientId)
+
+    // Register CrossTabSync handler for awareness updates from other tabs
+    if (this.crossTabSync && this.documentId) {
+      this.crossTabSync.on('awareness-update', (message: any) => {
+        if (message.documentId !== this.documentId) {
+          return
+        }
+
+        if (message.from === this.clientId) {
+          return
+        }
+
+        // Apply the awareness update from the other tab
+        if (message.update) {
+          this.applyUpdate(message.update)
+        }
+      })
+
+      this.crossTabSync.on('awareness-leave', (message: any) => {
+        if (message.documentId !== this.documentId) return
+
+        // Apply leave update for the tab that closed
+        if (message.clientId) {
+          this.applyUpdate({
+            client_id: message.clientId,
+            state: null,
+            clock: message.clock || Date.now()
+          })
+        }
+      })
+    }
   }
 
   /**
@@ -138,6 +176,16 @@ export class Awareness {
 
     // Update cache
     this.updateCache(update)
+
+    // Broadcast to other tabs via CrossTabSync
+    if (this.crossTabSync && this.documentId) {
+      this.crossTabSync.broadcast({
+        type: 'awareness-update',
+        documentId: this.documentId,
+        clientId: this.clientId,
+        update
+      })
+    }
 
     // Notify change callback (for broadcasting to server)
     if (this.onChangeCallback) {

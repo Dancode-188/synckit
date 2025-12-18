@@ -336,7 +336,7 @@ async function enableOfflineSync() {
 
 ```typescript
 // Load React hooks only when needed
-const { useSyncDocument } = await import('@synckit-js/sdk')
+const { useSyncDocument } = await import('@synckit-js/sdk/react')
 ```
 
 ### WASM Optimization
@@ -366,7 +366,7 @@ function TodoItem({ id }) {
 }
 
 // ✅ Proper cleanup with hook
-import { useSyncDocument } from '@synckit-js/sdk'
+import { useSyncDocument } from '@synckit-js/sdk/react'
 
 function TodoItem({ id }) {
   const [data, { update }] = useSyncDocument<Todo>(id)
@@ -530,7 +530,7 @@ await todo.update({
 Keep an eye on offline queue during extended offline periods:
 
 ```typescript
-import { useNetworkStatus } from '@synckit-js/sdk'
+import { useNetworkStatus } from '@synckit-js/sdk/react'
 
 function NetworkMonitor() {
   const status = useNetworkStatus()
@@ -709,7 +709,7 @@ worker.addEventListener('message', (event) => {
 #### Use Built-in Hooks
 
 ```typescript
-import { useSyncDocument, useNetworkStatus } from '@synckit-js/sdk'
+import { useSyncDocument, useNetworkStatus } from '@synckit-js/sdk/react'
 
 function TodoItem({ id }: { id: string }) {
   // ✅ Efficient: Hook handles init and cleanup
@@ -1064,7 +1064,7 @@ synckit.onNetworkStatusChange?.((status) => {
 Build a real-time performance monitoring component:
 
 ```typescript
-import { useNetworkStatus, useSyncState } from '@synckit-js/sdk'
+import { useNetworkStatus, useSyncState } from '@synckit-js/sdk/react'
 import { useEffect, useState } from 'react'
 
 function PerformanceDashboard() {

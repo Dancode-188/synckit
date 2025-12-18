@@ -13,10 +13,25 @@
 export { SyncKit } from './synckit'
 export { SyncDocument } from './document'
 export { SyncText } from './text'
+export { RichText } from './crdt/richtext'
 export { SyncCounter } from './counter'
 export { SyncSet } from './set'
 export { Awareness } from './awareness'
 export type { AwarenessState, AwarenessUpdate, AwarenessCallback } from './awareness'
+
+// RichText types
+export type {
+  RichTextStorageData,
+  FormatRange,
+  FormatChangeCallback
+} from './crdt/richtext'
+
+// Peritext types (for custom formatting)
+export type { FormatAttributes } from './crdt/peritext'
+
+// Delta utilities (for Quill interop)
+export type { Delta, DeltaOp } from './crdt/delta'
+export { DeltaUtils } from './crdt/delta'
 
 // Cross-tab sync
 export { CrossTabSync } from './sync/cross-tab'

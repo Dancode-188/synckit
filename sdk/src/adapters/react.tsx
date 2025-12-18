@@ -765,7 +765,7 @@ export function usePresence(
       unsubscribe()
       setSubscribed(false)
     }
-  }, [awareness, subscribed])
+  }, [awareness])
 
   // Cleanup: Send leave message on unmount
   useEffect(() => {
@@ -790,7 +790,7 @@ export function usePresence(
   const updatePresence = useCallback(
     async (state: Record<string, unknown>) => {
       await setLocalState(state)
-      setLocalStateValue(state)
+      // Note: setLocalStateValue is called via awareness subscription, no need to call it here
     },
     [setLocalState]
   )
@@ -917,6 +917,7 @@ export * from './react/Cursors'
 export * from './react/useSelection'
 export * from './react/Selection'
 export * from './react/Selections'
+export * from './react/useUndo'
 
 /**
  * High-level cursor tracking hook with awareness integration

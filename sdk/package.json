@@ -1,7 +1,7 @@
 {
   "name": "@synckit-js/sdk",
   "version": "0.1.1",
-  "description": "TypeScript SDK for SyncKit - Production-grade local-first sync (59KB gzipped)",
+  "description": "Production-ready local-first sync with rich text editing, undo/redo, live cursors, and framework adapters for React, Vue, and Svelte",
   "main": "./dist/index.js",
   "module": "./dist/index.mjs",
   "types": "./dist/index.d.ts",
@@ -31,19 +31,29 @@
       "import": "./dist/adapters/svelte/index.mjs",
       "require": "./dist/adapters/svelte/index.js"
     },
+    "./cursor": {
+      "types": "./dist/cursor/index.d.ts",
+      "import": "./dist/cursor/index.mjs",
+      "require": "./dist/cursor/index.js"
+    },
     "./cursor/selection": {
       "types": "./dist/cursor/selection.d.ts",
       "import": "./dist/cursor/selection.mjs",
       "require": "./dist/cursor/selection.js"
+    },
+    "./integrations/quill": {
+      "types": "./dist/integrations/quill.d.ts",
+      "import": "./dist/integrations/quill.mjs",
+      "require": "./dist/integrations/quill.js"
     }
   },
   "scripts": {
-    "build": "tsup src/index.ts src/index-lite.ts src/adapters/react.tsx src/adapters/vue/index.ts src/adapters/svelte/index.ts src/cursor/selection.ts --format cjs,esm --dts --clean && npm run copy-wasm && npm run copy-components",
+    "build": "tsup src/index.ts src/index-lite.ts src/adapters/react.tsx src/adapters/vue/index.ts src/adapters/svelte/index.ts src/cursor/index.ts src/cursor/selection.ts src/integrations/quill.ts --format cjs,esm --dts --clean && npm run copy-wasm && npm run copy-components",
     "copy-wasm": "npm run copy-wasm-variants && npm run copy-wasm-to-dist",
     "copy-components": "node scripts/copy-components.js",
     "copy-wasm-variants": "node scripts/copy-wasm-variants.js",
     "copy-wasm-to-dist": "node scripts/copy-wasm-to-dist.js",
-    "dev": "tsup src/index.ts src/index-lite.ts src/adapters/react.tsx src/adapters/vue/index.ts src/adapters/svelte/index.ts src/cursor/selection.ts --format cjs,esm --dts --watch",
+    "dev": "tsup src/index.ts src/index-lite.ts src/adapters/react.tsx src/adapters/vue/index.ts src/adapters/svelte/index.ts src/cursor/index.ts src/cursor/selection.ts src/integrations/quill.ts --format cjs,esm --dts --watch",
     "test": "vitest",
     "test:ui": "vitest --ui",
     "test:chaos": "playwright test",

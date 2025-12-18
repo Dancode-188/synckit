@@ -6,139 +6,138 @@ A comprehensive guide for adding true offline-first capabilities to your Supabas
 
 ## Table of Contents
 
-1. [Why Add SyncKit to Supabase?](#why-add-synckit-to-supabase)
-2. [Supabase vs SyncKit Comparison](#supabase-vs-synckit-comparison)
-3. [Migration Considerations](#migration-considerations)
-4. [Core Concepts Mapping](#core-concepts-mapping)
-5. [Code Migration Patterns](#code-migration-patterns)
-6. [Hybrid Architecture Option](#hybrid-architecture-option)
-7. [Testing & Validation](#testing--validation)
-8. [Deployment Strategy](#deployment-strategy)
+1. [What Supabase Does Exceptionally Well](#what-supabase-does-exceptionally-well)
+2. [When to Add SyncKit to Supabase](#when-to-add-synckit-to-supabase)
+3. [Supabase vs SyncKit Comparison](#supabase-vs-synckit-comparison)
+4. [Migration Considerations](#migration-considerations)
+5. [Core Concepts Mapping](#core-concepts-mapping)
+6. [Code Migration Patterns](#code-migration-patterns)
+7. [Hybrid Architecture Option (Recommended)](#hybrid-architecture-option-recommended)
+8. [Testing & Validation](#testing--validation)
+9. [Deployment Strategy](#deployment-strategy)
 
 ---
 
-## Why Add SyncKit to Supabase?
+## What Supabase Does Exceptionally Well
 
-### The #1 Supabase Pain Point: No Offline Support
+Supabase is a powerful backend-as-a-service that handles infrastructure so you can focus on building features:
 
-**GitHub Issue #357** - "Offline support / Offline first"
-- 🔴 **Most upvoted issue** (350+ upvotes)
-- ⏰ **Open for 4+ years**
-- 💬 **70+ comments** from frustrated developers
-- ⚠️ **"Deal-breaker"** for mobile apps
+**Strengths:**
+- **Managed Postgres:** Production-ready database with automatic backups, scaling, and maintenance
+- **Built-in Authentication:** Email, OAuth providers, magic links, phone auth—all handled
+- **Row-Level Security:** Postgres RLS provides granular access control at the database level
+- **File Storage:** S3-compatible storage with automatic image optimization
+- **Edge Functions:** Deploy serverless Deno functions globally
+- **Realtime:** Postgres CDC (Change Data Capture) broadcasts database changes
+- **Dashboard:** Beautiful UI for managing database, auth, storage, and more
+- **Pricing:** Free tier is generous, $25/month for production apps
+- **Developer Experience:** Excellent docs, CLI tools, and local development setup
 
-**Real developer quotes:**
+**What makes Supabase special:**
 
-> "Offline support is a deal-breaker for our mobile app. We need it to work on spotty connections." — GitHub user
+Supabase gives you a complete backend infrastructure in minutes. No server management, no DevOps complexity—just a Postgres connection string and you're building features. The integration between Auth, Database, and Storage is seamless.
 
-> "Without offline support, Supabase is just not viable for mobile-first apps." — GitHub user
+**If you need managed infrastructure and don't require offline-first functionality, stick with Supabase.**
 
-> "Had to abandon Supabase and use Firebase because of offline." — GitHub user
+---
 
-### Current Workarounds (And Why They're Insufficient)
+## When to Add SyncKit to Supabase
 
-#### Workaround 1: PowerSync (Paid Solution)
+Supabase Realtime is excellent for online applications. However, some scenarios benefit from adding offline-first capabilities:
 
-**Problems:**
-- 💰 **$99/month+** for offline sync
-- 🔒 **Vendor lock-in** (another service dependency)
-- 🐌 **Additional latency** (extra proxy layer)
-- 📦 **Larger bundle** (~200KB+)
+### Scenario 1: Mobile Applications
 
-#### Workaround 2: RxDB Integration
+Mobile users frequently encounter:
+- Spotty network connections (subway, elevators, rural areas)
+- Airplane mode
+- Network switching (WiFi ↔ cellular)
+- High latency connections
 
-**Problems:**
-- 🤯 **Complex setup** (steep learning curve)
-- 📦 **Large bundle** (~100KB+ RxDB)
-- 🔧 **Manual sync** implementation required
-- ⚠️ **Conflict resolution** not included
+**SyncKit benefit:** Works perfectly offline, syncs when connection returns.
 
-#### Workaround 3: WatermelonDB
+### Scenario 2: Collaborative Editing
 
-**Problems:**
-- 📱 **React Native only** (no web support)
-- 🛠️ **Complex schema migrations**
-- 📦 **Native dependencies**
-- ⚠️ **Manual Supabase integration**
+Supabase Realtime broadcasts changes, but doesn't include:
+- Rich text editing with proper conflict resolution
+- Cross-tab undo/redo
+- Operational transforms for text
+- Cursor presence and tracking
 
-### Additional Supabase Limitations
+**SyncKit benefit:** Includes Peritext rich text, cross-tab undo, and awareness out of the box.
 
-#### 2. Auth Token Expiration While Offline
+### Scenario 3: Instant User Experience
 
-**Problem:** Tokens expire after 1 hour, users logged out when offline.
+Database round-trips add latency:
+- Supabase query: ~50-200ms (network + database)
+- Local IndexedDB read: <5ms
 
-```typescript
-// Supabase refreshes token every hour
-// If offline > 1 hour, user is logged out
-const { data, error } = await supabase.auth.getSession()
-// Error: "Refresh token is invalid"
-```
+**SyncKit benefit:** Instant reads from local cache, background sync.
 
-**SyncKit solution:** JWT refresh handled automatically, graceful degradation.
+### Scenario 4: Cost Optimization at Scale
 
-#### 3. Postgres Dependency Can't Be Replicated Offline
+Supabase charges for:
+- Database compute (based on size)
+- Realtime connections
+- Bandwidth
 
-**Problem:** Postgres-specific features (triggers, functions, RLS) don't work offline.
-
-```sql
--- This Supabase Row Level Security rule...
-CREATE POLICY "Users can only see their own todos"
-  ON todos FOR SELECT
-  USING (auth.uid() = user_id);
-
--- ...cannot be enforced offline
-```
-
-**SyncKit solution:** Client-side filtering + server-side validation on sync.
-
-#### 4. Complex Channel Configuration
-
-**Problem:** Realtime channels require extensive configuration.
-
-```typescript
-// Supabase Realtime setup
-const channel = supabase
-  .channel('todos-channel')
-  .on('postgres_changes', {
-    event: 'INSERT',
-    schema: 'public',
-    table: 'todos',
-    filter: `user_id=eq.${userId}`
-  }, payload => {
-    console.log('Change:', payload)
-  })
-  .subscribe()
-
-// 6+ parameters to configure correctly
-```
-
-**SyncKit solution:** Simple subscribe pattern, no channel configuration.
+**SyncKit benefit:** Self-hosted, no per-user costs. Keep Supabase Auth/Storage, move sync to SyncKit.
 
 ---
 
 ## Supabase vs SyncKit Comparison
 
-| Feature | Supabase | SyncKit | Winner |
-|---------|----------|---------|--------|
-| **Offline Support** | ❌ None (GitHub #357) | ✅ Native offline-first | 🏆 SyncKit |
-| **Real-Time Sync** | ✅ Postgres-backed | ✅ WebSocket-backed | 🤝 Both |
-| **Database** | ✅ Postgres (managed) | ⚠️ Bring your own | 🏆 Supabase |
-| **Auth** | ✅ Built-in | ⚠️ JWT-based | 🏆 Supabase |
-| **Row-Level Security** | ✅ Postgres RLS | ⚠️ Server-side validation | 🏆 Supabase |
-| **Bundle Size** | ~45KB | **~59KB** (~45KB lite) | 🤝 Similar |
-| **Pricing** | $0-$25/mo | Self-hosted | 🏆 SyncKit |
-| **Mobile-Ready** | ⚠️ No offline | ✅ Full offline | 🏆 SyncKit |
-| **Ecosystem** | ✅ Full-stack (Storage, Edge, etc.) | ⚠️ Sync only | 🏆 Supabase |
+Both handle real-time data, but optimize for different scenarios:
 
-**Recommendation:** Use **Supabase + SyncKit hybrid** for best of both worlds.
+| Feature | Supabase | SyncKit v0.2.0 | Notes |
+|---------|----------|----------------|-------|
+| **Offline Support** | Limited (cache only) | ✅ Native offline-first | Supabase: read-only cache. SyncKit: full offline writes. |
+| **Real-Time Sync** | ✅ Postgres CDC | ✅ WebSocket-backed | Both work well online. |
+| **Database** | ✅ Managed Postgres | Bring your own | Supabase handles infrastructure. SyncKit: you choose backend. |
+| **Auth** | ✅ Built-in (email, OAuth, phone) | JWT-based (BYO) | Supabase has comprehensive auth. SyncKit focuses on sync. |
+| **Row-Level Security** | ✅ Postgres RLS | Server-side validation | Supabase: database-level security. SyncKit: server validation. |
+| **Bundle Size** | ~45KB | **154KB** (46KB lite) | Supabase is smaller. SyncKit includes text, rich text, undo, presence. |
+| **Pricing** | $0-$25/mo (managed) | Self-hosted (free) | Supabase: managed convenience. SyncKit: self-hosted control. |
+| **Mobile-Ready** | Online-first | ✅ Offline-first | Supabase needs connection. SyncKit works offline. |
+| **Ecosystem** | ✅ Full-stack (Storage, Edge, etc.) | Sync only | Supabase is complete. SyncKit specializes in sync. |
+| **Rich Text** | Build your own | ✅ Peritext + Quill | SyncKit includes collaborative rich text. |
+| **Undo/Redo** | Build your own | ✅ Cross-tab | SyncKit's undo works across tabs. |
+
+### The Hybrid Approach (Recommended)
+
+Don't choose one—use both:
+
+```typescript
+// Use Supabase for what it does best
+const supabase = createClient(SUPABASE_URL, SUPABASE_KEY)
+const { data: { user } } = await supabase.auth.getUser()
+
+// Use SyncKit for offline-first data
+const sync = new SyncKit({
+  storage: 'indexeddb',
+  name: 'my-app',
+  serverUrl: 'ws://localhost:8080'  // Optional: enables network sync
+})
+await sync.init()
+
+// Supabase Storage for files
+await supabase.storage.from('avatars').upload('avatar.png', file)
+
+// SyncKit for offline-first documents
+const todo = sync.document<Todo>('todo-1')
+await todo.update({ completed: true })  // Works offline!
+```
+
+**Best of both worlds:**
+- ✅ Supabase Auth, Storage, Edge Functions
+- ✅ SyncKit offline-first data sync
+- ✅ Minimal code changes
+- ✅ Keep managed infrastructure where it helps
 
 ---
 
 ## Migration Considerations
 
-### Migration Strategies
-
-#### Strategy 1: Hybrid Architecture (Recommended)
+### Strategy 1: Hybrid Architecture (Recommended)
 
 Keep Supabase for backend, add SyncKit for offline:
 
@@ -168,7 +167,7 @@ Keep Supabase for backend, add SyncKit for offline:
 - Apps with spotty connectivity
 - Apps needing instant UX
 
-#### Strategy 2: Full Migration to SyncKit
+### Strategy 2: Full Migration to SyncKit
 
 Replace Supabase Realtime entirely:
 
@@ -198,7 +197,7 @@ Replace Supabase Realtime entirely:
 - ✅ Potential cost savings
 
 **Trade-offs:**
-- ⚠️ Lose Supabase Auth, Storage, etc.
+- ⚠️ Lose Supabase managed Auth, Storage, etc.
 - ⚠️ More infrastructure to manage
 - ⚠️ Longer migration time
 
@@ -347,11 +346,7 @@ function TodoComponent({ id }: { id: string }) {
 }
 ```
 
-**Benefits:**
-- ✅ 70% less code
-- ✅ Works offline automatically
-- ✅ Simpler error handling
-- ✅ Built-in loading states
+Less code, works offline.
 
 ### Pattern 2: Broadcasting Messages
 
@@ -395,10 +390,7 @@ room.subscribe((data) => {
 })
 ```
 
-**Benefits:**
-- ✅ Persistent messages (not ephemeral)
-- ✅ Works offline
-- ✅ Automatic conflict resolution
+Both work. Supabase broadcasts are ephemeral. SyncKit messages persist.
 
 ### Pattern 3: Presence (Who's Online)
 
@@ -455,14 +447,11 @@ setInterval(async () => {
 }, 30000)  // Every 30 seconds
 ```
 
-**Benefits:**
-- ✅ Works offline (local presence)
-- ✅ Persistent presence data
-- ✅ Customizable heartbeat
+Both handle presence. Supabase is automatic. SyncKit gives you control and works offline.
 
 ---
 
-## Hybrid Architecture Option
+## Hybrid Architecture Option (Recommended)
 
 ### Best of Both Worlds: Supabase + SyncKit
 
@@ -477,10 +466,9 @@ const { data: { user } } = await supabase.auth.getUser()
 const sync = new SyncKit({
   storage: 'indexeddb',
   name: 'my-app',
-  serverUrl: 'ws://localhost:8080',  // ✅ Enables WebSocket sync (optional)
+  serverUrl: 'ws://localhost:8080',  // ✅ Enables WebSocket sync
 })
 await sync.init()
-// Note: Auth is handled separately in your backend (SyncKit focuses on sync)
 
 // Use Supabase Storage for files
 const { data, error } = await supabase.storage
@@ -510,12 +498,12 @@ await todo.update({ completed: true })  // Works offline!
 └──────────┘   └──────────┘   └──────────────┘
 ```
 
-**Use:**
+**What to use each for:**
 - ✅ Supabase Auth - User authentication
 - ✅ Supabase Storage - File uploads
 - ✅ Supabase Edge Functions - Serverless functions
 - ✅ SyncKit - Offline-first data sync
-- ✅ Postgres - Backend database (optional: keep Supabase or self-host)
+- ✅ Postgres - Backend database (Supabase managed or self-hosted)
 
 ---
 
@@ -541,9 +529,6 @@ describe('Supabase + SyncKit hybrid', () => {
       completed: false
     })
 
-    // ✅ SyncKit supports both offline-first AND network sync
-    // This test demonstrates local offline capability
-
     // Update works immediately (local-first)
     await todo.update({ completed: true })
 
@@ -558,11 +543,8 @@ describe('Supabase + SyncKit hybrid', () => {
       .eq('id', 'todo-1')
   })
 
-  test('Supabase handles auth token refresh automatically', async () => {
+  test('Supabase handles auth, SyncKit handles sync', async () => {
     const supabase = createClient(SUPABASE_URL, SUPABASE_KEY)
-
-    // Note: SyncKit doesn't enforce auth (by design)
-    // Use Supabase auth, which automatically refreshes tokens
 
     const sync = new SyncKit({
       storage: 'indexeddb',
@@ -596,7 +578,7 @@ const supabase = createClient(SUPABASE_URL, SUPABASE_KEY)
 const sync = new SyncKit({
   storage: 'indexeddb',
   name: 'my-app',
-  serverUrl: 'ws://localhost:8080',  // ✅ Enables real-time sync (optional)
+  serverUrl: 'ws://localhost:8080',  // ✅ Enables real-time sync
 })
 await sync.init()
 
@@ -642,14 +624,16 @@ async function saveTodo(id: string, updates: Partial<Todo>) {
 - ✅ Offline functionality working
 - ✅ Data consistency maintained
 
-### Phase 3: Optional - Remove Supabase Realtime (Week 3+)
+### Phase 3: Optional - Optimize (Week 3+)
 
-**Goal:** Reduce bundle size, simplify code
+**Goal:** Reduce complexity if desired
 
 ```typescript
-// Remove Supabase Realtime (keep Auth, Storage, Functions)
-import { createClient } from '@supabase/supabase-js'
+// Option A: Keep both (recommended for most apps)
+// - Supabase for Auth, Storage, Functions
+// - SyncKit for data sync
 
+// Option B: Remove Supabase Realtime if you want
 const supabase = createClient(SUPABASE_URL, SUPABASE_KEY, {
   realtime: {
     params: {
@@ -663,49 +647,58 @@ const [todo, { update }] = useSyncDocument<Todo>(id)
 ```
 
 **Validation:**
-- ✅ Offline functionality added (Supabase + SyncKit hybrid)
+- ✅ Offline functionality added
 - ✅ All features working
-- ✅ Cost potentially reduced
+- ✅ Simplified if Realtime removed
 
 ---
 
 ## Summary
 
-**Key Takeaways:**
+### What SyncKit Adds to Supabase
 
-1. **Supabase's #1 issue:** No offline support (GitHub #357, 500+ upvotes, 4+ years old)
-2. **Hybrid is best:** Keep Supabase Auth/Storage, add SyncKit for offline
-3. **Mobile-ready:** SyncKit makes Supabase viable for mobile apps
-4. **Minimal changes:** Add offline without rewriting existing code
-5. **Bundle size:** Similar sizes (~59KB SyncKit vs ~45KB Supabase)
-6. **Network sync:** SyncKit v0.1.0 includes WebSocket-based real-time sync
+When you combine Supabase with SyncKit v0.2.0, you get:
 
-**Migration Decision Matrix:**
+- **True offline-first:** Works on planes, trains, and coffee shops with spotty WiFi
+- **Collaborative editing:** Rich text with Peritext, undo/redo that syncs across tabs
+- **Live presence:** See who's editing, where they're typing
+- **Keep what works:** Supabase Auth, Storage, and Edge Functions stay as-is
+- **Bundle: 154KB** for everything (text, rich text, undo, presence, cursors)
 
-| Scenario | Recommendation |
-|----------|----------------|
-| **Mobile app** | ✅ Add SyncKit (offline is critical) |
-| **Offline required** | ✅ Add SyncKit (only solution) |
-| **Real-time only** | ⚠️ Keep Supabase (if no offline needed) |
-| **Large file uploads** | ✅ Hybrid (SyncKit + Supabase Storage) |
-| **Complex auth** | ✅ Hybrid (Supabase Auth + SyncKit sync) |
+### The Hybrid Approach
 
-**Timeline:**
+Don't replace Supabase—extend it:
 
-- **Week 1:** Add SyncKit, dual-write
-- **Week 2:** Migrate reads, test offline
-- **Week 3+:** Optional Supabase Realtime removal
+- ✅ **Supabase Auth** for user authentication
+- ✅ **Supabase Storage** for files and media
+- ✅ **Supabase Edge Functions** for serverless logic
+- ✅ **SyncKit** for offline-first data sync and collaboration
 
-**Total: 2-3 weeks with zero downtime**
+### When to Add SyncKit
 
-**Next Steps:**
+| Your Situation | Our Recommendation |
+|----------------|-------------------|
+| **Building a mobile app** | Add SyncKit—offline is essential on mobile |
+| **Users have unreliable internet** | Add SyncKit—spotty connections hurt UX |
+| **Need collaborative editing** | Add SyncKit—rich text and presence included |
+| **Only need basic CRUD online** | Stick with Supabase—it handles online use cases beautifully |
 
-1. Review [Getting Started Guide](./getting-started.md)
-2. Set up SyncKit server
-3. Implement dual-write
-4. Test offline scenarios
-5. Gradually migrate reads
+### Timeline
+
+Most teams integrate SyncKit with Supabase in 2-3 weeks:
+
+1. **Week 1:** Add SyncKit, implement dual-write (zero risk)
+2. **Week 2:** Switch reads to SyncKit, test offline scenarios
+3. **Week 3:** Optional—optimize based on your needs
+
+Zero downtime. Your users won't notice the switch.
+
+### Next Steps
+
+1. Try the [Getting Started Guide](./getting-started.md)—5 minutes to your first sync
+2. Read the [Offline-First Guide](./offline-first.md) for patterns
+3. Check out [Rich Text](./rich-text-editing.md) if you need collaborative editing
 
 ---
 
-**Offline-first + Supabase = Best of both worlds! 🚀**
+**Supabase for backend, SyncKit for offline. Simple as that. 🚀**

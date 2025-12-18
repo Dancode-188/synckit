@@ -16,6 +16,7 @@ import { SyncDocument } from './document'
 import { SyncCounter } from './counter'
 import { SyncSet } from './set'
 import { SyncText } from './text'
+import { RichText } from './crdt/richtext'
 import { Awareness } from './awareness'
 import { createStorage } from './storage'
 import { initWASM } from './wasm-loader'
@@ -23,6 +24,7 @@ import { WebSocketClient } from './websocket/client'
 import { SyncManager } from './sync/manager'
 import { OfflineQueue } from './sync/queue'
 import { NetworkStateTracker } from './sync/network-state'
+import { CrossTabSync } from './sync/cross-tab'
 
 export class SyncKit {
   private storage: StorageAdapter
@@ -32,6 +34,7 @@ export class SyncKit {
   private counters = new Map<string, SyncCounter>()
   private sets = new Map<string, SyncSet<any>>()
   private texts = new Map<string, SyncText>()
+  private richTexts = new Map<string, RichText>()
   private awarenessInstances = new Map<string, Awareness>()
   private config: SyncKitConfig
 
@@ -261,6 +264,39 @@ export class SyncKit {
   }
 
   /**
+   * Create or get a rich text CRDT
+   * Rich texts are cached per ID
+   */
+  richText(id: string): RichText {
+    if (!this.initialized) {
+      throw new SyncKitError(
+        'SyncKit not initialized. Call init() first.',
+        'NOT_INITIALIZED'
+      )
+    }
+
+    // Return cached rich text if exists
+    if (this.richTexts.has(id)) {
+      return this.richTexts.get(id)!
+    }
+
+    // Create CrossTabSync instance for this document (enables same-browser tab-to-tab sync)
+    const crossTabSync = new CrossTabSync(id, { enabled: true })
+    console.log('[SyncKit] Created CrossTabSync for document:', id)
+
+    // Create new rich text with cross-tab sync support
+    const richText = new RichText(id, this.clientId, this.storage, this.syncManager, crossTabSync)
+    this.richTexts.set(id, richText)
+
+    // Initialize rich text asynchronously
+    richText.init().catch(error => {
+      console.error(`Failed to initialize rich text ${id}:`, error)
+    })
+
+    return richText
+  }
+
+  /**
    * Get or create awareness instance for a document
    * Awareness instances are cached per document ID
    */
@@ -277,8 +313,11 @@ export class SyncKit {
       return this.awarenessInstances.get(documentId)!
     }
 
-    // Create new awareness
-    const awareness = new Awareness(this.clientId)
+    // Create CrossTabSync instance for this document (enables same-browser tab-to-tab awareness sync)
+    const crossTabSync = new CrossTabSync(documentId, { enabled: true })
+
+    // Create new awareness with cross-tab sync support
+    const awareness = new Awareness(this.clientId, documentId, crossTabSync)
     this.awarenessInstances.set(documentId, awareness)
 
     // Register with sync manager IMMEDIATELY (before init)

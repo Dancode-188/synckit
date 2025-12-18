@@ -10,14 +10,103 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### In Progress
-- 🚧 Text CRDT exposed in TypeScript SDK
-- 🚧 Custom CRDTs (Counter, Set) exposed in TypeScript SDK
 - 🚧 Python server implementation
 - 🚧 Go server implementation
 - 🚧 Rust server implementation
-- 🚧 Vue 3 composables
-- 🚧 Svelte stores
 - 🚧 Advanced storage adapters (OPFS, SQLite)
+
+---
+
+## [0.2.0] - 2025-12-18
+
+**Complete local-first collaboration platform! 🚀**
+
+This release transforms SyncKit from a simple sync engine into a production-ready collaboration platform with rich text editing, undo/redo, live cursors, and framework adapters for React, Vue, and Svelte.
+
+### 🎯 Status: Production Core, Beta Features
+
+**Production Ready:**
+- Document synchronization and CRDT text editing
+- Offline-first architecture with conflict-free merging
+- Rich text formatting with Peritext
+- WebSocket sync protocol
+
+**Public Beta:**
+- React/Vue/Svelte framework adapters
+- Cross-tab synchronization
+- Awareness and real-time presence
+- Editor integrations (Quill)
+
+### Added
+
+#### Text Editing & Collaboration
+- **✍️ Rich Text Editing (Peritext)** - Proper formatting conflict resolution for bold, italic, links, and block-level attributes
+- **🔁 Undo/Redo Manager** - Cross-tab undo/redo that syncs across sessions with 500ms operation merging
+- **👥 Awareness & Presence** - Real-time user tracking with ephemeral state management
+- **🖱️ Cursor Sharing** - Live cursor positions with smooth animations and teammate tracking
+- **🔢 Custom CRDTs** - PN-Counter (increment/decrement) and OR-Set (add/remove) now exposed in TypeScript SDK
+- **🎨 Text CRDT (Fugue)** - Collaborative text editing with conflict-free convergence, now accessible from TypeScript
+
+#### Framework Integration
+- **⚛️ React Hooks** - Complete hook library: `useSyncText`, `useRichText`, `useCursor`, `usePresence`, `useOthers`, `useUndo`
+- **🟢 Vue 3 Composables** - Idiomatic Composition API integration with reactive state management
+- **🔶 Svelte 5 Stores** - Reactive stores with runes support for Svelte 5
+
+#### Core Improvements
+- **🔄 Cross-Tab Sync** - BroadcastChannel-based synchronization for same-browser tab-to-tab collaboration
+- **📦 Optimized Bundles** - 154KB gzipped (complete) or 46KB (lite variant)
+- **🎯 Quill Integration** - First-class support for Quill editor with `QuillBinding`
+
+### Changed
+
+- **Bundle Size:** Increased from 59KB to 154KB gzipped for default variant (2.6x increase for 7+ major features)
+  - Added: Rich text CRDT, Undo/Redo, Awareness, Cursors, Framework adapters, Cross-tab sync
+  - Lite variant remains at 46KB for size-critical applications
+- **Test Suite:** Expanded from 700+ to 1,081+ tests (100% passing, 87% code coverage)
+- **Framework Adapters:** Separated into individual bundles (+6KB each) - import only what you need
+
+### Fixed
+
+- **Infinite re-render bug** in usePresence hook - Removed problematic dependency causing render loops
+- **Cross-tab awareness** - Fixed awareness updates not broadcasting to other browser tabs
+- **Cross-tab formatting** - Rich text formatting now syncs correctly across tabs
+
+### Performance
+
+- **Local Operations:** <1ms (same as v0.1.0)
+- **Network Sync:** 10-50ms p95 (unchanged)
+- **Bundle Size:** 154KB gzipped total (10KB JS + 144KB WASM, default variant), 46KB gzipped (lite variant)
+- **Memory Usage:** ~3MB for 10K documents (stable under 24-hour load testing)
+- **Test Suite:** 1,081+ comprehensive tests across TypeScript and Rust (100% pass rate)
+
+### Examples
+
+- **Collaborative Editor** - Real-time text editing with Quill, live cursors, presence, and undo/redo
+- New components: `Cursor.tsx`, `UndoRedoToolbar.tsx`, `ParticipantList.tsx`
+- Enhanced with cross-tab synchronization demonstration
+
+### Documentation
+
+- Updated API documentation for Rich Text, Undo/Redo, Cursor Sharing
+- Added framework adapter guides (React, Vue, Svelte)
+- Enhanced guides for cursor sharing and rich text editing
+- Updated bundle size documentation with optimization strategies
+
+### Migration from v0.1.0
+
+All v0.1.0 APIs remain compatible. New features are additive:
+
+```typescript
+// v0.1.0 code still works
+const doc = sync.document<Todo>('todo-1')
+await doc.update({ completed: true })
+
+// v0.2.0 adds new capabilities
+const text = sync.richText('doc-1')
+await text.format(0, 5, { bold: true })
+
+const [presence, setPresence] = usePresence('doc-1', { name: 'Alice' })
+```
 
 ---
 

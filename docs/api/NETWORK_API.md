@@ -1,6 +1,6 @@
 # Network Synchronization API
 
-Complete API reference for SyncKit's network synchronization features (v0.1.0).
+Complete API reference for SyncKit's network synchronization features (v0.2.0).
 
 ## Table of Contents
 
@@ -199,7 +199,7 @@ Useful for forcing a sync after making changes or coming back online.
 React hook for network status:
 
 ```typescript
-import { useNetworkStatus } from '@synckit-js/sdk'
+import { useNetworkStatus } from '@synckit-js/sdk/react'
 
 function NetworkIndicator() {
   const status = useNetworkStatus()
@@ -226,7 +226,7 @@ Automatically updates when network status changes.
 React hook for document sync state:
 
 ```typescript
-import { useSyncState } from '@synckit-js/sdk'
+import { useSyncState } from '@synckit-js/sdk/react'
 
 function DocumentStatus({ documentId }: { documentId: string }) {
   const syncState = useSyncState(documentId)
@@ -257,7 +257,7 @@ function DocumentStatus({ documentId }: { documentId: string }) {
 Enhanced document hook with sync state:
 
 ```typescript
-import { useSyncDocumentWithState } from '@synckit-js/sdk'
+import { useSyncDocumentWithState } from '@synckit-js/sdk/react'
 
 function TodoList() {
   const { data, setters, syncState } = useSyncDocumentWithState<{

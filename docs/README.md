@@ -1,6 +1,25 @@
 # SyncKit Documentation
 
-Welcome to the SyncKit documentation! This guide will help you build offline-first applications with real-time sync.
+Welcome to SyncKit! Build collaborative, offline-first apps without the complexity.
+
+---
+
+## ✨ What's New in v0.2.0
+
+**Everything you need for real-time collaboration.**
+
+v0.2.0 is production-ready with features that used to take months to build:
+
+- **✍️ Rich text editing** - Formatting conflicts resolved automatically (Peritext CRDT)
+- **↩️ Cross-tab undo/redo** - Works across browser tabs and persists across sessions
+- **👥 Live presence** - See who's editing in real-time
+- **🖱️ Cursor sharing** - Watch teammates type with animated cursors
+- **🎯 Counters & Sets** - PN-Counter and OR-Set CRDTs for distributed state
+- **⚛️ Framework adapters** - React, Vue 3, and Svelte 5 ready to use
+
+**Backed by 1,081 passing tests** (87% coverage). Zero critical bugs. Production-ready.
+
+**[Get started in 5 minutes →](guides/getting-started.md)**
 
 ---
 
@@ -25,20 +44,23 @@ Learn core concepts and patterns:
 - **[Testing Guide](guides/testing.md)** - Unit tests, property-based testing, chaos engineering, E2E
 
 ### Advanced Topics
-- **[Text CRDTs](api/SDK_API.md#tier-2-text-sync-crdt)** - Collaborative text editing
-- **[Custom CRDTs](api/SDK_API.md#tier-3-custom-crdts)** - Counters, sets, lists
-- **[Storage Adapters](api/SDK_API.md#storage-adapters)** - IndexedDB, OPFS, SQLite
+- **[Rich Text Editing](guides/rich-text-editing.md)** - Peritext CRDT for formatted text
+- **[Undo/Redo](guides/undo-redo.md)** - Cross-tab undo with persistent history
+- **[Cursor & Selection Sharing](guides/cursor-selection-sharing.md)** - Real-time cursor positions
+- **[Counters & Sets](api/COUNTER_SET_API.md)** - PN-Counter and OR-Set CRDTs
+- **[Bundle Size Optimization](guides/bundle-size-optimization.md)** - Tree-shaking, code splitting, lite variant
 - **[Server Deployment](../server/typescript/DEPLOYMENT.md)** - Production deployment
 
 ---
 
 ## 🔄 Migration Guides
 
-Switching from another platform?
+Switching from another platform or upgrading?
 
+- **[From v0.1.0 to v0.2.0](guides/migration-from-v0.1.0.md)** - Upgrade guide with breaking changes and new features
 - **[From Firebase/Firestore](guides/migration-from-firebase.md)** - Escape vendor lock-in, true offline support
-- **[From Supabase](guides/migration-from-supabase.md)** - Add offline functionality (fixes GitHub #357)
-- **[From Yjs/Automerge](guides/migration-from-yjs.md)** - Simpler API, WASM portability
+- **[From Supabase](guides/migration-from-supabase.md)** - Add offline functionality
+- **[From Yjs](guides/migration-from-yjs.md)** - Integrated solution with batteries included
 
 ---
 
@@ -53,9 +75,9 @@ Complete API documentation:
 - **[Storage API](api/SDK_API.md#storage-adapters)** - IndexedDB, memory, OPFS, SQLite
 
 ### Framework Adapters
-- **[React Hooks](api/SDK_API.md#react-hooks)** - `useSyncDocument`, `useSyncField`, `useNetworkStatus`, `useSyncState`
-- **[Vue Composables](api/SDK_API.md#vue-composables)** - Vue 3 integration *(coming soon)*
-- **[Svelte Stores](api/SDK_API.md#svelte-stores)** - Svelte integration *(coming soon)*
+- **[React Hooks](api/SDK_API.md#react-hooks)** - `useSyncText`, `useRichText`, `useCounter`, `useSet`, `usePresence`, `useCursor`, `useUndoRedo`
+- **[Vue 3 Integration](guides/vue-integration.md)** - Complete guide with composables and Composition API patterns
+- **[Svelte 5 Integration](guides/svelte-integration.md)** - Reactive stores with runes support and context patterns
 
 ### Server API
 - **[Server API Reference](../server/typescript/README.md)** - TypeScript server documentation
@@ -127,17 +149,18 @@ Learn from working examples:
 ### Performance
 
 **Bundle Size (gzipped):**
-- **Default variant:** ~59KB (document sync with network protocol)
-- **Lite variant:** ~45KB (local-only, no network protocol)
-- **Competitive:** Larger than Yjs (~19KB), smaller than Automerge (~60-78KB), much smaller than Firebase (~150KB)
+- **Default variant:** 154KB (everything included - text editing, rich text, undo/redo, presence, cursors, framework adapters)
+- **Lite variant:** 46KB (basic sync only)
+- **What you get:** For 154KB, you're shipping production-ready collaboration without building it yourself
 
-**Operation Speed:**
-- Local update: <1ms (371ns single field)
-- IndexedDB write: 1-5ms
-- Network sync: 10-50ms p95
-- Multi-client sync: 10-100ms (WebSocket server)
+**Speed:**
+- Local updates: <1ms (instant user feedback)
+- Network sync: 10-50ms p95 (faster than most REST APIs)
+- Multi-client convergence: <100ms (real-time collaboration)
 
-**[Learn more about performance →](guides/performance.md)**
+**Stress-tested:** 24-hour continuous operation, 1,081 tests, zero memory leaks.
+
+**[Learn more about performance →](guides/performance.md)** | **[Bundle size optimization →](guides/bundle-size-optimization.md)**
 
 ---
 
@@ -178,7 +201,7 @@ if (navigator.storage && navigator.storage.persist) {
 
 **Changes not syncing across tabs**
 ```typescript
-// ✅ Cross-tab sync via BroadcastChannel IS implemented in v0.1.0
+// ✅ Cross-tab sync via BroadcastChannel is fully implemented
 // Changes sync automatically across tabs via BroadcastChannel API
 // Multi-tab scenarios work both locally (BroadcastChannel) and via server
 const todo = sync.document<Todo>('todo-1')  // Same ID in both tabs - syncs automatically!
@@ -224,29 +247,35 @@ We welcome contributions!
 
 ## 📊 Status
 
-**Current Release:** v0.1.0 (November 2025)
-**Next Phase:** Phase 10 - Launch Preparation
+**Current Release:** v0.2.0 (December 2025)
+**Production Ready:** Complete local-first collaboration platform ✅
 
 ### What's Complete ✅
 
-- ✅ Core Rust engine (LWW sync, Text CRDT, protocol)
-- ✅ TypeScript SDK (Document API, storage, React hooks)
+- ✅ **Text CRDT (Fugue)** - Collaborative text editing with conflict-free convergence
+- ✅ **Rich Text (Peritext)** - Bold, italic, links with formatting conflict resolution
+- ✅ **Undo/Redo** - Cross-tab undo with persistent history
+- ✅ **Awareness & Presence** - Real-time user tracking
+- ✅ **Cursor Sharing** - Live cursor positions with animations
+- ✅ **Counters & Sets** - PN-Counter and OR-Set CRDTs
+- ✅ **Vue 3 Adapter** - Complete composables with Composition API
+- ✅ **Svelte 5 Adapter** - Reactive stores with runes support
+- ✅ Core Rust engine (LWW sync, full CRDT suite, protocol)
+- ✅ TypeScript SDK (Document, Text, RichText, Counter, Set APIs)
 - ✅ Network sync layer (WebSocket, offline queue, auto-reconnect)
-- ✅ Cross-tab sync (BroadcastChannel for local multi-tab synchronization)
-- ✅ React integration (`useSyncDocument`, `useSyncField`, `useNetworkStatus`, `useSyncState`)
+- ✅ Cross-tab sync (BroadcastChannel + server-mediated)
+- ✅ React integration (complete hook library for all features)
 - ✅ TypeScript server (WebSocket sync, JWT auth, PostgreSQL)
 - ✅ Example applications (todo app, collaborative editor, project management)
-- ✅ Testing infrastructure (100% pass rate, 100 tests)
-- ✅ Documentation (API reference, guides, migration docs)
+- ✅ **1,081+ tests** (87% coverage)
+- ✅ Documentation (complete API reference, guides, migration docs)
 - ✅ Formal verification (TLA+, 118K states explored)
 
 ### What's Next 🚧
 
 - 🚧 Multi-language servers (Python, Go, Rust)
-- 🚧 Vue & Svelte adapters
 - 🚧 Advanced storage adapters (OPFS, SQLite)
-- 🚧 Production deployment guides
-- 🚧 NPM package publication
+- 🚧 Performance optimization (large documents >10K chars)
 
 **[Full roadmap →](../ROADMAP.md)**
 

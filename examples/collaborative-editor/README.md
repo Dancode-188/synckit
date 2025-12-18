@@ -1,32 +1,48 @@
-# Collaborative Editor Example
+# Collaborative Rich Text Editor Example (v0.2.0)
 
-A production-ready collaborative Markdown and code editor built with SyncKit, React, and CodeMirror 6. This example demonstrates SyncKit's offline-first capabilities, real-time sync, and conflict-free collaboration.
+**A production-ready Google Docs-style collaborative editor showcasing all SyncKit v0.2.0 features.**
 
-![Bundle Size](https://img.shields.io/badge/bundle-~721KB%20uncompressed%20|%20~238KB%20gzipped-success)
-![SyncKit](https://img.shields.io/badge/synckit-~59KB%20gzipped-brightgreen)
+Built with SyncKit v0.2.0, React, and Quill. This example demonstrates rich text collaboration, real-time presence, cursor sharing, and cross-tab undo/redo.
+
+![Bundle Size](https://img.shields.io/badge/bundle-~195KB%20gzipped-success)
+![SyncKit](https://img.shields.io/badge/synckit-v0.2.0-brightgreen)
 ![React](https://img.shields.io/badge/react-18.2-blue)
 ![TypeScript](https://img.shields.io/badge/typescript-5.0-blue)
 
-## Features
+## ✨ v0.2.0 Features Showcase
 
-### Core Capabilities
+This example demonstrates **ALL** major features added in SyncKit v0.2.0:
 
-- **Real-time Collaboration**: Multiple users can edit the same document simultaneously with automatic conflict resolution
-- **Offline-First**: Works completely offline, syncs automatically when connection is restored
-- **Multi-Document Support**: Create, edit, and switch between multiple documents
-- **Syntax Highlighting**: Support for Markdown, JavaScript, and TypeScript with CodeMirror 6
-- **Persistent Storage**: All documents saved to IndexedDB for instant load times
-- **Live Presence**: See who else is actively editing (when connected to sync server)
-- **Tab Management**: VSCode-like tab interface for managing open documents
-- **Connection Status**: Clear visual feedback of online/offline state
+### 🎨 Rich Text Editing (Peritext CRDT)
+- **Bold, italic, underline, strikethrough** formatting
+- **Text colors and background colors**
+- **Headers** (H1, H2, H3)
+- **Lists** (ordered and bullet)
+- **Links** and code blocks
+- **Conflict-free formatting** - When two users format the same text simultaneously, Peritext ensures deterministic convergence
 
-### Technical Highlights
+### 👥 Real-time Presence & Awareness
+- **Live user list** - See who's currently editing the document
+- **Active status indicators** - Know when teammates are typing
+- **Color-coded participants** - Each user gets a unique color
 
-- **Optimized Bundle**: ~238KB gzipped (CodeMirror 6 + React + SyncKit)
-- **Full-Featured**: Uses SyncKit full SDK (~59KB gzipped) - includes network sync + offline queue
-- **Type-Safe**: Full TypeScript support throughout
-- **Modern Stack**: React 18, Vite, CodeMirror 6, Zustand
-- **Production-Ready**: Comprehensive error handling, accessibility, and UX polish
+### 🎯 Cursor Sharing
+- **Real-time cursor positions** - See exactly where teammates are typing
+- **Smooth spring animations** - Cursors glide naturally across the screen
+- **Name labels** - Know who each cursor belongs to
+- **Viewport tracking** - Cursors update as users move around the document
+
+### ↩️ Cross-Tab Undo/Redo
+- **Unlimited undo/redo** (configurable max history)
+- **Works across browser tabs** - Undo in one tab, redo in another
+- **Keyboard shortcuts** - Cmd/Ctrl+Z to undo, Cmd/Ctrl+Shift+Z to redo
+- **Visual stack counts** - See how many operations can be undone/redone
+
+### 📡 Network Sync (Inherited from v0.1.0)
+- **Offline-first** - Works completely offline
+- **Auto-reconnection** - Reconnects automatically when back online
+- **Offline queue** - All changes queued and synced when reconnected
+- **Connection status** - Clear visual feedback
 
 ## Quick Start
 
@@ -39,12 +55,19 @@ npm run dev
 
 # Build for production
 npm run build
-
-# Preview production build
-npm run preview
 ```
 
 The app will be available at `http://localhost:5173`.
+
+### Testing Collaboration
+
+To see real-time collaboration in action:
+
+1. Open the app in **two browser tabs**
+2. Type in one tab → See changes appear instantly in the other
+3. Format text with bold/italic → See formatting sync in real-time
+4. Move your mouse → See your cursor in the other tab
+5. Undo in one tab → See undo reflected in the other tab
 
 ## Architecture
 
@@ -53,305 +76,221 @@ The app will be available at `http://localhost:5173`.
 ```
 src/
 ├── components/
-│   ├── Header.tsx           # Top bar with menu, title, connection status
-│   ├── Sidebar.tsx          # Document list and creation
-│   ├── DocumentTabs.tsx     # Tab bar for open documents
-│   ├── Editor.tsx           # CodeMirror 6 editor with SyncKit integration
-│   └── ParticipantList.tsx  # Live user presence
-├── store.ts                 # Zustand state management
-├── types.ts                 # TypeScript interfaces
-├── App.tsx                  # Main application component
-└── main.tsx                 # Entry point
+│   ├── Header.tsx            # Top bar with menu and connection status
+│   ├── Sidebar.tsx           # Document list
+│   ├── DocumentTabs.tsx      # Tab bar for open documents
+│   ├── Editor.tsx            # Quill editor + QuillBinding + cursor tracking
+│   ├── UndoRedoToolbar.tsx   # Undo/redo buttons with keyboard shortcuts
+│   ├── Cursor.tsx            # Animated cursor component
+│   └── ParticipantList.tsx   # Live presence with SyncKit awareness
+├── store.ts                  # Zustand UI state
+├── types.ts                  # TypeScript interfaces
+├── App.tsx                   # Main app component
+└── main.tsx                  # Entry point
 ```
 
-### State Management
+### Key Implementation Details
 
-This example uses [Zustand](https://github.com/pmndrs/zustand) (3KB) for UI state management:
-
-```typescript
-const useStore = create<AppState>((set) => ({
-  documents: [...],
-  openDocuments: [...],
-  activeDocumentId: 'welcome',
-  participants: new Map(),
-  sidebarOpen: true,
-  // Actions
-  addDocument: (doc) => set((state) => ({ ... })),
-  openDocument: (id) => set((state) => ({ ... })),
-  // ... more actions
-}))
-```
-
-Document content is managed by SyncKit, which handles:
-- Persistence to IndexedDB
-- Conflict-free merging of concurrent edits
-- Sync with remote server (when configured)
-- Offline queue management
-
-### SyncKit Integration
-
-The editor uses SyncKit's React hooks for seamless sync:
+#### 1. Rich Text with QuillBinding
 
 ```typescript
-import { useSyncDocument } from '@synckit-js/sdk/react'
+import Quill from 'quill'
+import { QuillBinding } from '@synckit-js/sdk/integrations/quill'
 
-function Editor({ documentId }) {
-  // Returns [data, setters, document]
-  const [data, { update }] = useSyncDocument<{ content: string }>(documentId)
+// Create RichText CRDT
+const richText = synckit.richText(documentId)
+await richText.init()
 
-  // Update document on editor change
-  const handleChange = (newContent: string) => {
-    update({ content: newContent })
+// Initialize Quill editor
+const quill = new Quill('#editor', {
+  theme: 'snow',
+  modules: {
+    toolbar: [
+      [{ 'header': [1, 2, 3, false] }],
+      ['bold', 'italic', 'underline', 'strike'],
+      [{ 'color': [] }, { 'background': [] }],
+      ['link'],
+      ['clean']
+    ]
   }
+})
 
-  // data.content automatically updates when remote changes arrive
-  return <CodeMirrorEditor value={data?.content} onChange={handleChange} />
-}
+// Bind Quill to RichText (two-way sync!)
+const binding = new QuillBinding(richText, quill)
+
+// Now:
+// - Typing in Quill updates RichText CRDT
+// - Remote changes update Quill editor automatically
+// - Formatting syncs correctly with Peritext
 ```
 
-#### Key Integration Points
+#### 2. Presence & Cursors
 
-1. **Document Creation** (`Sidebar.tsx:23-40`)
-   ```typescript
-   const handleCreateDocument = async () => {
-     const id = `doc-${Date.now()}`
-     const newDoc: DocumentMetadata = {
-       id,
-       title: 'Untitled.md',
-       createdAt: Date.now(),
-       updatedAt: Date.now(),
-       language: 'markdown',
-     }
+```typescript
+import { usePresence, useOthers } from '@synckit-js/sdk/react'
 
-     // Create document in SyncKit
-     const doc = sync.document<{ content: string }>(id)
-     await doc.init() // Wait for document to initialize
-     await doc.update({ content: '# New Document\n\nStart typing...' })
+// Track local presence
+const [presence, setPresence] = usePresence(documentId, {
+  name: 'Alice',
+  color: '#3B82F6',
+  cursor: null
+})
 
-     addDocument(newDoc)
-     openDocument(id)
-   }
-   ```
+// Get other users
+const others = useOthers(documentId)
 
-2. **Real-time Sync** (`Editor.tsx:43-48`)
-   ```typescript
-   EditorView.updateListener.of((updateEvent) => {
-     if (updateEvent.docChanged) {
-       const content = updateEvent.state.doc.toString()
-       update({ content })
-     }
-   })
-   ```
+// Track mouse movement
+const handleMouseMove = (e: React.MouseEvent) => {
+  const rect = containerRef.current.getBoundingClientRect()
+  const cursor = {
+    x: e.clientX - rect.left,
+    y: e.clientY - rect.top
+  }
+  setPresence({ ...presence, cursor })
+}
 
-3. **Network Status Monitoring** (`Header.tsx:12-41`)
-   ```typescript
-   import { useNetworkStatus } from '@synckit-js/sdk/react'
+// Render teammate cursors
+{others.map(user => user.cursor && (
+  <Cursor
+    key={user.id}
+    position={user.cursor}
+    color={user.color}
+    name={user.name}
+  />
+))}
+```
 
-   const networkStatus = useNetworkStatus()
+#### 3. Cross-Tab Undo/Redo
 
-   const getStatusText = () => {
-     if (!networkStatus) return 'Offline Mode'
+```typescript
+import { useUndo } from '@synckit-js/sdk/react'
 
-     if (networkStatus.queueSize > 0) {
-       return `Syncing (${networkStatus.queueSize} pending)`
-     }
+const { undo, redo, canUndo, canRedo, undoStack, redoStack } = useUndo(documentId, {
+  maxUndoSize: 100,
+  mergeWindow: 500
+})
 
-     switch (networkStatus.connectionState) {
-       case 'connected':
-         return 'All changes saved'
-       case 'connecting':
-         return 'Connecting...'
-       case 'reconnecting':
-         return 'Reconnecting...'
-       case 'failed':
-         return 'Connection failed'
-       default:
-         return 'Offline'
-     }
-   }
-   ```
+// Keyboard shortcuts
+useEffect(() => {
+  const handleKeyDown = (e: KeyboardEvent) => {
+    if ((e.metaKey || e.ctrlKey) && e.key === 'z' && !e.shiftKey) {
+      e.preventDefault()
+      if (canUndo) undo()
+    }
+    if ((e.metaKey || e.ctrlKey) && e.key === 'y') {
+      e.preventDefault()
+      if (canRedo) redo()
+    }
+  }
+  window.addEventListener('keydown', handleKeyDown)
+  return () => window.removeEventListener('keydown', handleKeyDown)
+}, [undo, redo, canUndo, canRedo])
+```
+
+## What Makes This Different?
+
+### vs Google Docs
+- **Lightweight**: 195KB gzipped vs 1MB+ for Google Docs
+- **Offline-first**: Works completely offline with automatic sync
+- **Open source**: Full control over your data and infrastructure
+- **Self-hostable**: Run your own sync server
+
+### vs Other CRDT Libraries
+- **Smaller bundle**: 154KB gzipped (default SDK) vs 300KB+ (Yjs), 500KB+ (Automerge)
+- **Simpler API**: React hooks + QuillBinding vs manual CRDT management
+- **Better DX**: TypeScript-first with excellent autocomplete
+
+## Bundle Analysis
+
+### Production Bundle Size
+
+```
+Component                    Uncompressed    Gzipped
+──────────────────────────────────────────────────────
+Quill 2.0                        285 KB       85 KB
+React 18 + ReactDOM              142 KB       45 KB
+SyncKit (WASM + SDK)             154 KB       54 KB
+Application Code                  28 KB        8 KB
+Zustand                            9 KB        3 KB
+──────────────────────────────────────────────────────
+Total                           ~618 KB     ~195 KB
+```
+
+**Why Quill?** vs Monaco (2MB+): 95% smaller, perfect for rich text
+
+**Why SyncKit default variant?** Includes all v0.2.0 features:
+- Rich Text (Peritext) - 40KB
+- Presence/Awareness - 12KB
+- Undo/Redo - 8KB
+- Network sync - 20KB
+
+**Need smaller?** Use SyncKit Lite (46KB gzipped) for offline-only apps without rich text features.
 
 ## Configuration
 
 ### Local-Only Mode (Default)
 
-By default, the editor runs in local-only mode with IndexedDB persistence:
-
 ```typescript
 const sync = new SyncKit({
   storage: 'indexeddb',
+  name: 'collaborative-editor',
 })
 ```
 
-### Server Sync Mode
+All data stays local. Perfect for single-user offline-first apps.
 
-To enable real-time collaboration across devices, add the server URL:
+### Server Sync Mode
 
 ```typescript
 const sync = new SyncKit({
   storage: 'indexeddb',
-  serverUrl: 'ws://localhost:8080', // SyncKit sync server
+  name: 'collaborative-editor',
+  serverUrl: 'ws://localhost:8080', // Enable real-time collaboration
 })
 ```
 
 Then start the sync server:
 
 ```bash
-# In the root SyncKit directory
-cd server/node
-npm install
-npm start
+cd ../../server/typescript
+bun install
+bun run dev
 ```
 
-### Storage Options
-
-SyncKit supports multiple storage backends:
-
-```typescript
-// IndexedDB (default, recommended for web)
-const sync = new SyncKit({ storage: 'indexeddb' })
-
-// Memory (for testing, data lost on refresh)
-const sync = new SyncKit({ storage: 'memory' })
-```
-
-> **Note**: OPFS (Origin Private File System) storage is planned for a future release.
-
-## How It Works
-
-### Offline-First Architecture
-
-1. **Local Database as Source of Truth**
-   - All edits are immediately written to IndexedDB
-   - UI updates optimistically (no loading spinners)
-   - App works identically online and offline
-
-2. **Background Sync**
-   - When online, SyncKit syncs changes in the background
-   - Delta sync minimizes bandwidth usage
-   - Binary message protocol for efficiency
-
-3. **Conflict Resolution**
-   - Uses Last-Write-Wins (LWW) strategy
-   - Each change tagged with timestamp + client ID
-   - Deterministic resolution ensures all clients converge
-
-### Document Lifecycle
-
-```
-User creates document
-       ↓
-SyncKit creates CRDT document object
-       ↓
-Document saved to IndexedDB
-       ↓
-User makes edits → Local state updated → IndexedDB updated
-       ↓
-(If online) Background sync to server
-       ↓
-Server broadcasts to other clients
-       ↓
-Other clients merge changes conflict-free
-```
-
-## Bundle Analysis
-
-### Why SyncKit?
-
-This collaborative editor needs **offline-first document sync** with real-time updates. SyncKit provides:
-- ✅ Offline-first architecture
-- ✅ Conflict-free convergence (no lost edits)
-- ✅ Real-time collaboration
-- ✅ Full SDK with network sync: 59KB gzipped
-- ✅ Lite SDK (offline-only): 45KB gzipped
-
-**Full-featured collaborative editing** in a lightweight package.
-
-### Production Bundle Size
-
-```
-Component                    Uncompressed    Gzipped
-────────────────────────────────────────────────────
-CodeMirror 6                     410 KB      124 KB
-React 18 + ReactDOM              142 KB       45 KB
-SyncKit (WASM + SDK)             138 KB       59 KB
-Zustand                            9 KB        3 KB
-Application Code                  22 KB        8 KB
-────────────────────────────────────────────────────
-Total                           ~721 KB     ~238 KB
-```
-
-### Size-Critical Apps?
-
-**Need smaller bundle?** Use SyncKit Lite (45KB gzipped, 85KB uncompressed):
-```typescript
-import { SyncKit } from '@synckit-js/sdk/lite'  // Local-only, no network
-```
-
-**Trade-off:** No server sync. For collaborative editors, the full SDK (59KB gzipped) is recommended for network capabilities.
-
-### Why These Choices?
-
-- **CodeMirror 6** (~124KB) vs Monaco (2MB+): 94% smaller, same functionality
-- **Zustand** (~3KB) vs Redux (20KB+): 85% smaller, simpler API
-- **SyncKit** (~59KB gzipped): Document-level sync with full network capabilities
+Now open the app in multiple tabs or devices to see real-time collaboration!
 
 ## Extending This Example
 
-### Adding New Languages
+### Adding More Quill Modules
 
 ```typescript
-import { python } from '@codemirror/lang-python'
+import ImageResize from 'quill-image-resize-module'
 
-const getLanguageExtension = () => {
-  switch (language) {
-    case 'python':
-      return python()
-    // ...
+const quill = new Quill('#editor', {
+  modules: {
+    toolbar: [...],
+    imageResize: {}
   }
-}
-```
-
-### Custom Themes
-
-```typescript
-EditorView.theme({
-  '&': { backgroundColor: '#1e1e1e' }, // Dark background
-  '.cm-content': { color: '#d4d4d4' }, // Light text
-  '.cm-gutters': { backgroundColor: '#252526' },
-  // ... more theme rules
 })
 ```
 
-### Collaborative Cursors
+### Custom Cursor Styles
+
+Edit `Cursor.tsx` to customize cursor appearance:
 
 ```typescript
-// Track cursor positions in SyncKit
-const [presence, setPresence] = usePresence(sync, documentId)
-
-const handleCursorMove = (pos: number) => {
-  setPresence({ cursor: pos, color: currentUser.color })
-}
-
-// Render remote cursors as decorations
-const remoteCursors = EditorView.decorations.of(
-  Array.from(presence.values()).map(p =>
-    Decoration.widget({ widget: new CursorWidget(p) }).range(p.cursor)
-  )
-)
+<svg width="24" height="24" viewBox="0 0 24 24">
+  <path d="..." fill={color} stroke="white" />
+</svg>
 ```
 
 ### Document Export
 
 ```typescript
 const handleExport = async () => {
-  const [data] = useSyncDocument<{ content: string }>(documentId)
-  const blob = new Blob([data.content], { type: 'text/markdown' })
-  const url = URL.createObjectURL(blob)
-  const a = document.createElement('a')
-  a.href = url
-  a.download = `${activeDocument.title}`
-  a.click()
+  const delta = quill.getContents()
+  const html = quill.root.innerHTML
+  // Export as HTML, Delta, or Markdown
 }
 ```
 
@@ -359,7 +298,7 @@ const handleExport = async () => {
 
 ### Vite Build Optimization
 
-The included `vite.config.ts` already optimizes for production:
+The included `vite.config.ts` creates optimized chunks:
 
 ```typescript
 export default defineConfig({
@@ -367,7 +306,7 @@ export default defineConfig({
     rollupOptions: {
       output: {
         manualChunks: {
-          'codemirror': ['codemirror', '@codemirror/commands', '@codemirror/lang-javascript', '@codemirror/lang-markdown'],
+          'quill': ['quill', 'quill-delta'],
           'vendor': ['react', 'react-dom', 'zustand'],
         },
       },
@@ -376,78 +315,47 @@ export default defineConfig({
 })
 ```
 
-This creates separate chunks for:
-- **codemirror.js**: CodeMirror bundle (cached separately)
-- **vendor.js**: React + Zustand (rarely changes)
-- **index.js**: Application code (changes frequently)
+### Hosting
 
-### Hosting Recommendations
-
-**Static Hosting** (for local-only mode):
+**Static Hosting** (local-only mode):
 - Vercel, Netlify, GitHub Pages
-- No server required
 - Zero configuration
 
 **With Sync Server**:
 - Frontend: Any static host
-- Backend: Deploy SyncKit server to Railway, Fly.io, or VPS
-- Use wss:// (WebSocket over TLS) in production
-
-### Environment Variables
-
-```bash
-# .env.production
-VITE_SYNCKIT_SERVER=wss://sync.yourdomain.com
-```
-
-```typescript
-const sync = new SyncKit({
-  storage: 'indexeddb',
-  serverUrl: import.meta.env.VITE_SYNCKIT_SERVER,
-})
-```
+- Backend: Railway, Fly.io, or VPS
+- Use `wss://` in production
 
 ## Troubleshooting
 
-### Editor Content Not Syncing
+### Formatting Not Syncing
 
-**Check connection status**: Look at the status indicator in the header
-- **Offline Mode** = No sync server configured (local-only)
-- **All changes saved** = Connected with green dot
-- **Syncing (X pending)** = Blue pulsing dot with queue count
-- **Connecting...** = Yellow pulsing dot
-- **Connection failed** = Red dot
+**Check:** Ensure QuillBinding is initialized correctly and not destroyed prematurely.
 
-**Verify server configuration**: Ensure `serverUrl` is set in SyncKit initialization
-
-### Document Not Persisting
-
-**Check IndexedDB**: Open DevTools → Application → IndexedDB → synckit
-- Should see databases for each document
-- Try clearing and reloading if corrupted
-
-**Check browser support**: IndexedDB required (all modern browsers)
-
-### Large Documents Lagging
-
-**Enable virtualization**: For documents >10,000 lines, consider adding:
+**Fix:** Add logging to verify binding creation:
 
 ```typescript
-import { drawSelection } from '@codemirror/view'
-
-const extensions = [
-  basicSetup,
-  drawSelection({ cursorBlinkRate: 1000 }),
-  EditorView.theme({ '.cm-content': { minHeight: '100vh' } }),
-]
+const binding = new QuillBinding(richText, quill)
+console.log('QuillBinding created:', binding)
 ```
+
+### Cursors Jumping
+
+**Cause:** Missing spring animation or incorrect coordinate calculation.
+
+**Fix:** Verify spring animation is running in `Cursor.tsx`.
+
+### Undo/Redo Not Working Across Tabs
+
+**Check:** Both tabs must use the same document ID and have cross-tab sync enabled (default with IndexedDB).
 
 ## Learn More
 
-- **SyncKit Documentation**: `../../docs/README.md`
-- **Getting Started Guide**: `../../docs/guides/getting-started.md`
-- **Offline-First Guide**: `../../docs/guides/offline-first.md`
-- **API Reference**: `../../docs/api/SDK_API.md`
+- **[SyncKit v0.2.0 Documentation](../../docs/README.md)**
+- **[Rich Text Editing Guide](../../docs/guides/rich-text-editing.md)**
+- **[Cursor & Selection Sharing Guide](../../docs/guides/cursor-selection-sharing.md)**
+- **[Undo/Redo Guide](../../docs/guides/undo-redo.md)**
+- **[API Reference](../../docs/api/SDK_API.md)**
 
 ## License
 

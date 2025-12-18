@@ -63,15 +63,16 @@ export class IndexedDBStorage implements StorageAdapter {
     })
   }
   
-  async set(_docId: string, doc: StoredDocument): Promise<void> {
+  async set(docId: string, doc: StoredDocument): Promise<void> {
     if (!this.db) {
       throw new StorageError('Storage not initialized')
     }
-    
+
     return new Promise((resolve, reject) => {
       const transaction = this.db!.transaction(STORE_NAME, 'readwrite')
       const store = transaction.objectStore(STORE_NAME)
-      const request = store.put(doc)
+      // Ensure the document has an 'id' field for the keyPath
+      const request = store.put({ ...doc, id: docId })
       
       request.onerror = () => {
         reject(new StorageError(`Failed to save document: ${request.error}`))

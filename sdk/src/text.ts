@@ -73,6 +73,7 @@ export class SyncText implements SyncableDocument {
   private clock: number = 0
   private vectorClock: VectorClock = {}
   private isApplyingRemote: boolean = false
+  private initPromise: Promise<void> | null = null
 
   constructor(
     private readonly id: string,
@@ -87,10 +88,27 @@ export class SyncText implements SyncableDocument {
    * Must be called before using any other methods
    */
   async init(): Promise<void> {
+    // If already fully initialized, return immediately
     if (this.wasmText) {
       return
     }
 
+    // Create initialization promise only once (prevents race condition)
+    if (!this.initPromise) {
+      this.initPromise = this.doInit().finally(() => {
+        // Clear the promise after initialization completes (success or failure)
+        this.initPromise = null
+      })
+    }
+
+    // Always return the same promise, ensuring all concurrent callers wait for the same initialization
+    return this.initPromise
+  }
+
+  /**
+   * Internal initialization implementation
+   */
+  private async doInit(): Promise<void> {
     const wasm = await initWASM()
 
     // Check if WasmFugueText is available
@@ -173,6 +191,11 @@ export class SyncText implements SyncableDocument {
           this.isApplyingRemote = false
         }
       })
+
+      // Enable cross-tab sync (starts BroadcastChannel listeners)
+      console.log('[SyncText] Enabling cross-tab sync for document:', this.id)
+      this.crossTabSync.enable()
+      console.log('[SyncText] Cross-tab sync enabled for document:', this.id)
     }
   }
 
@@ -237,6 +260,7 @@ export class SyncText implements SyncableDocument {
 
     // Broadcast to other tabs (if not applying a remote operation)
     if (this.crossTabSync && !this.isApplyingRemote) {
+      console.log('[SyncText] Broadcasting text-insert to other tabs:', { documentId: this.id, position, text })
       this.crossTabSync.broadcast({
         type: 'text-insert',
         documentId: this.id,
