@@ -6,6 +6,7 @@ We actively support the following versions of SyncKit with security updates:
 
 | Version | Supported          |
 | ------- | ------------------ |
+| 0.2.x   | :white_check_mark: |
 | 0.1.x   | :white_check_mark: |
 | < 0.1.0 | :x:                |
 

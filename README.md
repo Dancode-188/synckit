@@ -41,9 +41,27 @@ await doc.update({ completed: true })
 
 ### 🎬 See It In Action
 
-![SyncKit Demo](demo.gif)
+**1. Complex State (Kanban)**
+SyncKit handles structural data like lists and nested objects with automatic conflict resolution.
 
-**Real-time collaboration with offline resilience:** Watch tasks sync instantly across tabs—even while offline. The example app demonstrates SyncKit's offline-first capabilities combined with smart browser storage to create a seamless collaborative experience.
+![SyncKit Kanban Demo](demo.gif)
+
+**2. Collaborative Text (New in v0.2.0)**
+Add Google Docs-style collaboration to your app with a single hook.
+
+```typescript
+// It's this simple:
+import { useSyncText } from '@synckit-js/sdk/react'
+
+function Editor() {
+  // ✨ Automatic conflict resolution & real-time sync
+  const [text, { insert, delete: del }] = useSyncText('doc-1')
+
+  return <textarea value={text} onChange={e => insert(0, e.target.value)} />
+}
+```
+
+*(Live text editing demo coming soon)*
 
 ---
 
@@ -69,7 +87,7 @@ True offline-first architecture—not just caching. Your app works perfectly on 
 
 **Size-critical apps?** Use Lite variant (46KB gzipped, basic sync only)
 
-**The trade-off:** Yjs is a minimal core (65KB, assembled). SyncKit is complete (154KB, production features included).
+**Every byte is justified.** We chose completeness over minimal size—rich text, undo/redo, cursors, and framework adapters all work together out of the box.
 
 ### 🔓 **Your Data, Your Rules**
 Open source and self-hostable. No vendor lock-in, no surprise $2,000/month bills, complete data sovereignty.
@@ -293,7 +311,7 @@ Different libraries make different trade-offs. Here's how SyncKit compares:
 | **Undo/Redo** | ✅ Cross-tab | ❌ No | ❌ No | ⚠️ Basic | ✅ Yes |
 | **Awareness/Cursors** | ✅ Built-in | ❌ No | ❌ No | ⚠️ Extension | ❌ No |
 | **Framework Adapters** | ✅ React/Vue/Svelte | ❌ No | ❌ No | ⚠️ Community | ❌ No |
-| **True Offline-First** | ✅ Native | ⚠️ Cache only | ❌ None | ✅ Full | ✅ Full |
+| **True Offline-First** | ✅ Native | ⚠️ Limited (cache + persistence) | ❌ No native support | ✅ Full | ✅ Full |
 | **Works Without Server** | ✅ Yes | ❌ No | ❌ No | ✅ Yes | ✅ Yes |
 | **Self-Hosted** | ✅ Yes | ❌ No | ✅ Yes | ✅ Yes | ✅ Yes |
 | **TypeScript Support** | ✅ Native | ✅ Good | ✅ Good | ⚠️ Issues | ✅ Good |
@@ -333,28 +351,37 @@ Different libraries make different trade-offs. Here's how SyncKit compares:
 ## 🚦 Status
 
 **Current Version:** v0.2.0
-**Production Ready:** Complete local-first collaboration platform ✅
 
-### What's Complete ✅
+### Production Ready ✅
 
+The core sync engine is battle-tested and ready for production:
+
+- ✅ **Document Sync** - LWW conflict resolution with vector clocks
 - ✅ **Text CRDT (Fugue)** - Collaborative text editing with conflict-free convergence
 - ✅ **Rich Text (Peritext)** - Bold, italic, links with formatting conflict resolution
-- ✅ **Undo/Redo** - Cross-tab undo with persistent history
-- ✅ **Awareness & Presence** - Real-time user tracking
-- ✅ **Cursor Sharing** - Live cursor positions with animations
 - ✅ **Counters & Sets** - PN-Counter and OR-Set CRDTs
-- ✅ **Vue 3 Adapter** - Complete composables with Composition API
-- ✅ **Svelte 5 Adapter** - Reactive stores with runes support
-- ✅ **Core Rust Engine** - LWW sync engine with full CRDT suite
+- ✅ **Offline-First Architecture** - Works perfectly without internet
+- ✅ **WebSocket Protocol** - Real-time server synchronization
+- ✅ **Core Rust Engine** - Memory-safe WASM with zero unsafe blocks
 - ✅ **WASM Compilation** - 154KB gzipped (46KB lite), optimized performance
 - ✅ **TypeScript SDK** - Document, Text, RichText, Counter, Set APIs
-- ✅ **Cross-Tab Sync** - BroadcastChannel + server-mediated sync
-- ✅ **React Integration** - Complete hook library for all features
+- ✅ **Storage Adapters** - IndexedDB and Memory storage
 - ✅ **TypeScript Server** - WebSocket sync server with Bun + Hono
+- ✅ **1,081+ Tests** - 87% code coverage, 100% pass rate
 - ✅ **Example Applications** - Todo app, collaborative editor, project management
-- ✅ **1,081+ Tests** - Comprehensive test coverage (87%)
-- ✅ **Documentation** - Complete guides and API reference
-- ✅ **Build System** - Complete toolchain with benchmarks and CI
+
+### Public Beta 🔶
+
+New features we're testing with the community - stable but gathering feedback:
+
+- 🔶 **Undo/Redo** - Cross-tab undo with persistent history
+- 🔶 **Awareness & Presence** - Real-time user tracking
+- 🔶 **Cursor Sharing** - Live cursor positions with animations
+- 🔶 **Cross-Tab Sync** - BroadcastChannel-based synchronization
+- 🔶 **React Hooks** - useSyncText, useRichText, usePresence, useOthers, useUndo
+- 🔶 **Vue 3 Composables** - Composition API integration
+- 🔶 **Svelte 5 Stores** - Reactive stores with runes support
+- 🔶 **Quill Integration** - QuillBinding for Quill editor
 
 ### What's Next 🚧
 
