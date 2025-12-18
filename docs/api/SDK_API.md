@@ -757,28 +757,42 @@ function useSyncSet<T>(id: string): [
 ]
 ```
 
-### useUndoRedo ✅ v0.2.0
+### useUndo ✅ v0.2.0
 
 ```typescript
-import { useUndoRedo } from '@synckit-js/sdk/react'
+import { useUndo } from '@synckit-js/sdk/react'
 
 function EditorToolbar({ documentId }: { documentId: string }) {
-  const { undo, redo, canUndo, canRedo } = useUndoRedo(documentId)
+  const { undo, redo, canUndo, canRedo, undoStack, redoStack } = useUndo(documentId)
 
   return (
     <div>
-      <button onClick={undo} disabled={!canUndo}>Undo</button>
-      <button onClick={redo} disabled={!canRedo}>Redo</button>
+      <button onClick={undo} disabled={!canUndo}>
+        Undo {undoStack.length > 0 && `(${undoStack.length})`}
+      </button>
+      <button onClick={redo} disabled={!canRedo}>
+        Redo {redoStack.length > 0 && `(${redoStack.length})`}
+      </button>
     </div>
   )
 }
 
 // API signature
-function useUndoRedo(documentId: string): {
+function useUndo(
+  documentId: string,
+  options?: {
+    maxHistorySize?: number      // Maximum undo stack size (default: 100)
+    captureTimeout?: number       // Debounce timeout for capturing operations (default: 500ms)
+  }
+): {
   undo: () => Promise<void>
   redo: () => Promise<void>
   canUndo: boolean
   canRedo: boolean
+  undoStack: Operation[]          // Current undo stack
+  redoStack: Operation[]          // Current redo stack
+  add: (operation: Operation) => void      // Manually add operation to history
+  clear: () => void                        // Clear all history
 }
 ```
 
@@ -1107,9 +1121,12 @@ export {
   useSyncRichText,
   useSyncCounter,
   useSyncSet,
-  useUndoRedo,
+  useUndo,
   usePresence,
+  useOthers,
+  useSelf,
   useCursor,
+  useCursorTracking,  // Lower-level cursor tracking utility
   useNetworkStatus,
   useSyncState
 } from '@synckit-js/sdk/react'

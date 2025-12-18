@@ -30,6 +30,7 @@ export default defineConfig({
   // Don't bundle WASM files
   noExternal: [],
   esbuildOptions(options) {
-    options.drop = ['console', 'debugger']
+    // Temporarily keep console.log for debugging cross-tab sync
+    // options.drop = ['console', 'debugger']
   },
 })

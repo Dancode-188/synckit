@@ -24,6 +24,7 @@ import { WebSocketClient } from './websocket/client'
 import { SyncManager } from './sync/manager'
 import { OfflineQueue } from './sync/queue'
 import { NetworkStateTracker } from './sync/network-state'
+import { CrossTabSync } from './sync/cross-tab'
 
 export class SyncKit {
   private storage: StorageAdapter
@@ -279,8 +280,12 @@ export class SyncKit {
       return this.richTexts.get(id)!
     }
 
-    // Create new rich text
-    const richText = new RichText(id, this.clientId, this.storage, this.syncManager)
+    // Create CrossTabSync instance for this document (enables same-browser tab-to-tab sync)
+    const crossTabSync = new CrossTabSync(id, { enabled: true })
+    console.log('[SyncKit] Created CrossTabSync for document:', id)
+
+    // Create new rich text with cross-tab sync support
+    const richText = new RichText(id, this.clientId, this.storage, this.syncManager, crossTabSync)
     this.richTexts.set(id, richText)
 
     // Initialize rich text asynchronously
@@ -308,8 +313,11 @@ export class SyncKit {
       return this.awarenessInstances.get(documentId)!
     }
 
-    // Create new awareness
-    const awareness = new Awareness(this.clientId)
+    // Create CrossTabSync instance for this document (enables same-browser tab-to-tab awareness sync)
+    const crossTabSync = new CrossTabSync(documentId, { enabled: true })
+
+    // Create new awareness with cross-tab sync support
+    const awareness = new Awareness(this.clientId, documentId, crossTabSync)
     this.awarenessInstances.set(documentId, awareness)
 
     // Register with sync manager IMMEDIATELY (before init)

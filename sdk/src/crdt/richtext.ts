@@ -11,6 +11,7 @@
 import { SyncText } from '../text'
 import type { StorageAdapter } from '../storage'
 import type { SyncManager } from '../sync/manager'
+import type { CrossTabSync } from '../sync/cross-tab'
 import {
   StyleAnchor,
   FormatSpan,
@@ -118,9 +119,10 @@ export class RichText extends SyncText {
     id: string,
     clientId: string,
     storage?: StorageAdapter,
-    syncManager?: SyncManager
+    syncManager?: SyncManager,
+    crossTabSync?: CrossTabSync
   ) {
-    super(id, clientId, storage, syncManager)
+    super(id, clientId, storage, syncManager, crossTabSync)
   }
 
   /**
@@ -147,6 +149,67 @@ export class RichText extends SyncText {
           }
         }
       }
+    }
+
+    // Register CrossTabSync handlers for format operations
+    const crossTabSync = (this as any).crossTabSync
+    if (crossTabSync) {
+      // Handle format operations from other tabs
+      crossTabSync.on('richtext-format', async (message: any) => {
+        if (message.documentId !== (this as any).id) return
+
+        // Create format span from the received data
+        const startAnchor = new StyleAnchor(
+          message.startCharId,
+          'start',
+          message.opId,
+          message.timestamp,
+          message.from
+        )
+
+        const endAnchor = new StyleAnchor(
+          message.endCharId,
+          'end',
+          message.opId,
+          message.timestamp,
+          message.from
+        )
+
+        const span = new FormatSpan(startAnchor, endAnchor, message.attributes)
+
+        // Apply the span
+        this.spans.set(message.opId, span)
+        await this.persistSpans()
+        this.notifyFormatSubscribers()
+      })
+
+      // Handle unformat operations from other tabs
+      crossTabSync.on('richtext-unformat', async (message: any) => {
+        if (message.documentId !== (this as any).id) return
+
+        const { start, end, attributes } = message
+
+        // Find and update overlapping spans (same logic as local unformat)
+        const overlappingSpans = Array.from(this.spans.values()).filter(span => {
+          const spanStart = this.getPosition(span.start.characterId)
+          const spanEnd = this.getPosition(span.end.characterId)
+          return spanStart < end && start < spanEnd
+        })
+
+        for (const span of overlappingSpans) {
+          const newAttrs = AttributeUtils.remove(span.attributes, attributes)
+
+          if (AttributeUtils.isEmpty(newAttrs)) {
+            this.spans.delete(span.opId)
+          } else {
+            const updatedSpan = span.withAttributes(newAttrs)
+            this.spans.set(span.opId, updatedSpan)
+          }
+        }
+
+        await this.persistSpans()
+        this.notifyFormatSubscribers()
+      })
     }
   }
 
@@ -229,6 +292,20 @@ export class RichText extends SyncText {
     // Notify format subscribers
     this.notifyFormatSubscribers()
 
+    // Broadcast to other tabs via CrossTabSync
+    const crossTabSync = (this as any).crossTabSync
+    if (crossTabSync) {
+      crossTabSync.broadcast({
+        type: 'richtext-format',
+        documentId: (this as any).id,
+        opId,
+        startCharId: startCharId,
+        endCharId: endCharId,
+        attributes,
+        timestamp
+      })
+    }
+
     // Sync (if sync manager available)
     if ((this as any).syncManager) {
       await (this as any).syncManager.pushOperation({
@@ -296,6 +373,18 @@ export class RichText extends SyncText {
 
     // Notify subscribers
     this.notifyFormatSubscribers()
+
+    // Broadcast to other tabs via CrossTabSync
+    const crossTabSync = (this as any).crossTabSync
+    if (crossTabSync) {
+      crossTabSync.broadcast({
+        type: 'richtext-unformat',
+        documentId: (this as any).id,
+        start,
+        end,
+        attributes
+      })
+    }
   }
 
   /**

@@ -24,7 +24,7 @@ SyncKit's RichText CRDT combines Fugue text editing with Peritext formatting to 
 import { useRichText } from '@synckit-js/sdk/react'
 
 function RichTextEditor() {
-  const [ranges, actions] = useRichText('doc-123')
+  const { text, ranges, format, insert, delete: deleteText } = useRichText('doc-123')
 
   return (
     <div>
@@ -40,10 +40,10 @@ function RichTextEditor() {
       ))}
 
       {/* Format toolbar */}
-      <button onClick={() => actions.format(0, 5, { bold: true })}>
+      <button onClick={() => format(0, 5, { bold: true })}>
         Bold
       </button>
-      <button onClick={() => actions.format(0, 5, { italic: true })}>
+      <button onClick={() => format(0, 5, { italic: true })}>
         Italic
       </button>
     </div>
@@ -515,11 +515,11 @@ import { useRichText } from '@synckit-js/sdk/react'
 import { useState } from 'react'
 
 function CollaborativeEditor() {
-  const [ranges, actions] = useRichText('doc-123')
+  const { text, ranges, format, richText } = useRichText('doc-123')
   const [selection, setSelection] = useState({ start: 0, end: 0 })
 
   // Get current formats at cursor
-  const currentFormats = actions.getFormats(selection.start)
+  const currentFormats = richText?.getFormats(selection.start) || {}
 
   return (
     <div>
@@ -527,13 +527,13 @@ function CollaborativeEditor() {
       <div className="toolbar">
         <button
           className={currentFormats.bold ? 'active' : ''}
-          onClick={() => actions.format(selection.start, selection.end, { bold: true })}
+          onClick={() => format(selection.start, selection.end, { bold: true })}
         >
           Bold
         </button>
         <button
           className={currentFormats.italic ? 'active' : ''}
-          onClick={() => actions.format(selection.start, selection.end, { italic: true })}
+          onClick={() => format(selection.start, selection.end, { italic: true })}
         >
           Italic
         </button>
@@ -541,7 +541,7 @@ function CollaborativeEditor() {
           type="color"
           value={currentFormats.color || '#000000'}
           onChange={(e) =>
-            actions.format(selection.start, selection.end, { color: e.target.value })
+            format(selection.start, selection.end, { color: e.target.value })
           }
         />
       </div>

@@ -21,20 +21,24 @@ SyncKit's cursor sharing system makes collaborative editing feel natural. See te
 ### React
 
 ```typescript
-import { useAwareness } from '@synckit-js/sdk/react'
-import { useCursorTracking } from '@synckit-js/sdk/react/cursor'
+import { usePresence, useOthers, useCursorTracking } from '@synckit-js/sdk/react'
 import { useRef } from 'react'
 
 function CollaborativeEditor() {
   const containerRef = useRef<HTMLDivElement>(null)
-  const { self, others, updateSelf } = useAwareness('doc-123')
+  const [presence, setPresence] = usePresence('doc-123', {
+    name: 'Alice',
+    color: '#3B82F6',
+    cursor: null
+  })
+  const others = useOthers('doc-123')
 
   // Track local cursor
   const cursorProps = useCursorTracking({
     mode: 'container',
     containerRef,
     onUpdate: (position) => {
-      updateSelf({ cursor: position })
+      setPresence({ ...presence, cursor: position })
     }
   })
 
@@ -61,11 +65,16 @@ function CollaborativeEditor() {
 
 ```vue
 <script setup lang="ts">
-import { useAwareness } from '@synckit-js/sdk/vue'
+import { usePresence, useOthers } from '@synckit-js/sdk/vue'
 import { ref, onMounted } from 'vue'
 
 const container = ref<HTMLElement>()
-const { self, others, updateSelf } = useAwareness('doc-123')
+const { presence, setPresence } = usePresence('doc-123', {
+  name: 'Alice',
+  color: '#3B82F6',
+  cursor: null
+})
+const { others } = useOthers('doc-123')
 
 function handleMouseMove(e: MouseEvent) {
   if (!container.value) return
@@ -76,7 +85,7 @@ function handleMouseMove(e: MouseEvent) {
     y: e.clientY - rect.top + container.value.scrollTop
   }
 
-  updateSelf({ cursor })
+  setPresence({ ...presence.value, cursor })
 }
 </script>
 
@@ -443,8 +452,7 @@ const adjusted = detectCollisions(cursors, {
 ### React: Animated Cursors
 
 ```typescript
-import { useAwareness } from '@synckit-js/sdk/react'
-import { useCursorTracking } from '@synckit-js/sdk/react/cursor'
+import { usePresence, useOthers, useCursorTracking } from '@synckit-js/sdk/react'
 import { useRef, useState, useEffect } from 'react'
 import { createSpring } from '@synckit-js/sdk/cursor/spring'
 
@@ -516,13 +524,18 @@ function AnimatedCursor({ targetPos, color, name }) {
 
 function CollaborativeCanvas() {
   const containerRef = useRef<HTMLDivElement>(null)
-  const { self, others, updateSelf } = useAwareness('canvas-123')
+  const [presence, setPresence] = usePresence('canvas-123', {
+    name: 'Alice',
+    color: '#3B82F6',
+    cursor: null
+  })
+  const others = useOthers('canvas-123')
 
   const cursorProps = useCursorTracking({
     mode: 'container',
     containerRef,
     onUpdate: (position) => {
-      updateSelf({ cursor: position })
+      setPresence({ ...presence, cursor: position })
     }
   })
 
@@ -553,12 +566,17 @@ function CollaborativeCanvas() {
 
 ```vue
 <script setup lang="ts">
-import { useAwareness } from '@synckit-js/sdk/vue'
+import { usePresence, useOthers } from '@synckit-js/sdk/vue'
 import { ref, computed } from 'vue'
 import { getSelectionFromDOM, serializeSelection } from '@synckit-js/sdk/cursor/selection'
 
 const container = ref<HTMLElement>()
-const { self, others, updateSelf } = useAwareness('doc-456')
+const { presence, setPresence } = usePresence('doc-456', {
+  name: 'Alice',
+  color: '#3B82F6',
+  selection: null
+})
+const { others } = useOthers('doc-456')
 
 // Track selection
 function handleSelectionChange() {
@@ -567,9 +585,9 @@ function handleSelectionChange() {
   const selection = getSelectionFromDOM('container', container.value)
   if (selection) {
     const serialized = serializeSelection()
-    updateSelf({ selection: serialized })
+    setPresence({ ...presence.value, selection: serialized })
   } else {
-    updateSelf({ selection: null })
+    setPresence({ ...presence.value, selection: null })
   }
 }
 
@@ -723,22 +741,28 @@ $: if (followingUserId) {
 
 1. **Check awareness connection:**
 ```typescript
-const { isConnected } = useAwareness('doc-123')
+import { useSelf } from '@synckit-js/sdk/react'
 
-if (!isConnected) {
+const self = useSelf('doc-123')
+
+if (!self) {
   console.log('Not connected to awareness channel')
 }
 ```
 
 2. **Verify cursor data is set:**
 ```typescript
-const { self } = useAwareness('doc-123')
-console.log('My cursor:', self.cursor)  // Should not be undefined
+import { useSelf } from '@synckit-js/sdk/react'
+
+const self = useSelf('doc-123')
+console.log('My cursor:', self?.cursor)  // Should not be undefined
 ```
 
 3. **Check cursor rendering:**
 ```typescript
-const { others } = useAwareness('doc-123')
+import { useOthers } from '@synckit-js/sdk/react'
+
+const others = useOthers('doc-123')
 console.log('Others:', others)  // Should see other users
 others.forEach(user => {
   console.log(`${user.name}: cursor at`, user.cursor)
@@ -823,16 +847,17 @@ const cursorProps = useCursorTracking({
 
 ```typescript
 // ✅ GOOD: Container mode for scrollable docs
+const [presence, setPresence] = usePresence('doc-123', { cursor: null })
 const cursorProps = useCursorTracking({
   mode: 'container',
   containerRef,
-  onUpdate: (pos) => updateSelf({ cursor: pos })
+  onUpdate: (pos) => setPresence({ ...presence, cursor: pos })
 })
 
 // ❌ BAD: Viewport mode (cursors misalign when scrolling)
 const cursorProps = useCursorTracking({
   mode: 'viewport',  // Wrong for scrollable content!
-  onUpdate: (pos) => updateSelf({ cursor: pos })
+  onUpdate: (pos) => setPresence({ ...presence, cursor: pos })
 })
 ```
 
@@ -872,7 +897,7 @@ const adjustedCursors = detectCollisions(cursors, {
 
 ```typescript
 // Automatically reduce update frequency as user count increases
-throttle.call(others.length, () => updateSelf({ cursor: position }))
+throttle.call(others.length, () => setPresence({ ...presence, cursor: position }))
 ```
 
 ---
