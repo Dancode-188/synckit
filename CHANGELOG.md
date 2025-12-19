@@ -17,6 +17,49 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [0.2.2] - 2025-12-19
+
+**Production-ready demo and cross-tab sync improvements! 🎉**
+
+### Added
+
+- **⚡ Live Demo** - Production-ready collaborative editor deployed at https://synckit-demo.netlify.app
+  - Room isolation with unique URL hash-based room IDs
+  - Real-time cross-tab synchronization demonstration
+  - Copy-paste ready for CodeSandbox deployment
+- **📚 Research Credits** - Comprehensive acknowledgments for Fugue, Peritext, Loro, and Ink & Switch research
+- **📦 Rust Crate README** - Added README for synckit-core crate (now visible on crates.io)
+
+### Fixed
+
+- **🔄 Cross-Tab Sync for text()** - Added missing CrossTabSync instance to `text()` method (previously only `richText()` had it)
+  - Real-time synchronization between browser tabs now works for all document types
+  - Uses BroadcastChannel for instant local sync without network latency
+- **📝 Documentation Accuracy** - Updated demo messaging for technical accuracy
+  - Changed "peer-to-peer" to "local-first architecture" (demo uses BroadcastChannel, not WebRTC)
+  - Clarified cross-tab sync is same-browser only (not cross-device)
+
+### Documentation
+
+- Added live demo link to main README
+- Removed outdated "coming soon" text for demo
+- Updated demo text for technical accuracy (local-first vs P2P)
+
+---
+
+## [0.2.1] - 2025-12-19
+
+**Critical bug fix for lz-string compression**
+
+### Fixed
+
+- **📦 lz-string Import Error** - Fixed module loading errors in browser environments
+  - Changed from named exports to default export: `import LZString from 'lz-string'`
+  - Updated compress/decompress calls to use `LZString.compress()` and `LZString.decompress()`
+  - Resolves `SyntaxError: does not provide an export named 'compress'` in Vite/browser builds
+
+---
+
 ## [0.2.0] - 2025-12-18
 
 **Complete local-first collaboration platform! 🚀**
