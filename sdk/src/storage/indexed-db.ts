@@ -6,7 +6,7 @@
  * race conditions.
  */
 
-import { compress, decompress } from 'lz-string';
+import LZString from 'lz-string';
 
 const DB_NAME = 'synckit';
 const DB_VERSION = 1;
@@ -146,7 +146,7 @@ export class IndexedDBStorage {
    */
   private compressState(state: UndoRedoState): any {
     const json = JSON.stringify(state);
-    const compressed = compress(json);
+    const compressed = LZString.compress(json);
 
     return {
       documentId: state.documentId,
@@ -225,7 +225,7 @@ export class IndexedDBStorage {
         // Check if data is compressed
         if (result.isCompressed && result.compressed) {
           try {
-            const decompressed = decompress(result.compressed);
+            const decompressed = LZString.decompress(result.compressed);
             if (!decompressed) {
               throw new Error('Decompression returned null');
             }

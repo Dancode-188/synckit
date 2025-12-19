@@ -251,8 +251,12 @@ export class SyncKit {
       return this.texts.get(id)!
     }
 
-    // Create new text
-    const text = new SyncText(id, this.clientId, this.storage, this.syncManager)
+    // Create CrossTabSync instance for this document (enables same-browser tab-to-tab sync)
+    const crossTabSync = new CrossTabSync(id, { enabled: true })
+    console.log('[SyncKit] Created CrossTabSync for text document:', id)
+
+    // Create new text with cross-tab sync support
+    const text = new SyncText(id, this.clientId, this.storage, this.syncManager, crossTabSync)
     this.texts.set(id, text)
 
     // Initialize text asynchronously
