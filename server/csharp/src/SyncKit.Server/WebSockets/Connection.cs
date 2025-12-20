@@ -108,9 +108,7 @@ public class Connection : IConnection
                 // Detect protocol type from first message
                 if (Protocol == ProtocolType.Unknown)
                 {
-                    Protocol = DetectProtocol(buffer, result.Count, result.MessageType);
-                    _logger.LogDebug("Connection {ConnectionId} using {Protocol} protocol",
-                        Id, Protocol);
+                    DetectProtocol(new ReadOnlySpan<byte>(buffer, 0, result.Count));
                 }
 
                 // Process the message - full implementation in P2-02
@@ -126,23 +124,46 @@ public class Connection : IConnection
 
     /// <summary>
     /// Detects the protocol type from the first message.
-    /// JSON messages start with '{' (0x7B), Binary messages start with a different byte.
+    /// JSON messages start with '{' (0x7B), '[' (0x5B), or whitespace characters.
+    /// Binary messages start with type codes (0x01-0x42 or 0xFF).
+    /// Matches the TypeScript implementation exactly.
     /// </summary>
-    private static ProtocolType DetectProtocol(byte[] buffer, int count, WebSocketMessageType messageType)
+    private void DetectProtocol(ReadOnlySpan<byte> data)
     {
-        if (count == 0)
-            return ProtocolType.Unknown;
+        if (Protocol != ProtocolType.Unknown)
+            return;
 
-        // Text messages are always JSON
-        if (messageType == WebSocketMessageType.Text)
-            return ProtocolType.Json;
+        // Empty message defaults to Binary
+        if (data.Length == 0)
+        {
+            Protocol = ProtocolType.Binary;
+            _logger.LogDebug(
+                "Connection {ConnectionId} protocol detected: {Protocol} (empty message, defaulting to binary)",
+                Id, Protocol);
+            return;
+        }
 
-        // For binary messages, check if it looks like JSON
-        // JSON objects start with '{' (0x7B)
-        if (buffer[0] == 0x7B)
-            return ProtocolType.Json;
+        var firstByte = data[0];
 
-        return ProtocolType.Binary;
+        // Check for JSON indicators
+        // JSON starts with '{' (0x7B), '[' (0x5B), or whitespace
+        if (firstByte == 0x7B ||  // '{'
+            firstByte == 0x5B ||  // '['
+            firstByte == 0x20 ||  // space
+            firstByte == 0x09 ||  // tab
+            firstByte == 0x0A ||  // newline
+            firstByte == 0x0D)    // carriage return
+        {
+            Protocol = ProtocolType.Json;
+        }
+        else
+        {
+            Protocol = ProtocolType.Binary;
+        }
+
+        _logger.LogDebug(
+            "Connection {ConnectionId} protocol detected: {Protocol} (first byte: 0x{FirstByte:X2})",
+            Id, Protocol, firstByte);
     }
 
     /// <summary>
