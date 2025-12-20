@@ -74,6 +74,11 @@ public interface IConnection : IAsyncDisposable
     string? ClientId { get; set; }
 
     /// <summary>
+    /// Parsed JWT token payload (null if not authenticated).
+    /// </summary>
+    Auth.TokenPayload? TokenPayload { get; set; }
+
+    /// <summary>
     /// Timestamp of last activity on this connection.
     /// </summary>
     DateTime LastActivity { get; }
@@ -120,4 +125,16 @@ public interface IConnection : IAsyncDisposable
     /// </summary>
     /// <returns>Set of document IDs.</returns>
     IReadOnlySet<string> GetSubscriptions();
+
+    /// <summary>
+    /// Send a message to the client.
+    /// </summary>
+    /// <param name="message">The message to send.</param>
+    /// <returns>True if the message was sent, false if the connection is closed.</returns>
+    bool Send(Protocol.IMessage message);
+
+    /// <summary>
+    /// Event raised when a message is received from the client.
+    /// </summary>
+    event EventHandler<Protocol.IMessage>? MessageReceived;
 }

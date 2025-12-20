@@ -1,5 +1,6 @@
 using System.Buffers;
 using System.Net.WebSockets;
+using SyncKit.Server.WebSockets.Protocol;
 
 namespace SyncKit.Server.WebSockets;
 
@@ -7,15 +8,13 @@ namespace SyncKit.Server.WebSockets;
 /// Manages an individual WebSocket connection.
 /// Handles connection lifecycle, protocol detection, and message processing.
 /// </summary>
-/// <remarks>
-/// This is a minimal implementation for P2-01 (WebSocket Middleware).
-/// Full implementation with protocol handlers will be added in P2-02.
-/// </remarks>
 public class Connection : IConnection
 {
     private const int BufferSize = 4096;
 
     private readonly WebSocket _webSocket;
+    private readonly IProtocolHandler _jsonHandler;
+    private readonly IProtocolHandler _binaryHandler;
     private readonly ILogger<Connection> _logger;
     private readonly CancellationTokenSource _cts = new();
     private readonly HashSet<string> _subscribedDocuments = new();
@@ -37,6 +36,9 @@ public class Connection : IConnection
     public string? ClientId { get; set; }
 
     /// <inheritdoc />
+    public Auth.TokenPayload? TokenPayload { get; set; }
+
+    /// <inheritdoc />
     public DateTime LastActivity { get; private set; }
 
     /// <inheritdoc />
@@ -45,16 +47,28 @@ public class Connection : IConnection
     /// <inheritdoc />
     public WebSocket WebSocket => _webSocket;
 
+    /// <inheritdoc />
+    public event EventHandler<IMessage>? MessageReceived;
+
     /// <summary>
     /// Creates a new connection instance.
     /// </summary>
     /// <param name="webSocket">The WebSocket to wrap.</param>
     /// <param name="connectionId">Unique identifier for this connection.</param>
+    /// <param name="jsonHandler">JSON protocol handler.</param>
+    /// <param name="binaryHandler">Binary protocol handler.</param>
     /// <param name="logger">Logger instance.</param>
-    public Connection(WebSocket webSocket, string connectionId, ILogger<Connection> logger)
+    public Connection(
+        WebSocket webSocket,
+        string connectionId,
+        IProtocolHandler jsonHandler,
+        IProtocolHandler binaryHandler,
+        ILogger<Connection> logger)
     {
         _webSocket = webSocket ?? throw new ArgumentNullException(nameof(webSocket));
         Id = connectionId ?? throw new ArgumentNullException(nameof(connectionId));
+        _jsonHandler = jsonHandler ?? throw new ArgumentNullException(nameof(jsonHandler));
+        _binaryHandler = binaryHandler ?? throw new ArgumentNullException(nameof(binaryHandler));
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
         State = ConnectionState.Connecting;
         LastActivity = DateTime.UtcNow;
@@ -134,17 +148,81 @@ public class Connection : IConnection
     /// <summary>
     /// Handles an incoming message.
     /// </summary>
-    /// <remarks>
-    /// Minimal implementation for P2-01. Full message handling with
-    /// protocol-specific parsing will be added in P2-02 through P2-06.
-    /// </remarks>
     private Task HandleMessageAsync(ReadOnlyMemory<byte> message, CancellationToken cancellationToken)
     {
-        // Log message receipt for now - full handling in P2-02+
         _logger.LogTrace("Connection {ConnectionId} received {ByteCount} bytes ({Protocol})",
             Id, message.Length, Protocol);
 
+        // Select the correct protocol handler
+        var handler = Protocol == ProtocolType.Json ? _jsonHandler : _binaryHandler;
+
+        // Parse the message
+        var parsedMessage = handler.Parse(message);
+
+        if (parsedMessage is not null)
+        {
+            // Raise the MessageReceived event for higher-level handlers
+            MessageReceived?.Invoke(this, parsedMessage);
+        }
+        else
+        {
+            _logger.LogWarning("Failed to parse message from connection {ConnectionId}", Id);
+        }
+
         return Task.CompletedTask;
+    }
+
+    /// <inheritdoc />
+    public bool Send(IMessage message)
+    {
+        if (_webSocket.State != WebSocketState.Open)
+        {
+            _logger.LogDebug("Cannot send message on connection {ConnectionId}: WebSocket not open (State: {State})",
+                Id, _webSocket.State);
+            return false;
+        }
+
+        try
+        {
+            // Select the correct protocol handler based on detected protocol
+            var handler = Protocol == ProtocolType.Json ? _jsonHandler : _binaryHandler;
+
+            // Serialize the message
+            var data = handler.Serialize(message);
+
+            if (data.Length == 0)
+            {
+                _logger.LogWarning("Failed to serialize message {MessageId} on connection {ConnectionId}",
+                    message.Id, Id);
+                return false;
+            }
+
+            // Determine message type (Text for JSON, Binary for Binary protocol)
+            var messageType = Protocol == ProtocolType.Json
+                ? WebSocketMessageType.Text
+                : WebSocketMessageType.Binary;
+
+            // Send the message synchronously (WebSocket SendAsync is thread-safe)
+            _webSocket.SendAsync(data, messageType, true, CancellationToken.None)
+                .AsTask()
+                .GetAwaiter()
+                .GetResult();
+
+            _logger.LogTrace("Sent message {MessageId} to connection {ConnectionId} ({ByteCount} bytes)",
+                message.Id, Id, data.Length);
+
+            return true;
+        }
+        catch (WebSocketException ex)
+        {
+            _logger.LogDebug(ex, "WebSocket exception sending message to connection {ConnectionId}", Id);
+            return false;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Unexpected error sending message to connection {ConnectionId}", Id);
+            return false;
+        }
     }
 
     /// <inheritdoc />

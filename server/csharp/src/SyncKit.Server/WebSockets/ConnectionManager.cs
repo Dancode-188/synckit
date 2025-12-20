@@ -2,6 +2,7 @@ using System.Collections.Concurrent;
 using System.Net.WebSockets;
 using Microsoft.Extensions.Options;
 using SyncKit.Server.Configuration;
+using SyncKit.Server.WebSockets.Protocol;
 
 namespace SyncKit.Server.WebSockets;
 
@@ -9,10 +10,6 @@ namespace SyncKit.Server.WebSockets;
 /// Manages all active WebSocket connections.
 /// Provides thread-safe connection tracking, lookup, and broadcast capabilities.
 /// </summary>
-/// <remarks>
-/// This is a minimal implementation for P2-01 (WebSocket Middleware).
-/// Full implementation with broadcast capabilities will be completed in P2-08.
-/// </remarks>
 public class ConnectionManager : IConnectionManager
 {
     private readonly ConcurrentDictionary<string, IConnection> _connections = new();
@@ -60,9 +57,20 @@ public class ConnectionManager : IConnectionManager
         // Generate unique connection ID
         var connectionId = GenerateConnectionId();
 
+        // Create protocol handlers
+        var jsonHandlerLogger = _loggerFactory.CreateLogger<JsonProtocolHandler>();
+        var binaryHandlerLogger = _loggerFactory.CreateLogger<BinaryProtocolHandler>();
+        var jsonHandler = new JsonProtocolHandler(jsonHandlerLogger);
+        var binaryHandler = new BinaryProtocolHandler(binaryHandlerLogger);
+
         // Create connection instance
         var connectionLogger = _loggerFactory.CreateLogger<Connection>();
-        var connection = new Connection(webSocket, connectionId, connectionLogger);
+        var connection = new Connection(
+            webSocket,
+            connectionId,
+            jsonHandler,
+            binaryHandler,
+            connectionLogger);
 
         // Track the connection
         if (!_connections.TryAdd(connectionId, connection))
