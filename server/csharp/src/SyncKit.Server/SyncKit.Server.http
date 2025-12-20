@@ -1,0 +1,7 @@
+@SyncKit.Server_HostAddress = http://localhost:5188
+
+### Health Check
+GET {{SyncKit.Server_HostAddress}}/health
+Accept: application/json
+
+###
