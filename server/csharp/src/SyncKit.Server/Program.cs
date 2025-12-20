@@ -1,5 +1,6 @@
 using Serilog;
 using SyncKit.Server.Configuration;
+using SyncKit.Server.Health;
 
 // Bootstrap logger for startup errors
 Log.Logger = new LoggerConfiguration()
@@ -26,6 +27,9 @@ try
     // Add SyncKit configuration with environment variable support and validation
     builder.Services.AddSyncKitConfiguration(builder.Configuration);
 
+    // Add health check services
+    builder.Services.AddSyncKitHealthChecks();
+
     var app = builder.Build();
 
     // Add Serilog request logging
@@ -45,10 +49,11 @@ try
         app.MapOpenApi();
     }
 
-    // Health check endpoint
-    app.MapGet("/health", () => Results.Ok(new { status = "healthy" }))
-        .WithName("HealthCheck")
-        .WithDescription("Health check endpoint for the SyncKit server");
+    // Map health check endpoints (matches TypeScript server + Kubernetes probes)
+    app.MapSyncKitHealthEndpoints();
+
+    // Mark server as ready to accept traffic
+    SyncKitReadinessHealthCheck.SetReady(true);
 
     Log.Information("SyncKit server started successfully");
     app.Run();
