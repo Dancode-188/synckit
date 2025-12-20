@@ -1,6 +1,7 @@
 using Serilog;
 using SyncKit.Server.Configuration;
 using SyncKit.Server.Health;
+using SyncKit.Server.WebSockets;
 
 // Bootstrap logger for startup errors
 Log.Logger = new LoggerConfiguration()
@@ -30,6 +31,9 @@ try
     // Add health check services
     builder.Services.AddSyncKitHealthChecks();
 
+    // Add WebSocket services
+    builder.Services.AddSyncKitWebSockets();
+
     var app = builder.Build();
 
     // Add Serilog request logging
@@ -51,6 +55,9 @@ try
 
     // Map health check endpoints (matches TypeScript server + Kubernetes probes)
     app.MapSyncKitHealthEndpoints();
+
+    // Enable WebSocket support with SyncKit middleware
+    app.UseSyncKitWebSockets();
 
     // Mark server as ready to accept traffic
     SyncKitReadinessHealthCheck.SetReady(true);
