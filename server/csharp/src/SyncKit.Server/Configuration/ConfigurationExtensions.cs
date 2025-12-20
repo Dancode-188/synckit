@@ -67,6 +67,14 @@ public static class ConfigurationExtensions
                 if (!string.IsNullOrEmpty(jwtRefreshExpiresIn))
                     config.JwtRefreshExpiresIn = jwtRefreshExpiresIn;
 
+                var jwtIssuer = Environment.GetEnvironmentVariable("JWT_ISSUER");
+                if (!string.IsNullOrEmpty(jwtIssuer))
+                    config.JwtIssuer = jwtIssuer;
+
+                var jwtAudience = Environment.GetEnvironmentVariable("JWT_AUDIENCE");
+                if (!string.IsNullOrEmpty(jwtAudience))
+                    config.JwtAudience = jwtAudience;
+
                 // WebSocket
                 if (int.TryParse(Environment.GetEnvironmentVariable("WS_HEARTBEAT_INTERVAL"), out var heartbeatInterval))
                     config.WsHeartbeatInterval = heartbeatInterval;

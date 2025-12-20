@@ -88,6 +88,18 @@ public class SyncKitConfig
     /// </summary>
     public string JwtRefreshExpiresIn { get; set; } = "7d";
 
+    /// <summary>
+    /// Expected JWT issuer (optional).
+    /// Environment variable: JWT_ISSUER
+    /// </summary>
+    public string? JwtIssuer { get; set; }
+
+    /// <summary>
+    /// Expected JWT audience (optional).
+    /// Environment variable: JWT_AUDIENCE
+    /// </summary>
+    public string? JwtAudience { get; set; }
+
     // WebSocket
     /// <summary>
     /// WebSocket heartbeat interval in milliseconds.

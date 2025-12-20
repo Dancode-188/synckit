@@ -15,4 +15,10 @@ public class AuthErrorMessage : BaseMessage
     /// </summary>
     [JsonPropertyName("error")]
     public required string Error { get; set; }
+
+    /// <summary>
+    /// Optional additional error details (e.g., error code).
+    /// </summary>
+    [JsonPropertyName("details")]
+    public Dictionary<string, object>? Details { get; set; }
 }

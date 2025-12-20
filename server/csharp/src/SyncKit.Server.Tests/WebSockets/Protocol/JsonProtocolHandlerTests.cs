@@ -171,10 +171,10 @@ public class JsonProtocolHandlerTests
     {
         // Arrange
         var json = @"{
-            \"type\": \"awareness_subscribe\",
-            \"id\": \"awareness-sub-1\",
-            \"timestamp\": 1702900006000,
-            \"documentId\": \"doc-4\"
+            ""type"": ""awareness_subscribe"",
+            ""id"": ""awareness-sub-1"",
+            ""timestamp"": 1702900006000,
+            ""documentId"": ""doc-4""
         }";
         var data = Encoding.UTF8.GetBytes(json);
 
@@ -192,12 +192,12 @@ public class JsonProtocolHandlerTests
     {
         // Arrange
         var json = @"{
-            \"type\": \"awareness_state\",
-            \"id\": \"awareness-state-1\",
-            \"timestamp\": 1702900007000,
-            \"documentId\": \"doc-5\",
-            \"states\": [
-                { \"clientId\": \"c1\", \"clock\": 1, \"state\": { \"cursor\": { \"x\": 1, \"y\": 2 } } }
+            ""type"": ""awareness_state"",
+            ""id"": ""awareness-state-1"",
+            ""timestamp"": 1702900007000,
+            ""documentId"": ""doc-5"",
+            ""states"": [
+                { ""clientId"": ""c1"", ""clock"": 1, ""state"": { ""cursor"": { ""x"": 1, ""y"": 2 } } }
             ]
         }";
         var data = Encoding.UTF8.GetBytes(json);
@@ -219,11 +219,11 @@ public class JsonProtocolHandlerTests
     {
         // Arrange
         var json = @"{
-            \"type\": \"auth_success\",
-            \"id\": \"auth-success-1\",
-            \"timestamp\": 1702900008000,
-            \"userId\": \"user-1\",
-            \"permissions\": { \"read\": true }
+            ""type"": ""auth_success"",
+            ""id"": ""auth-success-1"",
+            ""timestamp"": 1702900008000,
+            ""userId"": ""user-1"",
+            ""permissions"": { ""read"": true }
         }";
         var data = Encoding.UTF8.GetBytes(json);
 
@@ -234,7 +234,7 @@ public class JsonProtocolHandlerTests
         var message = Assert.IsType<AuthSuccessMessage>(result);
         Assert.Equal("user-1", message.UserId);
         Assert.NotNull(message.Permissions);
-        Assert.True((bool)message.Permissions["read"]);
+        Assert.True(((System.Text.Json.JsonElement)message.Permissions["read"]).GetBoolean());
     }
 
     [Fact]
@@ -242,11 +242,11 @@ public class JsonProtocolHandlerTests
     {
         // Arrange
         var json = @"{
-            \"type\": \"auth_error\",
-            \"id\": \"auth-error-1\",
-            \"timestamp\": 1702900009000,
-            \"error\": \"bad token\",
-            \"details\": { \"code\": 401 }
+            ""type"": ""auth_error"",
+            ""id"": ""auth-error-1"",
+            ""timestamp"": 1702900009000,
+            ""error"": ""bad token"",
+            ""details"": { ""code"": 401 }
         }";
         var data = Encoding.UTF8.GetBytes(json);
 
@@ -264,10 +264,10 @@ public class JsonProtocolHandlerTests
     {
         // Arrange
         var json = @"{
-            \"type\": \"subscribe\",
-            \"id\": \"sub-1\",
-            \"timestamp\": 1702900010000,
-            \"documentId\": \"doc-6\"
+            ""type"": ""subscribe"",
+            ""id"": ""sub-1"",
+            ""timestamp"": 1702900010000,
+            ""documentId"": ""doc-6""
         }";
         var data = Encoding.UTF8.GetBytes(json);
 
@@ -284,10 +284,10 @@ public class JsonProtocolHandlerTests
     {
         // Arrange
         var json = @"{
-            \"type\": \"unsubscribe\",
-            \"id\": \"unsub-1\",
-            \"timestamp\": 1702900011000,
-            \"documentId\": \"doc-6\"
+            ""type"": ""unsubscribe"",
+            ""id"": ""unsub-1"",
+            ""timestamp"": 1702900011000,
+            ""documentId"": ""doc-6""
         }";
         var data = Encoding.UTF8.GetBytes(json);
 
@@ -304,13 +304,13 @@ public class JsonProtocolHandlerTests
     {
         // Arrange
         var json = @"{
-            \"type\": \"sync_response\",
-            \"id\": \"sync-resp-1\",
-            \"timestamp\": 1702900012000,
-            \"requestId\": \"sync-req-1\",
-            \"documentId\": \"doc-7\",
-            \"deltas\": [],
-            \"state\": { \"content\": \"hello\" }
+            ""type"": ""sync_response"",
+            ""id"": ""sync-resp-1"",
+            ""timestamp"": 1702900012000,
+            ""requestId"": ""sync-req-1"",
+            ""documentId"": ""doc-7"",
+            ""deltas"": [],
+            ""state"": { ""content"": ""hello"" }
         }";
         var data = Encoding.UTF8.GetBytes(json);
 
@@ -329,10 +329,10 @@ public class JsonProtocolHandlerTests
     {
         // Arrange
         var json = @"{
-            \"type\": \"ack\",
-            \"id\": \"ack-1\",
-            \"timestamp\": 1702900013000,
-            \"messageId\": \"delta-1\"
+            ""type"": ""ack"",
+            ""id"": ""ack-1"",
+            ""timestamp"": 1702900013000,
+            ""messageId"": ""delta-1""
         }";
         var data = Encoding.UTF8.GetBytes(json);
 

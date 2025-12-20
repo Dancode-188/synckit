@@ -1,4 +1,5 @@
 using Serilog;
+using SyncKit.Server.Auth;
 using SyncKit.Server.Configuration;
 using SyncKit.Server.Health;
 using SyncKit.Server.WebSockets;
@@ -27,6 +28,9 @@ try
 
     // Add SyncKit configuration with environment variable support and validation
     builder.Services.AddSyncKitConfiguration(builder.Configuration);
+
+    // Add auth services
+    builder.Services.AddSyncKitAuth();
 
     // Add health check services
     builder.Services.AddSyncKitHealthChecks();

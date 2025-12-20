@@ -32,6 +32,8 @@ The server exposes a minimal health endpoint at `/health` by default and listens
 Configuration is driven by environment variables and the standard ASP.NET Core configuration system. Common variables:
 
 - `JWT_SECRET`: Required for local development. A 32+ character secret used to sign development JWTs.
+- `JWT_ISSUER`: Optional issuer to enforce during JWT validation.
+- `JWT_AUDIENCE`: Optional audience to enforce during JWT validation.
 - `ASPNETCORE_ENVIRONMENT`: `Development` (default) or `Production`.
 - `ConnectionStrings__Postgres`: PostgreSQL connection string for persistent storage.
 - `REDIS__ENDPOINT` or `REDIS_URL`: Redis connection string for pub/sub coordination.
@@ -41,6 +43,8 @@ Example `env` for development:
 
 ```bash
 export JWT_SECRET="test-secret-key-for-development-32-chars"
+export JWT_ISSUER="synckit-server"
+export JWT_AUDIENCE="synckit-api"
 export ASPNETCORE_ENVIRONMENT=Development
 export ConnectionStrings__Postgres="Host=localhost;Port=5432;Database=synckit;Username=postgres;Password=postgres"
 export REDIS_URL=redis://localhost:6379
