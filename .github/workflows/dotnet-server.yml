@@ -1,0 +1,128 @@
+# =============================================================================
+# .NET Server CI
+# =============================================================================
+# Continuous integration workflow for the SyncKit .NET server implementation.
+# Triggers on changes to server/csharp/src/** on main branch and PRs.
+# =============================================================================
+
+name: .NET Server CI
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'server/csharp/src/**'
+      - '.github/workflows/dotnet-server.yml'
+  pull_request:
+    branches: [main]
+    paths:
+      - 'server/csharp/src/**'
+      - '.github/workflows/dotnet-server.yml'
+
+defaults:
+  run:
+    working-directory: server/csharp/src
+
+jobs:
+  build:
+    name: Build & Test
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v6
+      
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+          dotnet-quality: 'preview'
+      
+      - name: Cache NuGet packages
+        uses: actions/cache@v5
+        with:
+          path: ~/.nuget/packages
+          key: ${{ runner.os }}-nuget-${{ hashFiles('**/packages.lock.json', '**/*.csproj') }}
+          restore-keys: |
+            ${{ runner.os }}-nuget-
+      
+      - name: Restore dependencies
+        run: dotnet restore SyncKit.Server.sln
+      
+      - name: Build
+        run: dotnet build SyncKit.Server.sln --no-restore --configuration Release
+      
+      - name: Test
+        run: dotnet test SyncKit.Server.sln --no-build --configuration Release --verbosity normal --collect:"XPlat Code Coverage" --results-directory ./coverage
+      
+      - name: Upload coverage to Codecov
+        uses: codecov/codecov-action@v5
+        with:
+          files: ./server/csharp/src/coverage/**/coverage.cobertura.xml
+          flags: dotnet-server
+          fail_ci_if_error: false
+
+  docker:
+    name: Docker Build
+    runs-on: ubuntu-latest
+    needs: build
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v6
+      
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+      
+      - name: Build Docker image (Alpine)
+        run: |
+          docker build -t synckit-server:test-alpine --build-arg VARIANT=alpine .
+      
+      - name: Build Docker image (Debian)
+        run: |
+          docker build -t synckit-server:test-debian --build-arg VARIANT=debian .
+      
+      - name: Display Docker image sizes
+        run: |
+          echo "=== Docker Image Sizes ==="
+          docker images synckit-server --format "table {{.Repository}}:{{.Tag}}\t{{.Size}}"
+      
+      - name: Test Docker image
+        run: |
+          # Start the server in the background
+          docker run -d --name test-server -p 8080:8080 \
+            -e JWT_SECRET=test-secret-at-least-32-characters-long \
+            synckit-server:test-alpine
+          
+          # Wait for the server to start
+          echo "Waiting for server to start..."
+          sleep 10
+          
+          # Test health endpoint
+          echo "Testing health endpoint..."
+          curl -f http://localhost:8080/health
+          
+          # Show container logs for debugging
+          echo "Container logs:"
+          docker logs test-server
+          
+          # Cleanup
+          docker stop test-server
+          docker rm test-server
+
+  format-check:
+    name: Format Check
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v6
+      
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+          dotnet-quality: 'preview'
+      
+      - name: Check formatting
+        run: dotnet format SyncKit.Server.sln --verify-no-changes --verbosity diagnostic
