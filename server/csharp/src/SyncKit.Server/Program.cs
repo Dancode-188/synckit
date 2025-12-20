@@ -1,7 +1,12 @@
+using SyncKit.Server.Configuration;
+
 var builder = WebApplication.CreateBuilder(args);
 
 // Add services to the container
 builder.Services.AddOpenApi();
+
+// Add SyncKit configuration with environment variable support and validation
+builder.Services.AddSyncKitConfiguration(builder.Configuration);
 
 var app = builder.Build();
 
@@ -17,3 +22,4 @@ app.MapGet("/health", () => Results.Ok(new { status = "healthy" }))
     .WithDescription("Health check endpoint for the SyncKit server");
 
 app.Run();
+
