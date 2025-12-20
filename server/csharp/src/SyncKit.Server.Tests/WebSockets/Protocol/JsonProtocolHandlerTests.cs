@@ -167,6 +167,184 @@ public class JsonProtocolHandlerTests
     }
 
     [Fact]
+    public void Parse_AwarenessSubscribeMessage_ParsesCorrectly()
+    {
+        // Arrange
+        var json = @"{
+            \"type\": \"awareness_subscribe\",
+            \"id\": \"awareness-sub-1\",
+            \"timestamp\": 1702900006000,
+            \"documentId\": \"doc-4\"
+        }";
+        var data = Encoding.UTF8.GetBytes(json);
+
+        // Act
+        var result = _handler.Parse(data);
+
+        // Assert
+        var message = Assert.IsType<AwarenessSubscribeMessage>(result);
+        Assert.Equal(MessageType.AwarenessSubscribe, message.Type);
+        Assert.Equal("doc-4", message.DocumentId);
+    }
+
+    [Fact]
+    public void Parse_AwarenessStateMessage_ParsesCorrectly()
+    {
+        // Arrange
+        var json = @"{
+            \"type\": \"awareness_state\",
+            \"id\": \"awareness-state-1\",
+            \"timestamp\": 1702900007000,
+            \"documentId\": \"doc-5\",
+            \"states\": [
+                { \"clientId\": \"c1\", \"clock\": 1, \"state\": { \"cursor\": { \"x\": 1, \"y\": 2 } } }
+            ]
+        }";
+        var data = Encoding.UTF8.GetBytes(json);
+
+        // Act
+        var result = _handler.Parse(data);
+
+        // Assert
+        var message = Assert.IsType<AwarenessStateMessage>(result);
+        Assert.Equal(MessageType.AwarenessState, message.Type);
+        Assert.Equal("doc-5", message.DocumentId);
+        Assert.Single(message.States);
+        Assert.Equal("c1", message.States[0].ClientId);
+        Assert.Equal(1, message.States[0].Clock);
+    }
+
+    [Fact]
+    public void Parse_AuthSuccessMessage_ParsesCorrectly()
+    {
+        // Arrange
+        var json = @"{
+            \"type\": \"auth_success\",
+            \"id\": \"auth-success-1\",
+            \"timestamp\": 1702900008000,
+            \"userId\": \"user-1\",
+            \"permissions\": { \"read\": true }
+        }";
+        var data = Encoding.UTF8.GetBytes(json);
+
+        // Act
+        var result = _handler.Parse(data);
+
+        // Assert
+        var message = Assert.IsType<AuthSuccessMessage>(result);
+        Assert.Equal("user-1", message.UserId);
+        Assert.NotNull(message.Permissions);
+        Assert.True((bool)message.Permissions["read"]);
+    }
+
+    [Fact]
+    public void Parse_AuthErrorMessage_ParsesCorrectly()
+    {
+        // Arrange
+        var json = @"{
+            \"type\": \"auth_error\",
+            \"id\": \"auth-error-1\",
+            \"timestamp\": 1702900009000,
+            \"error\": \"bad token\",
+            \"details\": { \"code\": 401 }
+        }";
+        var data = Encoding.UTF8.GetBytes(json);
+
+        // Act
+        var result = _handler.Parse(data);
+
+        // Assert
+        var message = Assert.IsType<AuthErrorMessage>(result);
+        Assert.Equal("bad token", message.Error);
+        Assert.NotNull(message.Details);
+    }
+
+    [Fact]
+    public void Parse_SubscribeMessage_ParsesCorrectly()
+    {
+        // Arrange
+        var json = @"{
+            \"type\": \"subscribe\",
+            \"id\": \"sub-1\",
+            \"timestamp\": 1702900010000,
+            \"documentId\": \"doc-6\"
+        }";
+        var data = Encoding.UTF8.GetBytes(json);
+
+        // Act
+        var result = _handler.Parse(data);
+
+        // Assert
+        var message = Assert.IsType<SubscribeMessage>(result);
+        Assert.Equal("doc-6", message.DocumentId);
+    }
+
+    [Fact]
+    public void Parse_UnsubscribeMessage_ParsesCorrectly()
+    {
+        // Arrange
+        var json = @"{
+            \"type\": \"unsubscribe\",
+            \"id\": \"unsub-1\",
+            \"timestamp\": 1702900011000,
+            \"documentId\": \"doc-6\"
+        }";
+        var data = Encoding.UTF8.GetBytes(json);
+
+        // Act
+        var result = _handler.Parse(data);
+
+        // Assert
+        var message = Assert.IsType<UnsubscribeMessage>(result);
+        Assert.Equal("doc-6", message.DocumentId);
+    }
+
+    [Fact]
+    public void Parse_SyncResponseMessage_ParsesCorrectly()
+    {
+        // Arrange
+        var json = @"{
+            \"type\": \"sync_response\",
+            \"id\": \"sync-resp-1\",
+            \"timestamp\": 1702900012000,
+            \"requestId\": \"sync-req-1\",
+            \"documentId\": \"doc-7\",
+            \"deltas\": [],
+            \"state\": { \"content\": \"hello\" }
+        }";
+        var data = Encoding.UTF8.GetBytes(json);
+
+        // Act
+        var result = _handler.Parse(data);
+
+        // Assert
+        var message = Assert.IsType<SyncResponseMessage>(result);
+        Assert.Equal("sync-req-1", message.RequestId);
+        Assert.Equal("doc-7", message.DocumentId);
+        Assert.NotNull(message.State);
+    }
+
+    [Fact]
+    public void Parse_AckMessage_ParsesCorrectly()
+    {
+        // Arrange
+        var json = @"{
+            \"type\": \"ack\",
+            \"id\": \"ack-1\",
+            \"timestamp\": 1702900013000,
+            \"messageId\": \"delta-1\"
+        }";
+        var data = Encoding.UTF8.GetBytes(json);
+
+        // Act
+        var result = _handler.Parse(data);
+
+        // Assert
+        var message = Assert.IsType<AckMessage>(result);
+        Assert.Equal("delta-1", message.MessageId);
+    }
+
+    [Fact]
     public void Parse_ErrorMessage_ParsesCorrectly()
     {
         // Arrange
@@ -396,6 +574,99 @@ public class JsonProtocolHandlerTests
     }
 
     [Fact]
+    public void Serialize_AwarenessStateMessage_IncludesStates()
+    {
+        // Arrange
+        var message = new AwarenessStateMessage
+        {
+            Id = "awareness-state-1",
+            Timestamp = 1702900006000,
+            DocumentId = "doc-4",
+            States = new List<AwarenessClientState>
+            {
+                new AwarenessClientState
+                {
+                    ClientId = "c1",
+                    Clock = 1,
+                    State = new Dictionary<string, object> { { "cursor", new { x = 1, y = 2 } } }
+                }
+            }
+        };
+
+        // Act
+        var result = _handler.Serialize(message);
+        var json = Encoding.UTF8.GetString(result.Span);
+        var parsed = JsonDocument.Parse(json);
+
+        // Assert
+        Assert.Equal("awareness_state", parsed.RootElement.GetProperty("type").GetString());
+        Assert.True(parsed.RootElement.TryGetProperty("states", out var states));
+        Assert.Equal(1, states.GetArrayLength());
+    }
+
+    [Fact]
+    public void Serialize_SubscribeMessage_UsesCamelCaseProperties()
+    {
+        // Arrange
+        var message = new SubscribeMessage
+        {
+            Id = "sub-1",
+            Timestamp = 1702900007000,
+            DocumentId = "doc-5"
+        };
+
+        // Act
+        var json = Encoding.UTF8.GetString(_handler.Serialize(message).Span);
+
+        // Assert
+        Assert.Contains("\"documentId\"", json);
+        Assert.DoesNotContain("document_id", json);
+    }
+
+    [Fact]
+    public void Serialize_SyncResponseMessage_IncludesStateAndDeltas()
+    {
+        // Arrange
+        var message = new SyncResponseMessage
+        {
+            Id = "sync-resp-1",
+            Timestamp = 1702900008000,
+            RequestId = "sync-req-1",
+            DocumentId = "doc-6",
+            State = new { content = "hello" },
+            Deltas = new List<object> { new { op = "set" } }
+        };
+
+        // Act
+        var json = Encoding.UTF8.GetString(_handler.Serialize(message).Span);
+        var parsed = JsonDocument.Parse(json);
+
+        // Assert
+        Assert.Equal("sync_response", parsed.RootElement.GetProperty("type").GetString());
+        Assert.True(parsed.RootElement.TryGetProperty("state", out _));
+        Assert.True(parsed.RootElement.TryGetProperty("deltas", out var deltas));
+        Assert.Equal(1, deltas.GetArrayLength());
+    }
+
+    [Fact]
+    public void Serialize_AckMessage_IncludesMessageId()
+    {
+        // Arrange
+        var message = new AckMessage
+        {
+            Id = "ack-1",
+            Timestamp = 1702900009000,
+            MessageId = "delta-1"
+        };
+
+        // Act
+        var json = Encoding.UTF8.GetString(_handler.Serialize(message).Span);
+
+        // Assert
+        Assert.Contains("\"messageId\":\"delta-1\"", json);
+    }
+
+    [Fact]
     public void Serialize_MessageWithNullOptionalProperty_OmitsProperty()
     {
         // Arrange
@@ -468,6 +739,46 @@ public class JsonProtocolHandlerTests
         Assert.Equal(original.DocumentId, result.DocumentId);
         Assert.NotNull(result.VectorClock);
         Assert.Equal(5, result.VectorClock["client-1"]);
+    }
+
+    [Fact]
+    public void RoundTrip_AllMessageTypes_PreserveCoreFields()
+    {
+        var messages = new IMessage[]
+        {
+            new PingMessage { Id = "ping", Timestamp = 1 },
+            new PongMessage { Id = "pong", Timestamp = 2 },
+            new AuthMessage { Id = "auth", Timestamp = 3, Token = "token" },
+            new AuthSuccessMessage { Id = "auth-success", Timestamp = 4, UserId = "user", Permissions = new Dictionary<string, object>() },
+            new AuthErrorMessage { Id = "auth-error", Timestamp = 5, Error = "oops", Details = new Dictionary<string, object>() },
+            new SubscribeMessage { Id = "sub", Timestamp = 6, DocumentId = "doc" },
+            new UnsubscribeMessage { Id = "unsub", Timestamp = 7, DocumentId = "doc" },
+            new SyncRequestMessage { Id = "sync-req", Timestamp = 8, DocumentId = "doc", VectorClock = new Dictionary<string, long> { { "c1", 1 } } },
+            new SyncResponseMessage { Id = "sync-resp", Timestamp = 9, RequestId = "sync-req", DocumentId = "doc", State = new { content = "hi" }, Deltas = new List<object>() },
+            new DeltaMessage { Id = "delta", Timestamp = 10, DocumentId = "doc", Delta = new { field = "value" }, VectorClock = new Dictionary<string, long> { { "c1", 2 } } },
+            new AckMessage { Id = "ack", Timestamp = 11, MessageId = "delta" },
+            new AwarenessUpdateMessage { Id = "au", Timestamp = 12, DocumentId = "doc", ClientId = "client", State = new Dictionary<string, object> { { "cursor", new { x = 1, y = 2 } } }, Clock = 3 },
+            new AwarenessSubscribeMessage { Id = "asub", Timestamp = 13, DocumentId = "doc" },
+            new AwarenessStateMessage { Id = "astate", Timestamp = 14, DocumentId = "doc", States = new List<AwarenessClientState> { new AwarenessClientState { ClientId = "client", Clock = 1, State = new Dictionary<string, object> { { "cursor", new { x = 1, y = 2 } } } } } },
+            new ErrorMessage { Id = "err", Timestamp = 15, Error = "error", Details = new Dictionary<string, object>() }
+        };
+
+        foreach (var original in messages)
+        {
+            var serialized = _handler.Serialize(original);
+            var parsed = _handler.Parse(serialized);
+
+            Assert.NotNull(parsed);
+            Assert.Equal(original.Type, parsed!.Type);
+            Assert.Equal(original.Id, parsed.Id);
+            Assert.Equal(original.Timestamp, parsed.Timestamp);
+
+            if (original is AwarenessStateMessage stateMsg)
+            {
+                var parsedState = Assert.IsType<AwarenessStateMessage>(parsed);
+                Assert.Equal(stateMsg.States.Count, parsedState.States.Count);
+            }
+        }
     }
 
     #endregion

@@ -586,6 +586,23 @@ public class BinaryProtocolHandlerTests
         }
     }
 
+    [Fact]
+    public void Serialize_UnknownMessageType_ReturnsEmptyBuffer()
+    {
+        // Arrange
+        var message = new FakeUnknownMessage
+        {
+            Id = "unknown",
+            Timestamp = 1702900015000L
+        };
+
+        // Act
+        var result = _handler.Serialize(message);
+
+        // Assert
+        Assert.Equal(0, result.Length);
+    }
+
     #endregion
 
     #region Serialize Tests - Endianness
@@ -755,7 +772,54 @@ public class BinaryProtocolHandlerTests
         }
     }
 
+    [Fact]
+    public void RoundTrip_AllMappedMessageTypes_PreserveCoreFields()
+    {
+        var messages = new IMessage[]
+        {
+            new AuthMessage { Id = "auth", Timestamp = 1, Token = "token" },
+            new AuthSuccessMessage { Id = "auth-success", Timestamp = 2, UserId = "user", Permissions = new Dictionary<string, object>() },
+            new AuthErrorMessage { Id = "auth-error", Timestamp = 3, Error = "bad" },
+            new SubscribeMessage { Id = "sub", Timestamp = 4, DocumentId = "doc" },
+            new UnsubscribeMessage { Id = "unsub", Timestamp = 5, DocumentId = "doc" },
+            new SyncRequestMessage { Id = "sync-req", Timestamp = 6, DocumentId = "doc", VectorClock = new Dictionary<string, long> { { "c1", 1 } } },
+            new SyncResponseMessage { Id = "sync-resp", Timestamp = 7, RequestId = "sync-req", DocumentId = "doc", State = new { content = "hi" }, Deltas = new List<object>() },
+            new DeltaMessage { Id = "delta", Timestamp = 8, DocumentId = "doc", Delta = new { field = "value" }, VectorClock = new Dictionary<string, long> { { "c1", 2 } } },
+            new AckMessage { Id = "ack", Timestamp = 9, MessageId = "delta" },
+            new PingMessage { Id = "ping", Timestamp = 10 },
+            new PongMessage { Id = "pong", Timestamp = 11 },
+            new AwarenessUpdateMessage { Id = "au", Timestamp = 12, DocumentId = "doc", ClientId = "client", State = new Dictionary<string, object> { { "cursor", new { x = 1, y = 2 } } }, Clock = 3 },
+            new AwarenessSubscribeMessage { Id = "asub", Timestamp = 13, DocumentId = "doc" },
+            new AwarenessStateMessage { Id = "astate", Timestamp = 14, DocumentId = "doc", States = new List<AwarenessClientState> { new AwarenessClientState { ClientId = "client", Clock = 1, State = new Dictionary<string, object> { { "cursor", new { x = 1, y = 2 } } } } } },
+            new ErrorMessage { Id = "err", Timestamp = 15, Error = "error", Details = new Dictionary<string, object>() }
+        };
+
+        foreach (var original in messages)
+        {
+            var serialized = _handler.Serialize(original);
+            var parsed = _handler.Parse(serialized);
+
+            Assert.NotNull(parsed);
+            Assert.Equal(original.Type, parsed!.Type);
+            Assert.Equal(original.Id, parsed.Id);
+            Assert.Equal(original.Timestamp, parsed.Timestamp);
+
+            if (original is AwarenessStateMessage stateMsg)
+            {
+                var parsedState = Assert.IsType<AwarenessStateMessage>(parsed);
+                Assert.Equal(stateMsg.States.Count, parsedState.States.Count);
+            }
+        }
+    }
+
     #endregion
+
+    private class FakeUnknownMessage : IMessage
+    {
+        public MessageType Type => MessageType.Disconnect; // Not mapped in binary protocol
+        public string Id { get; set; } = string.Empty;
+        public long Timestamp { get; set; }
+    }
 
     #region Wire Format Validation Tests
 
