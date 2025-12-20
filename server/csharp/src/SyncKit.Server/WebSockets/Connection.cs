@@ -19,6 +19,8 @@ public class Connection : IConnection
     private readonly CancellationTokenSource _cts = new();
     private readonly HashSet<string> _subscribedDocuments = new();
     private byte[]? _rentedBuffer;
+    private Timer? _heartbeatTimer;
+    private DateTime _lastPong;
 
     /// <inheritdoc />
     public string Id { get; }
@@ -72,6 +74,7 @@ public class Connection : IConnection
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
         State = ConnectionState.Connecting;
         LastActivity = DateTime.UtcNow;
+        _lastPong = DateTime.UtcNow;
     }
 
     /// <inheritdoc />
@@ -286,9 +289,113 @@ public class Connection : IConnection
     /// <inheritdoc />
     public IReadOnlySet<string> GetSubscriptions() => _subscribedDocuments;
 
+    /// <summary>
+    /// Start the heartbeat timer to monitor connection health.
+    /// Sends periodic PING messages and terminates the connection if no PONG is received.
+    /// </summary>
+    /// <param name="intervalMs">Time between ping messages in milliseconds.</param>
+    /// <param name="timeoutMs">Maximum time to wait for pong response in milliseconds.</param>
+    public void StartHeartbeat(int intervalMs, int timeoutMs)
+    {
+        // Stop any existing heartbeat timer
+        StopHeartbeat();
+
+        _lastPong = DateTime.UtcNow;
+
+        _heartbeatTimer = new Timer(async _ =>
+        {
+            try
+            {
+                // Check if connection is stale
+                var timeSinceLastPong = (DateTime.UtcNow - _lastPong).TotalMilliseconds;
+                if (timeSinceLastPong > timeoutMs)
+                {
+                    _logger.LogWarning(
+                        "Connection {ConnectionId} heartbeat timeout ({ElapsedMs}ms since last pong) - terminating",
+                        Id, timeSinceLastPong);
+                    await CloseAsync(
+                        WebSocketCloseStatus.PolicyViolation,
+                        "Heartbeat timeout",
+                        CancellationToken.None);
+                    return;
+                }
+
+                // Send ping
+                IsAlive = false; // Will be set to true when pong received
+                var pingMessage = new Protocol.Messages.PingMessage
+                {
+                    Id = Guid.NewGuid().ToString(),
+                    Timestamp = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds()
+                };
+
+                if (!Send(pingMessage))
+                {
+                    _logger.LogDebug("Failed to send ping to connection {ConnectionId}", Id);
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error in heartbeat timer for connection {ConnectionId}", Id);
+            }
+        }, null, intervalMs, intervalMs);
+
+        _logger.LogDebug(
+            "Started heartbeat for connection {ConnectionId} (interval: {IntervalMs}ms, timeout: {TimeoutMs}ms)",
+            Id, intervalMs, timeoutMs);
+    }
+
+    /// <summary>
+    /// Stop the heartbeat timer.
+    /// </summary>
+    public void StopHeartbeat()
+    {
+        if (_heartbeatTimer is not null)
+        {
+            _heartbeatTimer.Dispose();
+            _heartbeatTimer = null;
+            _logger.LogDebug("Stopped heartbeat for connection {ConnectionId}", Id);
+        }
+    }
+
+    /// <summary>
+    /// Handle a PONG message received from the client.
+    /// Updates last pong timestamp and marks connection as alive.
+    /// </summary>
+    public void HandlePong()
+    {
+        _lastPong = DateTime.UtcNow;
+        IsAlive = true;
+        _logger.LogTrace("Received pong from connection {ConnectionId}", Id);
+    }
+
+    /// <summary>
+    /// Handle a PING message received from the client.
+    /// Responds with a PONG message.
+    /// </summary>
+    /// <param name="ping">The ping message received.</param>
+    public void HandlePing(Protocol.Messages.PingMessage ping)
+    {
+        var pongMessage = new Protocol.Messages.PongMessage
+        {
+            Id = Guid.NewGuid().ToString(),
+            Timestamp = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds()
+        };
+
+        if (Send(pongMessage))
+        {
+            _logger.LogTrace("Sent pong to connection {ConnectionId} in response to ping {PingId}",
+                Id, ping.Id);
+        }
+        else
+        {
+            _logger.LogDebug("Failed to send pong to connection {ConnectionId}", Id);
+        }
+    }
+
     /// <inheritdoc />
     public async ValueTask DisposeAsync()
     {
+        StopHeartbeat();
         await _cts.CancelAsync();
         _cts.Dispose();
 

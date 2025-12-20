@@ -89,6 +89,12 @@ public class SyncWebSocketMiddleware
                 connection.Id,
                 context.Connection.RemoteIpAddress);
 
+            // Subscribe to message events to handle ping/pong
+            connection.MessageReceived += (sender, message) =>
+            {
+                HandleMessage(connection, message);
+            };
+
             await connection.ProcessMessagesAsync(context.RequestAborted);
         }
         catch (OperationCanceledException) when (context.RequestAborted.IsCancellationRequested)
@@ -123,6 +129,30 @@ public class SyncWebSocketMiddleware
                 await _connectionManager.RemoveConnectionAsync(connection.Id);
                 _logger.LogInformation("WebSocket connection closed: {ConnectionId}", connection.Id);
             }
+        }
+    }
+
+    /// <summary>
+    /// Handles messages received from a connection.
+    /// Routes ping/pong messages to the connection's heartbeat handlers.
+    /// </summary>
+    private void HandleMessage(IConnection connection, Protocol.IMessage message)
+    {
+        switch (message)
+        {
+            case Protocol.Messages.PingMessage ping:
+                connection.HandlePing(ping);
+                break;
+
+            case Protocol.Messages.PongMessage:
+                connection.HandlePong();
+                break;
+
+            // Other message types will be handled by future message handlers
+            default:
+                _logger.LogTrace("Received message of type {MessageType} from connection {ConnectionId}",
+                    message.Type, connection.Id);
+                break;
         }
     }
 }

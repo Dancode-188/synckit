@@ -134,6 +134,29 @@ public interface IConnection : IAsyncDisposable
     bool Send(Protocol.IMessage message);
 
     /// <summary>
+    /// Start the heartbeat timer to monitor connection health.
+    /// </summary>
+    /// <param name="intervalMs">Time between ping messages in milliseconds.</param>
+    /// <param name="timeoutMs">Maximum time to wait for pong response in milliseconds.</param>
+    void StartHeartbeat(int intervalMs, int timeoutMs);
+
+    /// <summary>
+    /// Stop the heartbeat timer.
+    /// </summary>
+    void StopHeartbeat();
+
+    /// <summary>
+    /// Handle a PONG message received from the client.
+    /// </summary>
+    void HandlePong();
+
+    /// <summary>
+    /// Handle a PING message received from the client.
+    /// </summary>
+    /// <param name="ping">The ping message received.</param>
+    void HandlePing(Protocol.Messages.PingMessage ping);
+
+    /// <summary>
     /// Event raised when a message is received from the client.
     /// </summary>
     event EventHandler<Protocol.IMessage>? MessageReceived;

@@ -81,6 +81,9 @@ public class ConnectionManager : IConnectionManager
             return await CreateConnectionAsync(webSocket, cancellationToken);
         }
 
+        // Start heartbeat monitoring
+        connection.StartHeartbeat(_config.WsHeartbeatInterval, _config.WsHeartbeatTimeout);
+
         _logger.LogDebug("Connection created: {ConnectionId} (Total: {ConnectionCount})",
             connectionId, _connections.Count);
 
