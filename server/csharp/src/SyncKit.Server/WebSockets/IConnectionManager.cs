@@ -55,6 +55,15 @@ public interface IConnectionManager
     Task RemoveConnectionAsync(string connectionId);
 
     /// <summary>
+    /// Broadcasts a message to all connections subscribed to a specific document.
+    /// </summary>
+    /// <param name="documentId">The document ID to broadcast to.</param>
+    /// <param name="message">The message to broadcast.</param>
+    /// <param name="excludeConnectionId">Optional connection ID to exclude from broadcast.</param>
+    /// <returns>Task representing the async operation.</returns>
+    Task BroadcastToDocumentAsync(string documentId, Protocol.IMessage message, string? excludeConnectionId = null);
+
+    /// <summary>
     /// Closes all active connections.
     /// </summary>
     /// <param name="status">The WebSocket close status code.</param>

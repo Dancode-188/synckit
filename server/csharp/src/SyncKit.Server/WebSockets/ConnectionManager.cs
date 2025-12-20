@@ -132,6 +132,43 @@ public class ConnectionManager : IConnectionManager
     }
 
     /// <inheritdoc />
+    public Task BroadcastToDocumentAsync(string documentId, Protocol.IMessage message, string? excludeConnectionId = null)
+    {
+        var connections = GetConnectionsByDocument(documentId);
+
+        var sendCount = 0;
+        var failCount = 0;
+
+        foreach (var connection in connections)
+        {
+            if (excludeConnectionId != null && connection.Id == excludeConnectionId)
+                continue;
+
+            if (connection.Send(message))
+            {
+                sendCount++;
+            }
+            else
+            {
+                failCount++;
+            }
+        }
+
+        if (failCount > 0)
+        {
+            _logger.LogDebug("Broadcast to document {DocumentId}: {SendCount} sent, {FailCount} failed",
+                documentId, sendCount, failCount);
+        }
+        else if (sendCount > 0)
+        {
+            _logger.LogTrace("Broadcast message {MessageId} to document {DocumentId}: {SendCount} connections",
+                message.Id, documentId, sendCount);
+        }
+
+        return Task.CompletedTask;
+    }
+
+    /// <inheritdoc />
     public async Task CloseAllAsync(WebSocketCloseStatus status, string description)
     {
         _logger.LogInformation("Closing all connections: {Description} (Count: {ConnectionCount})",
