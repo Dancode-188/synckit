@@ -324,6 +324,114 @@ public class SyncKitConfigTests
         }
     }
 
+    [Fact]
+    public void ApiKeys_LoadFromAppSettings()
+    {
+        // Arrange
+        var inMemorySettings = new Dictionary<string, string?>
+        {
+            { "SyncKit:JwtSecret", "test-secret-that-is-at-least-32-characters-long" },
+            { "SyncKit:ApiKeys:0", "key1" },
+            { "SyncKit:ApiKeys:1", "key2" },
+            { "SyncKit:ApiKeys:2", "key3" }
+        };
+
+        // Act
+        var configuration = new ConfigurationBuilder()
+            .AddInMemoryCollection(inMemorySettings)
+            .Build();
+
+        var services = new ServiceCollection();
+        services.AddSyncKitConfiguration(configuration);
+        var serviceProvider = services.BuildServiceProvider();
+        var config = serviceProvider.GetRequiredService<IOptions<SyncKitConfig>>().Value;
+
+        // Assert
+        Assert.NotNull(config.ApiKeys);
+        Assert.Equal(3, config.ApiKeys.Length);
+        Assert.Contains("key1", config.ApiKeys);
+        Assert.Contains("key2", config.ApiKeys);
+        Assert.Contains("key3", config.ApiKeys);
+    }
+
+    [Fact]
+    public void ApiKeys_LoadFromEnvironmentVariable()
+    {
+        // Test comma-separated values
+        Environment.SetEnvironmentVariable("SYNCKIT_AUTH_APIKEYS", "sk_dev_123,sk_prod_456,sk_test_789");
+        try
+        {
+            var config = BuildConfigWithJwtSecret();
+            Assert.NotNull(config.ApiKeys);
+            Assert.Equal(3, config.ApiKeys.Length);
+            Assert.Contains("sk_dev_123", config.ApiKeys);
+            Assert.Contains("sk_prod_456", config.ApiKeys);
+            Assert.Contains("sk_test_789", config.ApiKeys);
+        }
+        finally
+        {
+            Environment.SetEnvironmentVariable("SYNCKIT_AUTH_APIKEYS", null);
+        }
+    }
+
+    [Fact]
+    public void ApiKeys_EnvironmentVariable_TrimsWhitespace()
+    {
+        // Test with extra whitespace
+        Environment.SetEnvironmentVariable("SYNCKIT_AUTH_APIKEYS", " key1 , key2 ,  key3  ");
+        try
+        {
+            var config = BuildConfigWithJwtSecret();
+            Assert.NotNull(config.ApiKeys);
+            Assert.Equal(3, config.ApiKeys.Length);
+            Assert.Contains("key1", config.ApiKeys);
+            Assert.Contains("key2", config.ApiKeys);
+            Assert.Contains("key3", config.ApiKeys);
+            Assert.DoesNotContain(" key1 ", config.ApiKeys);
+        }
+        finally
+        {
+            Environment.SetEnvironmentVariable("SYNCKIT_AUTH_APIKEYS", null);
+        }
+    }
+
+    [Fact]
+    public void ApiKeys_EnvironmentVariable_OverridesAppSettings()
+    {
+        // Arrange
+        var inMemorySettings = new Dictionary<string, string?>
+        {
+            { "SyncKit:JwtSecret", "test-secret-that-is-at-least-32-characters-long" },
+            { "SyncKit:ApiKeys:0", "config-key1" },
+            { "SyncKit:ApiKeys:1", "config-key2" }
+        };
+
+        Environment.SetEnvironmentVariable("SYNCKIT_AUTH_APIKEYS", "env-key1,env-key2");
+        try
+        {
+            var configuration = new ConfigurationBuilder()
+                .AddInMemoryCollection(inMemorySettings)
+                .Build();
+
+            var services = new ServiceCollection();
+            services.AddSyncKitConfiguration(configuration);
+            var serviceProvider = services.BuildServiceProvider();
+            var config = serviceProvider.GetRequiredService<IOptions<SyncKitConfig>>().Value;
+
+            // Assert - environment variable should override
+            Assert.NotNull(config.ApiKeys);
+            Assert.Equal(2, config.ApiKeys.Length);
+            Assert.Contains("env-key1", config.ApiKeys);
+            Assert.Contains("env-key2", config.ApiKeys);
+            Assert.DoesNotContain("config-key1", config.ApiKeys);
+            Assert.DoesNotContain("config-key2", config.ApiKeys);
+        }
+        finally
+        {
+            Environment.SetEnvironmentVariable("SYNCKIT_AUTH_APIKEYS", null);
+        }
+    }
+
     private static SyncKitConfig BuildConfigWithJwtSecret()
     {
         var inMemorySettings = new Dictionary<string, string?>

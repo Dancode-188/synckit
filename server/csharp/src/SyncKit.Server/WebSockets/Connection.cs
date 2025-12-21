@@ -26,7 +26,7 @@ public class Connection : IConnection
     public string Id { get; }
 
     /// <inheritdoc />
-    public ConnectionState State { get; private set; }
+    public ConnectionState State { get; set; }
 
     /// <inheritdoc />
     public ProtocolType Protocol { get; private set; } = ProtocolType.Unknown;

@@ -97,6 +97,15 @@ public static class ConfigurationExtensions
                 if (!string.IsNullOrEmpty(authRequired))
                     config.AuthRequired = authRequired.Equals("true", StringComparison.OrdinalIgnoreCase)
                                           || authRequired == "1";
+
+                // API Keys (comma-separated)
+                var apiKeys = Environment.GetEnvironmentVariable("SYNCKIT_AUTH_APIKEYS");
+                if (!string.IsNullOrEmpty(apiKeys))
+                {
+                    config.ApiKeys = apiKeys.Split(',', StringSplitOptions.RemoveEmptyEntries)
+                                            .Select(k => k.Trim())
+                                            .ToArray();
+                }
             })
             .ValidateDataAnnotations()
             .ValidateOnStart(); // Fail fast on startup if config invalid

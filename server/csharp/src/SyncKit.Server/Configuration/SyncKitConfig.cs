@@ -143,4 +143,10 @@ public class SyncKitConfig
     /// Environment variable: SYNCKIT_AUTH_REQUIRED
     /// </summary>
     public bool AuthRequired { get; set; } = true;
+
+    /// <summary>
+    /// Valid API keys for authentication (alternative to JWT).
+    /// Environment variable: SYNCKIT_AUTH_APIKEYS (comma-separated)
+    /// </summary>
+    public string[] ApiKeys { get; set; } = Array.Empty<string>();
 }

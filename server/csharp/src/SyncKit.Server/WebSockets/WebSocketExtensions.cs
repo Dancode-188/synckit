@@ -16,6 +16,13 @@ public static class WebSocketExtensions
     public static IServiceCollection AddSyncKitWebSockets(this IServiceCollection services)
     {
         services.AddSingleton<IConnectionManager, ConnectionManager>();
+
+        // Register message handlers
+        services.AddSingleton<Handlers.IMessageHandler, Handlers.AuthMessageHandler>();
+
+        // Register message router
+        services.AddSingleton<Handlers.MessageRouter>();
+
         return services;
     }
 

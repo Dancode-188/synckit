@@ -56,7 +56,7 @@ public interface IConnection : IAsyncDisposable
     /// <summary>
     /// Current connection state.
     /// </summary>
-    ConnectionState State { get; }
+    ConnectionState State { get; set; }
 
     /// <summary>
     /// Detected protocol type (JSON or Binary).
