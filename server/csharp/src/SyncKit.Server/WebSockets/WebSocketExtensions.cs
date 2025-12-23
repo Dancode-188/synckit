@@ -1,5 +1,6 @@
 using Microsoft.Extensions.Options;
 using SyncKit.Server.Configuration;
+using SyncKit.Server.WebSockets.Protocol.Messages;
 
 namespace SyncKit.Server.WebSockets;
 
@@ -17,8 +18,15 @@ public static class WebSocketExtensions
     {
         services.AddSingleton<IConnectionManager, ConnectionManager>();
 
+        // Register AuthGuard for permission enforcement
+        services.AddSingleton<AuthGuard>();
+
         // Register message handlers
         services.AddSingleton<Handlers.IMessageHandler, Handlers.AuthMessageHandler>();
+        services.AddSingleton<Handlers.IMessageHandler, Handlers.SubscribeMessageHandler>();
+        services.AddSingleton<Handlers.IMessageHandler, Handlers.DeltaMessageHandler>();
+        services.AddSingleton<Handlers.IMessageHandler, Handlers.AwarenessSubscribeMessageHandler>();
+        services.AddSingleton<Handlers.IMessageHandler, Handlers.AwarenessUpdateMessageHandler>();
 
         // Register message router
         services.AddSingleton<Handlers.MessageRouter>();
@@ -49,5 +57,24 @@ public static class WebSocketExtensions
         app.UseMiddleware<SyncWebSocketMiddleware>();
 
         return app;
+    }
+
+    /// <summary>
+    /// Sends an error message to the client.
+    /// </summary>
+    /// <param name="connection">The connection to send the error to.</param>
+    /// <param name="error">The error message.</param>
+    /// <param name="details">Optional error details.</param>
+    public static void SendError(this IConnection connection, string error, object? details = null)
+    {
+        var errorMessage = new ErrorMessage
+        {
+            Id = Guid.NewGuid().ToString(),
+            Timestamp = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds(),
+            Error = error,
+            Details = details
+        };
+
+        connection.Send(errorMessage);
     }
 }
