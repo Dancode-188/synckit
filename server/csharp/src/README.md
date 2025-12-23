@@ -101,6 +101,64 @@ There is a Docker Compose file for test dependencies at `server/csharp/docker-co
 
 ## API Reference
 
+### REST Endpoints
+
+#### Authentication (Phase 3)
+
+The server provides REST authentication endpoints at `/auth/*`:
+
+**POST /auth/login** - User login (demo implementation)
+```bash
+curl -X POST http://localhost:8080/auth/login \
+  -H "Content-Type: application/json" \
+  -d '{
+    "email": "user@example.com",
+    "password": "password123",
+    "permissions": {
+      "canRead": ["doc-1"],
+      "canWrite": ["doc-1"],
+      "isAdmin": false
+    }
+  }'
+```
+
+Returns:
+```json
+{
+  "userId": "user-1234567890",
+  "email": "user@example.com",
+  "accessToken": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
+  "refreshToken": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
+  "permissions": {
+    "canRead": ["doc-1"],
+    "canWrite": ["doc-1"],
+    "isAdmin": false
+  }
+}
+```
+
+**POST /auth/refresh** - Refresh access token
+```bash
+curl -X POST http://localhost:8080/auth/refresh \
+  -H "Content-Type: application/json" \
+  -d '{"refreshToken": "<refresh_token>"}'
+```
+
+**GET /auth/me** - Get current user info
+```bash
+curl -X GET http://localhost:8080/auth/me \
+  -H "Authorization: Bearer <access_token>"
+```
+
+**POST /auth/verify** - Verify token validity
+```bash
+curl -X POST http://localhost:8080/auth/verify \
+  -H "Content-Type: application/json" \
+  -d '{"token": "<token>"}'
+```
+
+### WebSocket Protocol
+
 Protocol and message shapes are documented in the repository protocol specs (`protocol/specs/` and the TypeScript server reference). Maintain strict compatibility with the TypeScript implementation.
 
 ## Contributing

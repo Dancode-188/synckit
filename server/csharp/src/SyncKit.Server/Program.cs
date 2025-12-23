@@ -26,6 +26,9 @@ try
     // Add services to the container
     builder.Services.AddOpenApi();
 
+    // Add controller services
+    builder.Services.AddControllers();
+
     // Add SyncKit configuration with environment variable support and validation
     builder.Services.AddSyncKitConfiguration(builder.Configuration);
 
@@ -56,6 +59,9 @@ try
     {
         app.MapOpenApi();
     }
+
+    // Map controller endpoints (including /auth routes)
+    app.MapControllers();
 
     // Map health check endpoints (matches TypeScript server + Kubernetes probes)
     app.MapSyncKitHealthEndpoints();
