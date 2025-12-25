@@ -28,6 +28,7 @@ public static class WebSocketExtensions
         // Register message handlers
         services.AddSingleton<Handlers.IMessageHandler, Handlers.AuthMessageHandler>();
         services.AddSingleton<Handlers.IMessageHandler, Handlers.SubscribeMessageHandler>();
+        services.AddSingleton<Handlers.IMessageHandler, Handlers.UnsubscribeMessageHandler>();
         services.AddSingleton<Handlers.IMessageHandler, Handlers.DeltaMessageHandler>();
         services.AddSingleton<Handlers.IMessageHandler, Handlers.AwarenessSubscribeMessageHandler>();
         services.AddSingleton<Handlers.IMessageHandler, Handlers.AwarenessUpdateMessageHandler>();
