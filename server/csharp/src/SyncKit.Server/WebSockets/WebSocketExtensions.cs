@@ -1,5 +1,6 @@
 using Microsoft.Extensions.Options;
 using SyncKit.Server.Configuration;
+using SyncKit.Server.Sync;
 using SyncKit.Server.WebSockets.Protocol.Messages;
 
 namespace SyncKit.Server.WebSockets;
@@ -17,6 +18,9 @@ public static class WebSocketExtensions
     public static IServiceCollection AddSyncKitWebSockets(this IServiceCollection services)
     {
         services.AddSingleton<IConnectionManager, ConnectionManager>();
+
+        // Register document store
+        services.AddSingleton<IDocumentStore, InMemoryDocumentStore>();
 
         // Register AuthGuard for permission enforcement
         services.AddSingleton<AuthGuard>();
