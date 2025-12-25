@@ -1,4 +1,4 @@
-@SyncKit.Server_HostAddress = http://localhost:5188
+@SyncKit.Server_HostAddress = http://localhost:8080
 
 ### Health Check
 GET {{SyncKit.Server_HostAddress}}/health

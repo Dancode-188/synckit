@@ -110,6 +110,104 @@ Each server type starts, then the same integration tests run against it.
 | `tests/integration/config.ts` | Test configuration (includes `useExternalServer` flag) |
 | `tests/integration/setup.ts` | Test lifecycle (supports external server mode) |
 
+## Testing REST Auth Endpoints (Phase 3)
+
+### Unit Tests
+
+The AuthController has comprehensive unit tests covering all endpoints:
+
+```bash
+cd src
+dotnet test --filter "FullyQualifiedName~AuthControllerTests"
+```
+
+**Test Coverage (16 tests):**
+- Login endpoint (valid/invalid credentials, permissions)
+- Token refresh (valid/invalid/missing tokens)
+- User info retrieval (/auth/me)
+- Token verification
+- Complete authentication flow integration
+
+### Manual Testing
+
+**Option 1: Using the integration test script**
+
+```bash
+# Terminal 1: Start .NET server
+cd src/SyncKit.Server
+JWT_SECRET="test-secret-key-for-development-32-chars" dotnet run
+
+# Terminal 2: Run automated tests
+cd ../../  # Back to server/csharp
+./test-auth-endpoints.sh
+```
+
+The script tests all 7 scenarios:
+- Login with permissions
+- Get user info (/auth/me)
+- Verify valid token
+- Verify invalid token
+- Refresh access token
+- Use refreshed token
+- Error handling
+
+**Option 2: Manual cURL commands**
+
+```bash
+# Login
+curl -X POST http://localhost:8080/auth/login \
+  -H "Content-Type: application/json" \
+  -d '{
+    "email": "test@example.com",
+    "password": "password123",
+    "permissions": {
+      "canRead": ["doc-1"],
+      "canWrite": ["doc-1"],
+      "isAdmin": false
+    }
+  }'
+
+# Save the accessToken and refreshToken from response, then:
+
+# Get user info
+curl -X GET http://localhost:8080/auth/me \
+  -H "Authorization: Bearer <ACCESS_TOKEN>"
+
+# Verify token
+curl -X POST http://localhost:8080/auth/verify \
+  -H "Content-Type: application/json" \
+  -d '{"token": "<ACCESS_TOKEN>"}'
+
+# Refresh token
+curl -X POST http://localhost:8080/auth/refresh \
+  -H "Content-Type: application/json" \
+  -d '{"refreshToken": "<REFRESH_TOKEN>"}'
+```
+
+### Expected Responses
+
+**Login Success:**
+```json
+{
+  "userId": "user-1234567890",
+  "email": "test@example.com",
+  "accessToken": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
+  "refreshToken": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
+  "permissions": {
+    "canRead": ["doc-1"],
+    "canWrite": ["doc-1"],
+    "isAdmin": false
+  }
+}
+```
+
+**Error Response:**
+```json
+{
+  "error": "Email required"
+}
+```
+
 ## Summary
 
 The .NET server uses unit tests as the primary quality gate because they:
