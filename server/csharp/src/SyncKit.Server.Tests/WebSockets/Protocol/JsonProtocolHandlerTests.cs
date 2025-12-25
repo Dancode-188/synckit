@@ -310,7 +310,7 @@ public class JsonProtocolHandlerTests
             ""requestId"": ""sync-req-1"",
             ""documentId"": ""doc-7"",
             ""deltas"": [],
-            ""state"": { ""content"": ""hello"" }
+            ""state"": { ""client-1"": 5, ""client-2"": 3 }
         }";
         var data = Encoding.UTF8.GetBytes(json);
 
@@ -322,6 +322,9 @@ public class JsonProtocolHandlerTests
         Assert.Equal("sync-req-1", message.RequestId);
         Assert.Equal("doc-7", message.DocumentId);
         Assert.NotNull(message.State);
+        Assert.Equal(2, message.State.Count);
+        Assert.Equal(5L, message.State["client-1"]);
+        Assert.Equal(3L, message.State["client-2"]);
     }
 
     [Fact]
@@ -633,8 +636,15 @@ public class JsonProtocolHandlerTests
             Timestamp = 1702900008000,
             RequestId = "sync-req-1",
             DocumentId = "doc-6",
-            State = new { content = "hello" },
-            Deltas = new List<object> { new { op = "set" } }
+            State = new Dictionary<string, long> { ["client1"] = 5 },
+            Deltas = new List<DeltaPayload>
+            {
+                new DeltaPayload
+                {
+                    Delta = JsonDocument.Parse("{\"op\":\"set\"}").RootElement,
+                    VectorClock = new Dictionary<string, long> { ["client1"] = 5 }
+                }
+            }
         };
 
         // Act
@@ -754,7 +764,7 @@ public class JsonProtocolHandlerTests
             new SubscribeMessage { Id = "sub", Timestamp = 6, DocumentId = "doc" },
             new UnsubscribeMessage { Id = "unsub", Timestamp = 7, DocumentId = "doc" },
             new SyncRequestMessage { Id = "sync-req", Timestamp = 8, DocumentId = "doc", VectorClock = new Dictionary<string, long> { { "c1", 1 } } },
-            new SyncResponseMessage { Id = "sync-resp", Timestamp = 9, RequestId = "sync-req", DocumentId = "doc", State = new { content = "hi" }, Deltas = new List<object>() },
+            new SyncResponseMessage { Id = "sync-resp", Timestamp = 9, RequestId = "sync-req", DocumentId = "doc", State = new Dictionary<string, long> { ["c1"] = 1 }, Deltas = new List<DeltaPayload>() },
             new DeltaMessage { Id = "delta", Timestamp = 10, DocumentId = "doc", Delta = new { field = "value" }, VectorClock = new Dictionary<string, long> { { "c1", 2 } } },
             new AckMessage { Id = "ack", Timestamp = 11, MessageId = "delta" },
             new AwarenessUpdateMessage { Id = "au", Timestamp = 12, DocumentId = "doc", ClientId = "client", State = new Dictionary<string, object> { { "cursor", new { x = 1, y = 2 } } }, Clock = 3 },

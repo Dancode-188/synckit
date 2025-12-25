@@ -24,13 +24,15 @@ public class SyncResponseMessage : BaseMessage
 
     /// <summary>
     /// Full document state (for initial sync).
+    /// Vector clock represented as a dictionary of client ID to clock value.
     /// </summary>
     [JsonPropertyName("state")]
-    public object? State { get; set; }
+    public Dictionary<string, long>? State { get; set; }
 
     /// <summary>
     /// Delta updates (for incremental sync).
+    /// Each delta includes the delta data and its associated vector clock.
     /// </summary>
     [JsonPropertyName("deltas")]
-    public List<object>? Deltas { get; set; }
+    public List<DeltaPayload>? Deltas { get; set; }
 }

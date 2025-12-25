@@ -783,7 +783,7 @@ public class BinaryProtocolHandlerTests
             new SubscribeMessage { Id = "sub", Timestamp = 4, DocumentId = "doc" },
             new UnsubscribeMessage { Id = "unsub", Timestamp = 5, DocumentId = "doc" },
             new SyncRequestMessage { Id = "sync-req", Timestamp = 6, DocumentId = "doc", VectorClock = new Dictionary<string, long> { { "c1", 1 } } },
-            new SyncResponseMessage { Id = "sync-resp", Timestamp = 7, RequestId = "sync-req", DocumentId = "doc", State = new { content = "hi" }, Deltas = new List<object>() },
+            new SyncResponseMessage { Id = "sync-resp", Timestamp = 7, RequestId = "sync-req", DocumentId = "doc", State = new Dictionary<string, long> { ["c1"] = 1 }, Deltas = new List<DeltaPayload>() },
             new DeltaMessage { Id = "delta", Timestamp = 8, DocumentId = "doc", Delta = new { field = "value" }, VectorClock = new Dictionary<string, long> { { "c1", 2 } } },
             new AckMessage { Id = "ack", Timestamp = 9, MessageId = "delta" },
             new PingMessage { Id = "ping", Timestamp = 10 },

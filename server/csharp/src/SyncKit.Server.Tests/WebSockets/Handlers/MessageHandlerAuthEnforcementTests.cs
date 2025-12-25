@@ -1,6 +1,7 @@
 using Microsoft.Extensions.Logging.Abstractions;
 using Moq;
 using SyncKit.Server.Auth;
+using SyncKit.Server.Sync;
 using SyncKit.Server.WebSockets;
 using SyncKit.Server.WebSockets.Handlers;
 using SyncKit.Server.WebSockets.Protocol;
@@ -30,8 +31,10 @@ public class MessageHandlerAuthEnforcementTests
     public async Task SubscribeHandler_NotAuthenticated_SendsError()
     {
         // Arrange
+        var mockDocStore = new Mock<IDocumentStore>();
         var handler = new SubscribeMessageHandler(
             _authGuard,
+            mockDocStore.Object,
             NullLogger<SubscribeMessageHandler>.Instance);
 
         _mockConnection.Setup(c => c.State).Returns(ConnectionState.Authenticating);
@@ -58,8 +61,10 @@ public class MessageHandlerAuthEnforcementTests
     public async Task SubscribeHandler_NoReadPermission_SendsError()
     {
         // Arrange
+        var mockDocStore = new Mock<IDocumentStore>();
         var handler = new SubscribeMessageHandler(
             _authGuard,
+            mockDocStore.Object,
             NullLogger<SubscribeMessageHandler>.Instance);
 
         var payload = new TokenPayload
@@ -88,18 +93,23 @@ public class MessageHandlerAuthEnforcementTests
         // Act
         await handler.HandleAsync(_mockConnection.Object, message);
 
-        // Assert
+    // Assert
         _mockConnection.Verify(c => c.Send(It.Is<ErrorMessage>(
             m => m.Error == "Permission denied")), Times.Once);
         _mockConnection.Verify(c => c.AddSubscription(It.IsAny<string>()), Times.Never);
     }
 
     [Fact]
-    public async Task SubscribeHandler_HasReadPermission_AllowsSubscription()
+    public async Task SubscribeHandler_WithReadPermission_AllowsSubscription()
     {
         // Arrange
+        var mockDocStore = new Mock<IDocumentStore>();
+        var mockDoc = new Document("doc-1");
+        mockDocStore.Setup(d => d.GetOrCreateAsync("doc-1")).ReturnsAsync(mockDoc);
+
         var handler = new SubscribeMessageHandler(
             _authGuard,
+            mockDocStore.Object,
             NullLogger<SubscribeMessageHandler>.Instance);
 
         var payload = new TokenPayload
@@ -134,11 +144,16 @@ public class MessageHandlerAuthEnforcementTests
     }
 
     [Fact]
-    public async Task SubscribeHandler_AdminUser_AllowsSubscription()
+    public async Task SubscribeHandler_AdminUser_AllowsSubscriptionToAnyDocument()
     {
         // Arrange
+        var mockDocStore = new Mock<IDocumentStore>();
+        var mockDoc = new Document("any-doc");
+        mockDocStore.Setup(d => d.GetOrCreateAsync("any-doc")).ReturnsAsync(mockDoc);
+
         var handler = new SubscribeMessageHandler(
             _authGuard,
+            mockDocStore.Object,
             NullLogger<SubscribeMessageHandler>.Instance);
 
         var payload = new TokenPayload
