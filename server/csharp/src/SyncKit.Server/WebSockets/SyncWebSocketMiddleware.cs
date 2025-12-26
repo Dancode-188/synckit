@@ -17,7 +17,7 @@ public class SyncWebSocketMiddleware
 {
     private readonly RequestDelegate _next;
     private readonly IConnectionManager _connectionManager;
-    private readonly Handlers.MessageRouter _messageRouter;
+    private readonly Handlers.IMessageDispatcher _messageDispatcher;
     private readonly ILogger<SyncWebSocketMiddleware> _logger;
 
     /// <summary>
@@ -25,17 +25,17 @@ public class SyncWebSocketMiddleware
     /// </summary>
     /// <param name="next">The next middleware in the pipeline.</param>
     /// <param name="connectionManager">The connection manager service.</param>
-    /// <param name="messageRouter">The message router for handling messages.</param>
+    /// <param name="messageDispatcher">The message dispatcher for handling messages.</param>
     /// <param name="logger">Logger instance.</param>
     public SyncWebSocketMiddleware(
         RequestDelegate next,
         IConnectionManager connectionManager,
-        Handlers.MessageRouter messageRouter,
+        Handlers.IMessageDispatcher messageDispatcher,
         ILogger<SyncWebSocketMiddleware> logger)
     {
         _next = next ?? throw new ArgumentNullException(nameof(next));
         _connectionManager = connectionManager ?? throw new ArgumentNullException(nameof(connectionManager));
-        _messageRouter = messageRouter ?? throw new ArgumentNullException(nameof(messageRouter));
+        _messageDispatcher = messageDispatcher ?? throw new ArgumentNullException(nameof(messageDispatcher));
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
     }
 
@@ -138,25 +138,11 @@ public class SyncWebSocketMiddleware
 
     /// <summary>
     /// Handles messages received from a connection.
-    /// Routes ping/pong messages to the connection's heartbeat handlers.
-    /// Routes other messages to the appropriate handler via MessageRouter.
+    /// Routes messages to the appropriate handler via MessageDispatcher.
     /// </summary>
     private async void HandleMessage(IConnection connection, Protocol.IMessage message)
     {
-        switch (message)
-        {
-            case Protocol.Messages.PingMessage ping:
-                connection.HandlePing(ping);
-                break;
-
-            case Protocol.Messages.PongMessage:
-                connection.HandlePong();
-                break;
-
-            default:
-                // Route to appropriate handler
-                await _messageRouter.RouteAsync(connection, message);
-                break;
-        }
+        // Dispatch to appropriate handler (including Ping/Pong)
+        await _messageDispatcher.DispatchAsync(connection, message);
     }
 }

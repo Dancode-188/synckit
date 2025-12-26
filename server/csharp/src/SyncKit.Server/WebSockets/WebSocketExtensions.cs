@@ -26,16 +26,25 @@ public static class WebSocketExtensions
         services.AddSingleton<AuthGuard>();
 
         // Register message handlers
+        // Heartbeat handlers
+        services.AddSingleton<Handlers.IMessageHandler, Handlers.PingMessageHandler>();
+        services.AddSingleton<Handlers.IMessageHandler, Handlers.PongMessageHandler>();
+
+        // Auth handler
         services.AddSingleton<Handlers.IMessageHandler, Handlers.AuthMessageHandler>();
+
+        // Sync handlers
         services.AddSingleton<Handlers.IMessageHandler, Handlers.SubscribeMessageHandler>();
         services.AddSingleton<Handlers.IMessageHandler, Handlers.UnsubscribeMessageHandler>();
         services.AddSingleton<Handlers.IMessageHandler, Handlers.DeltaMessageHandler>();
         services.AddSingleton<Handlers.IMessageHandler, Handlers.SyncRequestMessageHandler>();
+
+        // Awareness handlers
         services.AddSingleton<Handlers.IMessageHandler, Handlers.AwarenessSubscribeMessageHandler>();
         services.AddSingleton<Handlers.IMessageHandler, Handlers.AwarenessUpdateMessageHandler>();
 
-        // Register message router
-        services.AddSingleton<Handlers.MessageRouter>();
+        // Register message dispatcher
+        services.AddSingleton<Handlers.IMessageDispatcher, Handlers.MessageDispatcher>();
 
         return services;
     }
