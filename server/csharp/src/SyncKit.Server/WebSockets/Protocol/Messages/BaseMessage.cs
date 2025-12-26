@@ -11,7 +11,6 @@ public abstract class BaseMessage : IMessage
     /// The type of the message.
     /// </summary>
     [JsonPropertyName("type")]
-    [JsonConverter(typeof(JsonStringEnumConverter))]
     public abstract MessageType Type { get; }
 
     /// <summary>

@@ -6,6 +6,7 @@ namespace SyncKit.Server.WebSockets.Protocol;
 /// Message type names (string representation) - matches TypeScript exactly.
 /// JSON serialization uses snake_case (e.g., "auth_success").
 /// </summary>
+[JsonConverter(typeof(MessageTypeConverter))]
 public enum MessageType
 {
     // Connection lifecycle
