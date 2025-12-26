@@ -3,6 +3,7 @@ using System.Text;
 using System.Text.Json;
 using Microsoft.Extensions.Logging;
 using Moq;
+using SyncKit.Server.Tests;
 using SyncKit.Server.WebSockets.Protocol;
 using SyncKit.Server.WebSockets.Protocol.Messages;
 
@@ -279,6 +280,7 @@ public class BinaryProtocolHandlerTests
         Assert.Equal("doc-1", awarenessMsg.DocumentId);
         Assert.Equal("client-1", awarenessMsg.ClientId);
         Assert.Equal(42, awarenessMsg.Clock);
+        Assert.NotNull(awarenessMsg.State);
     }
 
     [Fact]
@@ -569,7 +571,7 @@ public class BinaryProtocolHandlerTests
             (new AckMessage { MessageId = "msg" }, MessageTypeCode.ACK),
             (new PingMessage(), MessageTypeCode.PING),
             (new PongMessage(), MessageTypeCode.PONG),
-            (new AwarenessUpdateMessage { DocumentId = "doc", ClientId = "c", State = new Dictionary<string, object>(), Clock = 1 }, MessageTypeCode.AWARENESS_UPDATE),
+            (new AwarenessUpdateMessage { DocumentId = "doc", ClientId = "c", State = TestHelpers.ToNullableJsonElement(new Dictionary<string, object>()), Clock = 1 }, MessageTypeCode.AWARENESS_UPDATE),
             (new AwarenessSubscribeMessage { DocumentId = "doc" }, MessageTypeCode.AWARENESS_SUBSCRIBE),
             (new AwarenessStateMessage { DocumentId = "doc", States = new List<AwarenessClientState>() }, MessageTypeCode.AWARENESS_STATE),
             (new ErrorMessage { Error = "error" }, MessageTypeCode.ERROR)
@@ -720,11 +722,11 @@ public class BinaryProtocolHandlerTests
             Timestamp = 1702900002000L,
             DocumentId = "doc-1",
             ClientId = "client-1",
-            State = new Dictionary<string, object>
+            State = TestHelpers.ToNullableJsonElement(new Dictionary<string, object>
             {
                 { "cursor", new { x = 10, y = 20 } },
                 { "name", "User 1" }
-            },
+            }),
             Clock = 42
         };
 
@@ -741,7 +743,7 @@ public class BinaryProtocolHandlerTests
         Assert.Equal(original.ClientId, result.ClientId);
         Assert.Equal(original.Clock, result.Clock);
         Assert.NotNull(result.State);
-        Assert.Equal(2, result.State.Count);
+        Assert.Equal(2, result.State.Value.EnumerateObject().Count());
     }
 
     [Fact]
@@ -756,7 +758,7 @@ public class BinaryProtocolHandlerTests
             new PongMessage(),
             new SubscribeMessage { DocumentId = "doc" },
             new DeltaMessage { DocumentId = "doc", Delta = new {}, VectorClock = new Dictionary<string, long>() },
-            new AwarenessUpdateMessage { DocumentId = "doc", ClientId = "c", State = new Dictionary<string, object>(), Clock = 1 }
+            new AwarenessUpdateMessage { DocumentId = "doc", ClientId = "c", State = TestHelpers.ToNullableJsonElement(new Dictionary<string, object>()), Clock = 1 }
         };
 
         // Act & Assert
@@ -788,9 +790,9 @@ public class BinaryProtocolHandlerTests
             new AckMessage { Id = "ack", Timestamp = 9, MessageId = "delta" },
             new PingMessage { Id = "ping", Timestamp = 10 },
             new PongMessage { Id = "pong", Timestamp = 11 },
-            new AwarenessUpdateMessage { Id = "au", Timestamp = 12, DocumentId = "doc", ClientId = "client", State = new Dictionary<string, object> { { "cursor", new { x = 1, y = 2 } } }, Clock = 3 },
+            new AwarenessUpdateMessage { Id = "au", Timestamp = 12, DocumentId = "doc", ClientId = "client", State = TestHelpers.ToNullableJsonElement(new Dictionary<string, object> { { "cursor", new { x = 1, y = 2 } } }), Clock = 3 },
             new AwarenessSubscribeMessage { Id = "asub", Timestamp = 13, DocumentId = "doc" },
-            new AwarenessStateMessage { Id = "astate", Timestamp = 14, DocumentId = "doc", States = new List<AwarenessClientState> { new AwarenessClientState { ClientId = "client", Clock = 1, State = new Dictionary<string, object> { { "cursor", new { x = 1, y = 2 } } } } } },
+            new AwarenessStateMessage { Id = "astate", Timestamp = 14, DocumentId = "doc", States = new List<AwarenessClientState> { new AwarenessClientState { ClientId = "client", Clock = 1, State = TestHelpers.ToJsonElement(new Dictionary<string, object> { { "cursor", new { x = 1, y = 2 } } }) } } },
             new ErrorMessage { Id = "err", Timestamp = 15, Error = "error", Details = new Dictionary<string, object>() }
         };
 

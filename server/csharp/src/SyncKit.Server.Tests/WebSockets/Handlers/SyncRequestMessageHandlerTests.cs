@@ -3,6 +3,7 @@ using Microsoft.Extensions.Logging.Abstractions;
 using Moq;
 using SyncKit.Server.Auth;
 using SyncKit.Server.Sync;
+using SyncKit.Server.Tests;
 using SyncKit.Server.WebSockets;
 using SyncKit.Server.WebSockets.Handlers;
 using SyncKit.Server.WebSockets.Protocol;
@@ -68,7 +69,7 @@ public class SyncRequestMessageHandlerTests
         Assert.Equal(messageId, response.RequestId);
         Assert.Equal(documentId, response.DocumentId);
         Assert.NotNull(response.State);
-        Assert.Empty(response.State);
+        Assert.Empty(TestHelpers.AsDictionary(response.State)!);
         Assert.NotNull(response.Deltas);
         Assert.Empty(response.Deltas);
     }
@@ -112,7 +113,8 @@ public class SyncRequestMessageHandlerTests
 
         // State should reflect merged vector clock
         Assert.NotNull(response.State);
-        Assert.Equal(2, response.State["client-1"]);
+        var stateDict = TestHelpers.AsDictionary(response.State)!;
+        Assert.Equal(2L, ((JsonElement)stateDict["client-1"]).GetInt64());
     }
 
     [Fact]
@@ -155,7 +157,8 @@ public class SyncRequestMessageHandlerTests
 
         // State should be current server state
         Assert.NotNull(response.State);
-        Assert.Equal(3, response.State["client-1"]);
+        var stateDict = TestHelpers.AsDictionary(response.State)!;
+        Assert.Equal(3L, ((JsonElement)stateDict["client-1"]).GetInt64());
     }
 
     [Fact]
@@ -435,7 +438,8 @@ public class SyncRequestMessageHandlerTests
 
         // State should still be returned
         Assert.NotNull(response.State);
-        Assert.Equal(5, response.State["client-1"]);
+        var stateDict = TestHelpers.AsDictionary(response.State)!;
+        Assert.Equal(5L, ((JsonElement)stateDict["client-1"]).GetInt64());
     }
 
     [Fact]

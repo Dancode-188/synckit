@@ -178,6 +178,13 @@ public class VectorClock : IEquatable<VectorClock>
     public Dictionary<string, long> ToDict() => new(_entries);
 
     /// <summary>
+    /// Convert to JSON-serializable dictionary.
+    /// Alias for ToDict() for semantic clarity.
+    /// </summary>
+    /// <returns>Dictionary of client IDs to clock values</returns>
+    public Dictionary<string, long> ToJson() => ToDict();
+
+    /// <summary>
     /// Create vector clock from dictionary (for deserialization).
     /// </summary>
     /// <param name="dict">Dictionary of client IDs to clock values</param>

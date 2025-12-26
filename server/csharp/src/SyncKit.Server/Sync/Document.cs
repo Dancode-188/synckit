@@ -23,14 +23,14 @@ public class Document
     public VectorClock VectorClock { get; private set; }
 
     /// <summary>
-    /// When the document was created.
+    /// When the document was created (Unix milliseconds).
     /// </summary>
-    public DateTime CreatedAt { get; }
+    public long CreatedAt { get; }
 
     /// <summary>
-    /// When the document was last updated.
+    /// When the document was last updated (Unix milliseconds).
     /// </summary>
-    public DateTime UpdatedAt { get; private set; }
+    public long UpdatedAt { get; private set; }
 
     /// <summary>
     /// Create a new empty document.
@@ -40,8 +40,8 @@ public class Document
     {
         Id = id;
         VectorClock = new VectorClock();
-        CreatedAt = DateTime.UtcNow;
-        UpdatedAt = DateTime.UtcNow;
+        CreatedAt = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
+        UpdatedAt = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
     }
 
     /// <summary>
@@ -55,8 +55,8 @@ public class Document
         Id = id;
         VectorClock = vectorClock;
         _deltas = deltas.ToList();
-        CreatedAt = DateTime.UtcNow;
-        UpdatedAt = DateTime.UtcNow;
+        CreatedAt = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
+        UpdatedAt = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
     }
 
     /// <summary>
@@ -70,7 +70,7 @@ public class Document
         {
             _deltas.Add(delta);
             VectorClock = VectorClock.Merge(delta.VectorClock);
-            UpdatedAt = DateTime.UtcNow;
+            UpdatedAt = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
         }
     }
 

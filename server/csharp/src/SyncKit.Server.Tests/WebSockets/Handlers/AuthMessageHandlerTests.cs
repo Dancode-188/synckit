@@ -2,6 +2,7 @@ using System.Net.WebSockets;
 using Microsoft.Extensions.Logging;
 using Moq;
 using SyncKit.Server.Auth;
+using SyncKit.Server.Tests;
 using SyncKit.Server.WebSockets;
 using SyncKit.Server.WebSockets.Handlers;
 using SyncKit.Server.WebSockets.Protocol;
@@ -115,8 +116,8 @@ public class AuthMessageHandlerTests
         // Assert
         connection.Verify(c => c.Send(It.Is<AuthSuccessMessage>(m =>
             m.UserId == "user-123" &&
-            m.Permissions.ContainsKey("isAdmin") &&
-            (bool)m.Permissions["isAdmin"] == true)), Times.Once);
+            TestHelpers.AsDictionary(m.Permissions)!.ContainsKey("isAdmin") &&
+            (bool)TestHelpers.AsDictionary(m.Permissions)!["isAdmin"] == true)), Times.Once);
         connection.VerifySet(c => c.UserId = "user-123");
         connection.VerifySet(c => c.TokenPayload = validPayload);
         connection.VerifySet(c => c.State = ConnectionState.Authenticated);
@@ -152,10 +153,10 @@ public class AuthMessageHandlerTests
         // Assert
         connection.Verify(c => c.Send(It.Is<AuthSuccessMessage>(m =>
             m.UserId == "user-456" &&
-            m.Permissions.ContainsKey("canRead") &&
-            ((string[])m.Permissions["canRead"]).Length == 2 &&
-            ((string[])m.Permissions["canWrite"]).Length == 1 &&
-            (bool)m.Permissions["isAdmin"] == false)), Times.Once);
+            TestHelpers.AsDictionary(m.Permissions)!.ContainsKey("canRead") &&
+            ((string[])TestHelpers.AsDictionary(m.Permissions)!["canRead"]).Length == 2 &&
+            ((string[])TestHelpers.AsDictionary(m.Permissions)!["canWrite"]).Length == 1 &&
+            (bool)TestHelpers.AsDictionary(m.Permissions)!["isAdmin"] == false)), Times.Once);
     }
 
     [Fact]
@@ -251,7 +252,7 @@ public class AuthMessageHandlerTests
 
         // Assert
         connection.Verify(c => c.Send(It.Is<AuthSuccessMessage>(m =>
-            (bool)m.Permissions["isAdmin"] == true)), Times.Once);
+            (bool)TestHelpers.AsDictionary(m.Permissions)!["isAdmin"] == true)), Times.Once);
     }
 
     #endregion
@@ -537,12 +538,12 @@ public class AuthMessageHandlerTests
 
         // Assert
         connection.Verify(c => c.Send(It.Is<AuthSuccessMessage>(m =>
-            m.Permissions.ContainsKey("canRead") &&
-            m.Permissions.ContainsKey("canWrite") &&
-            m.Permissions.ContainsKey("isAdmin") &&
-            ((string[])m.Permissions["canRead"]).Length == 2 &&
-            ((string[])m.Permissions["canWrite"]).Length == 1 &&
-            (bool)m.Permissions["isAdmin"] == false)), Times.Once);
+            TestHelpers.AsDictionary(m.Permissions)!.ContainsKey("canRead") &&
+            TestHelpers.AsDictionary(m.Permissions)!.ContainsKey("canWrite") &&
+            TestHelpers.AsDictionary(m.Permissions)!.ContainsKey("isAdmin") &&
+            ((string[])TestHelpers.AsDictionary(m.Permissions)!["canRead"]).Length == 2 &&
+            ((string[])TestHelpers.AsDictionary(m.Permissions)!["canWrite"]).Length == 1 &&
+            (bool)TestHelpers.AsDictionary(m.Permissions)!["isAdmin"] == false)), Times.Once);
     }
 
     [Fact]

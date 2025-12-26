@@ -18,7 +18,8 @@ public class AuthSuccessMessage : BaseMessage
 
     /// <summary>
     /// User permissions (document access, roles, etc.).
+    /// Can be any JSON-serializable object representing the user's permissions.
     /// </summary>
     [JsonPropertyName("permissions")]
-    public required Dictionary<string, object> Permissions { get; set; }
+    public required object Permissions { get; set; }
 }

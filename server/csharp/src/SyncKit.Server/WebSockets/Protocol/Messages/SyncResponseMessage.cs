@@ -24,10 +24,10 @@ public class SyncResponseMessage : BaseMessage
 
     /// <summary>
     /// Full document state (for initial sync).
-    /// Vector clock represented as a dictionary of client ID to clock value.
+    /// Can be any JSON-serializable object representing the document's current state.
     /// </summary>
     [JsonPropertyName("state")]
-    public Dictionary<string, long>? State { get; set; }
+    public object? State { get; set; }
 
     /// <summary>
     /// Delta updates (for incremental sync).

@@ -1,6 +1,7 @@
 using Microsoft.Extensions.Logging;
 using Moq;
 using SyncKit.Server.Auth;
+using SyncKit.Server.Tests;
 using SyncKit.Server.WebSockets;
 using SyncKit.Server.WebSockets.Handlers;
 using SyncKit.Server.WebSockets.Protocol;
@@ -60,7 +61,7 @@ public class AwarenessUpdateMessageHandlerTests
             Timestamp = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds(),
             DocumentId = documentId,
             ClientId = connectionId,
-            State = awarenessState,
+            State = TestHelpers.ToNullableJsonElement(awarenessState),
             Clock = 1
         };
 
@@ -92,7 +93,7 @@ public class AwarenessUpdateMessageHandlerTests
             Timestamp = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds(),
             DocumentId = documentId,
             ClientId = connectionId,
-            State = awarenessState,
+            State = TestHelpers.ToNullableJsonElement(awarenessState),
             Clock = 1
         };
 
@@ -156,7 +157,7 @@ public class AwarenessUpdateMessageHandlerTests
             Timestamp = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds(),
             DocumentId = documentId,
             ClientId = connectionId,
-            State = awarenessState,
+            State = TestHelpers.ToNullableJsonElement(awarenessState),
             Clock = 1
         };
 
@@ -220,7 +221,7 @@ public class AwarenessUpdateMessageHandlerTests
             Timestamp = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds(),
             DocumentId = documentId,
             ClientId = connectionId,
-            State = awarenessState,
+            State = TestHelpers.ToNullableJsonElement(awarenessState),
             Clock = 1
         };
 

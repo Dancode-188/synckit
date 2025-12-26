@@ -18,6 +18,7 @@ public class SyncRequestMessage : BaseMessage
 
     /// <summary>
     /// Optional vector clock representing client's current state.
+    /// Maps client IDs to their logical clock values.
     /// </summary>
     [JsonPropertyName("vectorClock")]
     public Dictionary<string, long>? VectorClock { get; set; }

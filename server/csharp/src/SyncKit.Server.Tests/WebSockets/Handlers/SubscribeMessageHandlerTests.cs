@@ -3,6 +3,7 @@ using Microsoft.Extensions.Logging;
 using Moq;
 using SyncKit.Server.Auth;
 using SyncKit.Server.Sync;
+using SyncKit.Server.Tests;
 using SyncKit.Server.WebSockets;
 using SyncKit.Server.WebSockets.Handlers;
 using SyncKit.Server.WebSockets.Protocol;
@@ -294,8 +295,9 @@ public class SubscribeMessageHandlerTests
         // Assert - Vector clock sent in state
         Assert.NotNull(sentResponse);
         Assert.NotNull(sentResponse!.State);
-        Assert.Equal(5, sentResponse.State["client-1"]);
-        Assert.Equal(3, sentResponse.State["client-2"]);
+        var stateDict = TestHelpers.AsDictionary(sentResponse.State)!;
+        Assert.Equal(5L, ((JsonElement)stateDict["client-1"]).GetInt64());
+        Assert.Equal(3L, ((JsonElement)stateDict["client-2"]).GetInt64());
     }
 
     [Fact]
@@ -329,7 +331,7 @@ public class SubscribeMessageHandlerTests
         // Assert - Empty deltas list
         Assert.NotNull(sentResponse);
         Assert.Empty(sentResponse!.Deltas!);
-        Assert.Empty(sentResponse!.State!);
+        Assert.Empty(TestHelpers.AsDictionary(sentResponse!.State)!);
     }
 
     [Fact]

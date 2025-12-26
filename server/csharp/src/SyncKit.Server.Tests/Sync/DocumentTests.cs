@@ -22,8 +22,8 @@ public class DocumentTests
         Assert.Empty(doc.VectorClock.Entries);
         Assert.Equal(0, doc.DeltaCount);
         Assert.Equal(0, doc.SubscriberCount);
-        Assert.True(doc.CreatedAt <= DateTime.UtcNow);
-        Assert.True(doc.UpdatedAt <= DateTime.UtcNow);
+        Assert.True(doc.CreatedAt <= DateTimeOffset.UtcNow.ToUnixTimeMilliseconds());
+        Assert.True(doc.UpdatedAt <= DateTimeOffset.UtcNow.ToUnixTimeMilliseconds());
     }
 
     [Fact]

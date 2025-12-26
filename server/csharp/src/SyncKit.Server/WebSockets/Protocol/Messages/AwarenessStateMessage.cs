@@ -1,3 +1,4 @@
+using System.Text.Json;
 using System.Text.Json.Serialization;
 
 namespace SyncKit.Server.WebSockets.Protocol.Messages;
@@ -36,9 +37,10 @@ public class AwarenessClientState
 
     /// <summary>
     /// Client's awareness state.
+    /// Can be any JSON-serializable object representing the client's presence state.
     /// </summary>
     [JsonPropertyName("state")]
-    public required Dictionary<string, object> State { get; set; }
+    public required JsonElement State { get; set; }
 
     /// <summary>
     /// Logical clock for this state.

@@ -24,6 +24,8 @@ public class DeltaMessage : BaseMessage
 
     /// <summary>
     /// Vector clock representing the state after this delta.
+    /// Maps client IDs to their logical clock values.
+    /// Note: JavaScript numbers are 64-bit floats, C# long is 64-bit integer.
     /// </summary>
     [JsonPropertyName("vectorClock")]
     public required Dictionary<string, long> VectorClock { get; set; }

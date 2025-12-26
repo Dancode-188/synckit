@@ -2,6 +2,7 @@ using Microsoft.Extensions.Logging.Abstractions;
 using Moq;
 using SyncKit.Server.Auth;
 using SyncKit.Server.Sync;
+using SyncKit.Server.Tests;
 using SyncKit.Server.WebSockets;
 using SyncKit.Server.WebSockets.Handlers;
 using SyncKit.Server.WebSockets.Protocol;
@@ -449,7 +450,7 @@ public class MessageHandlerAuthEnforcementTests
             Timestamp = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds(),
             DocumentId = "doc-1",
             ClientId = "client-1",
-            State = new Dictionary<string, object>(),
+            State = TestHelpers.ToNullableJsonElement(new Dictionary<string, object>()),
             Clock = 1
         };
 
@@ -491,7 +492,7 @@ public class MessageHandlerAuthEnforcementTests
             Timestamp = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds(),
             DocumentId = "doc-1",
             ClientId = "client-1",
-            State = new Dictionary<string, object>(),
+            State = TestHelpers.ToNullableJsonElement(new Dictionary<string, object>()),
             Clock = 1
         };
 

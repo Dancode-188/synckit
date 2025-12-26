@@ -1,3 +1,4 @@
+using System.Text.Json;
 using System.Text.Json.Serialization;
 
 namespace SyncKit.Server.WebSockets.Protocol.Messages;
@@ -24,10 +25,11 @@ public class AwarenessUpdateMessage : BaseMessage
 
     /// <summary>
     /// Awareness state (cursor position, selection, user info, etc.).
+    /// Can be any JSON-serializable object representing the client's presence state.
     /// Null means the client has left.
     /// </summary>
     [JsonPropertyName("state")]
-    public Dictionary<string, object>? State { get; set; }
+    public JsonElement? State { get; set; }
 
     /// <summary>
     /// Logical clock for ordering awareness updates.
