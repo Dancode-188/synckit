@@ -59,6 +59,7 @@ public class JwtGenerator : IJwtGenerator
         var claims = new List<Claim>
         {
             new(JwtRegisteredClaimNames.Sub, userId),
+            // Per RFC 7519, the 'iat' (issued at) claim is expressed as Unix epoch seconds.
             new(JwtRegisteredClaimNames.Iat, now.ToUnixTimeSeconds().ToString(), ClaimValueTypes.Integer64)
         };
 
@@ -107,9 +108,11 @@ public class JwtGenerator : IJwtGenerator
         var claims = new List<Claim>
         {
             new(JwtRegisteredClaimNames.Sub, userId),
+            // Per RFC 7519, the 'iat' (issued at) claim is expressed as Unix epoch seconds.
             new(JwtRegisteredClaimNames.Iat, now.ToUnixTimeSeconds().ToString(), ClaimValueTypes.Integer64)
         };
 
+        // The token handler encodes the 'exp' claim from the Expires DateTime as Unix epoch seconds (RFC 7519).
         var tokenDescriptor = new SecurityTokenDescriptor
         {
             Subject = new ClaimsIdentity(claims),

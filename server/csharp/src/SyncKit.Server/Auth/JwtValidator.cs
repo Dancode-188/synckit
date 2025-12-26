@@ -118,6 +118,7 @@ public class JwtValidator : IJwtValidator
 
     public bool IsExpired(TokenPayload payload)
     {
+        // `payload.Exp` is in Unix epoch seconds per RFC 7519; convert with FromUnixTimeSeconds.
         if (payload.Exp == null) return false;
         var expiration = DateTimeOffset.FromUnixTimeSeconds(payload.Exp.Value);
         return expiration <= DateTimeOffset.UtcNow;
@@ -170,6 +171,7 @@ public class JwtValidator : IJwtValidator
             .ToArray();
     }
 
+    // Parse numeric claim values expected to be Unix epoch seconds (iat/exp per RFC 7519).
     private static bool TryParseUnixTime(string? value, out long unixTime)
     {
         if (long.TryParse(value, out unixTime))
