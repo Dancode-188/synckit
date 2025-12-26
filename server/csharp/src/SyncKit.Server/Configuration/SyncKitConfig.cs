@@ -122,6 +122,13 @@ public class SyncKitConfig
     [Range(1, int.MaxValue)]
     public int WsMaxConnections { get; set; } = 10000;
 
+    /// <summary>
+    /// Awareness timeout in milliseconds before an awareness entry is considered stale/expired.
+    /// Environment variable: AWARENESS_TIMEOUT_MS
+    /// </summary>
+    [Range(0, int.MaxValue)]
+    public int AwarenessTimeoutMs { get; set; } = 30000;
+
     // Sync
     /// <summary>
     /// Number of operations to batch together for sync.

@@ -12,15 +12,18 @@ public class AwarenessUpdateMessageHandler : IMessageHandler
     private static readonly MessageType[] _handledTypes = [MessageType.AwarenessUpdate];
 
     private readonly AuthGuard _authGuard;
+    private readonly IAwarenessStore _awarenessStore;
     private readonly ILogger<AwarenessUpdateMessageHandler> _logger;
 
     public MessageType[] HandledTypes => _handledTypes;
 
     public AwarenessUpdateMessageHandler(
         AuthGuard authGuard,
+        IAwarenessStore awarenessStore,
         ILogger<AwarenessUpdateMessageHandler> logger)
     {
         _authGuard = authGuard ?? throw new ArgumentNullException(nameof(authGuard));
+        _awarenessStore = awarenessStore ?? throw new ArgumentNullException(nameof(awarenessStore));
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
     }
 
@@ -44,14 +47,21 @@ public class AwarenessUpdateMessageHandler : IMessageHandler
             return;
         }
 
-        // TODO: Implement awareness update logic in Phase 5 (Awareness)
-        // For now, just log success
+        // Store the awareness update (SetAsync returns true if applied)
+        var applied = await _awarenessStore.SetAsync(update.DocumentId, update.ClientId,
+            AwarenessState.Create(update.ClientId, update.State, update.Clock), update.Clock);
+
+        if (!applied)
+        {
+            _logger.LogDebug("Ignored stale awareness update from connection {ConnectionId} (clock {Clock})",
+                connection.Id, update.Clock);
+            return;
+        }
+
         _logger.LogInformation(
             "Connection {ConnectionId} (user {UserId}) sent awareness update for document {DocumentId}",
             connection.Id, connection.UserId, update.DocumentId);
 
-        // TODO: Broadcast awareness update to other subscribers
-        // This will be implemented in Phase 5
-        await Task.CompletedTask;
+        // TODO: Broadcast awareness update to other subscribers (Phase 5 W5-03)
     }
 }

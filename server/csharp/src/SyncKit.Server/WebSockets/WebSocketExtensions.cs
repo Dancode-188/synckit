@@ -22,6 +22,9 @@ public static class WebSocketExtensions
         // Register document store
         services.AddSingleton<IDocumentStore, InMemoryDocumentStore>();
 
+        // Register awareness store (in-memory for Phase 5)
+        services.AddSingleton<IAwarenessStore, InMemoryAwarenessStore>();
+
         // Register AuthGuard for permission enforcement
         services.AddSingleton<AuthGuard>();
 

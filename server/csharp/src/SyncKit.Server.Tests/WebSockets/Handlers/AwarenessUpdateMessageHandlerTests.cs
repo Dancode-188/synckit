@@ -18,6 +18,7 @@ public class AwarenessUpdateMessageHandlerTests
     private readonly AuthGuard _authGuard;
     private readonly Mock<IConnection> _mockConnection;
     private readonly Mock<ILogger<AwarenessUpdateMessageHandler>> _mockLogger;
+    private readonly Mock<IAwarenessStore> _mockStore;
     private readonly AwarenessUpdateMessageHandler _handler;
 
     public AwarenessUpdateMessageHandlerTests()
@@ -25,8 +26,13 @@ public class AwarenessUpdateMessageHandlerTests
         _authGuard = new AuthGuard(new Mock<ILogger<AuthGuard>>().Object);
         _mockConnection = new Mock<IConnection>();
         _mockLogger = new Mock<ILogger<AwarenessUpdateMessageHandler>>();
+        _mockStore = new Mock<IAwarenessStore>();
+        _mockStore.Setup(s => s.SetAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<AwarenessState>(), It.IsAny<long>()))
+            .ReturnsAsync(true);
+
         _handler = new AwarenessUpdateMessageHandler(
             _authGuard,
+            _mockStore.Object,
             _mockLogger.Object);
     }
 
@@ -68,7 +74,8 @@ public class AwarenessUpdateMessageHandlerTests
         // Act & Assert - Should not throw
         await _handler.HandleAsync(_mockConnection.Object, message);
 
-        // Note: Phase 5 will add awareness state storage and broadcasting
+        // Verify the store was called
+        _mockStore.Verify(s => s.SetAsync(documentId, connectionId, It.IsAny<AwarenessState>(), 1), Times.Once);
     }
 
     [Fact]
