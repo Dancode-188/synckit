@@ -3,6 +3,7 @@ using Moq;
 using SyncKit.Server.Auth;
 using SyncKit.Server.Sync;
 using SyncKit.Server.Tests;
+using SyncKit.Server.Awareness;
 using SyncKit.Server.WebSockets;
 using SyncKit.Server.WebSockets.Handlers;
 using SyncKit.Server.WebSockets.Protocol;
@@ -371,8 +372,10 @@ public class MessageHandlerAuthEnforcementTests
     public async Task AwarenessSubscribeHandler_NotAuthenticated_SendsError()
     {
         // Arrange
+        var mockAwarenessStore = new Mock<IAwarenessStore>();
         var handler = new AwarenessSubscribeMessageHandler(
             _authGuard,
+            mockAwarenessStore.Object,
             NullLogger<AwarenessSubscribeMessageHandler>.Instance);
 
         _mockConnection.Setup(c => c.State).Returns(ConnectionState.Authenticating);
@@ -398,8 +401,10 @@ public class MessageHandlerAuthEnforcementTests
     public async Task AwarenessSubscribeHandler_Authenticated_Succeeds()
     {
         // Arrange
+        var mockAwarenessStore = new Mock<IAwarenessStore>();
         var handler = new AwarenessSubscribeMessageHandler(
             _authGuard,
+            mockAwarenessStore.Object,
             NullLogger<AwarenessSubscribeMessageHandler>.Instance);
 
         var payload = new TokenPayload
