@@ -30,6 +30,7 @@ public static class WebSocketExtensions
         services.AddSingleton<Handlers.IMessageHandler, Handlers.SubscribeMessageHandler>();
         services.AddSingleton<Handlers.IMessageHandler, Handlers.UnsubscribeMessageHandler>();
         services.AddSingleton<Handlers.IMessageHandler, Handlers.DeltaMessageHandler>();
+        services.AddSingleton<Handlers.IMessageHandler, Handlers.SyncRequestMessageHandler>();
         services.AddSingleton<Handlers.IMessageHandler, Handlers.AwarenessSubscribeMessageHandler>();
         services.AddSingleton<Handlers.IMessageHandler, Handlers.AwarenessUpdateMessageHandler>();
 

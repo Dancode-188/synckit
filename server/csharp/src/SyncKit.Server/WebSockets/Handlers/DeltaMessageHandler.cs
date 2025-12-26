@@ -11,12 +11,14 @@ namespace SyncKit.Server.WebSockets.Handlers;
 /// </summary>
 public class DeltaMessageHandler : IMessageHandler
 {
+    private static readonly MessageType[] _handledTypes = [MessageType.Delta];
+
     private readonly AuthGuard _authGuard;
     private readonly IDocumentStore _documentStore;
     private readonly IConnectionManager _connectionManager;
     private readonly ILogger<DeltaMessageHandler> _logger;
 
-    public MessageType[] HandledTypes => new[] { MessageType.Delta };
+    public MessageType[] HandledTypes => _handledTypes;
 
     public DeltaMessageHandler(
         AuthGuard authGuard,

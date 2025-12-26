@@ -11,11 +11,13 @@ namespace SyncKit.Server.WebSockets.Handlers;
 /// </summary>
 public class AuthMessageHandler : IMessageHandler
 {
+    private static readonly MessageType[] _handledTypes = [MessageType.Auth];
+
     private readonly IJwtValidator _jwtValidator;
     private readonly IApiKeyValidator _apiKeyValidator;
     private readonly ILogger<AuthMessageHandler> _logger;
 
-    public MessageType[] HandledTypes => new[] { MessageType.Auth };
+    public MessageType[] HandledTypes => _handledTypes;
 
     public AuthMessageHandler(
         IJwtValidator jwtValidator,

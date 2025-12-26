@@ -10,10 +10,12 @@ namespace SyncKit.Server.WebSockets.Handlers;
 /// </summary>
 public class UnsubscribeMessageHandler : IMessageHandler
 {
+    private static readonly MessageType[] _handledTypes = [MessageType.Unsubscribe];
+
     private readonly IDocumentStore _documentStore;
     private readonly ILogger<UnsubscribeMessageHandler> _logger;
 
-    public MessageType[] HandledTypes => new[] { MessageType.Unsubscribe };
+    public MessageType[] HandledTypes => _handledTypes;
 
     public UnsubscribeMessageHandler(
         IDocumentStore documentStore,

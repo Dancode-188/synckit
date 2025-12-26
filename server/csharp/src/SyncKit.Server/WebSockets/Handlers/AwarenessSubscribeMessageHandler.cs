@@ -9,10 +9,12 @@ namespace SyncKit.Server.WebSockets.Handlers;
 /// </summary>
 public class AwarenessSubscribeMessageHandler : IMessageHandler
 {
+    private static readonly MessageType[] _handledTypes = [MessageType.AwarenessSubscribe];
+
     private readonly AuthGuard _authGuard;
     private readonly ILogger<AwarenessSubscribeMessageHandler> _logger;
 
-    public MessageType[] HandledTypes => new[] { MessageType.AwarenessSubscribe };
+    public MessageType[] HandledTypes => _handledTypes;
 
     public AwarenessSubscribeMessageHandler(
         AuthGuard authGuard,
