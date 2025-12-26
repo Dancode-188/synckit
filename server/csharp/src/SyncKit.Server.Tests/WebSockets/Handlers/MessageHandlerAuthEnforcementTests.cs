@@ -195,8 +195,12 @@ public class MessageHandlerAuthEnforcementTests
     public async Task DeltaHandler_NotAuthenticated_SendsError()
     {
         // Arrange
+        var mockDocStore = new Mock<IDocumentStore>();
+        var mockConnManager = new Mock<IConnectionManager>();
         var handler = new DeltaMessageHandler(
             _authGuard,
+            mockDocStore.Object,
+            mockConnManager.Object,
             NullLogger<DeltaMessageHandler>.Instance);
 
         _mockConnection.Setup(c => c.State).Returns(ConnectionState.Authenticating);
@@ -224,8 +228,12 @@ public class MessageHandlerAuthEnforcementTests
     public async Task DeltaHandler_NoWritePermission_SendsError()
     {
         // Arrange
+        var mockDocStore = new Mock<IDocumentStore>();
+        var mockConnManager = new Mock<IConnectionManager>();
         var handler = new DeltaMessageHandler(
             _authGuard,
+            mockDocStore.Object,
+            mockConnManager.Object,
             NullLogger<DeltaMessageHandler>.Instance);
 
         var payload = new TokenPayload
@@ -265,8 +273,14 @@ public class MessageHandlerAuthEnforcementTests
     public async Task DeltaHandler_HasWritePermission_Succeeds()
     {
         // Arrange
+        var mockDocStore = new Mock<IDocumentStore>();
+        var mockConnManager = new Mock<IConnectionManager>();
+        mockDocStore.Setup(d => d.AddDeltaAsync(It.IsAny<string>(), It.IsAny<StoredDelta>()))
+            .Returns(Task.CompletedTask);
         var handler = new DeltaMessageHandler(
             _authGuard,
+            mockDocStore.Object,
+            mockConnManager.Object,
             NullLogger<DeltaMessageHandler>.Instance);
 
         var payload = new TokenPayload
@@ -284,6 +298,7 @@ public class MessageHandlerAuthEnforcementTests
         _mockConnection.Setup(c => c.TokenPayload).Returns(payload);
         _mockConnection.Setup(c => c.Id).Returns("conn-1");
         _mockConnection.Setup(c => c.UserId).Returns("user-1");
+        _mockConnection.Setup(c => c.GetSubscriptions()).Returns(new HashSet<string> { "doc-1" });
 
         var message = new DeltaMessage
         {
@@ -306,8 +321,12 @@ public class MessageHandlerAuthEnforcementTests
     public async Task DeltaHandler_NullDelta_SendsError()
     {
         // Arrange
+        var mockDocStore = new Mock<IDocumentStore>();
+        var mockConnManager = new Mock<IConnectionManager>();
         var handler = new DeltaMessageHandler(
             _authGuard,
+            mockDocStore.Object,
+            mockConnManager.Object,
             NullLogger<DeltaMessageHandler>.Instance);
 
         var payload = new TokenPayload
@@ -323,6 +342,8 @@ public class MessageHandlerAuthEnforcementTests
 
         _mockConnection.Setup(c => c.State).Returns(ConnectionState.Authenticated);
         _mockConnection.Setup(c => c.TokenPayload).Returns(payload);
+        _mockConnection.Setup(c => c.Id).Returns("conn-1");
+        _mockConnection.Setup(c => c.GetSubscriptions()).Returns(new HashSet<string> { "doc-1" });
 
         var message = new DeltaMessage
         {
