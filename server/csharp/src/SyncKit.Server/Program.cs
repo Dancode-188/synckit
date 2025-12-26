@@ -41,6 +41,9 @@ try
     // Add WebSocket services
     builder.Services.AddSyncKitWebSockets();
 
+    // Background cleanup service for expired awareness entries
+    builder.Services.AddHostedService<SyncKit.Server.Awareness.AwarenessCleanupService>();
+
     var app = builder.Build();
 
     // Add Serilog request logging
