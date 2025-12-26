@@ -1,3 +1,5 @@
+using System.Text.Json;
+using SyncKit.Server.Awareness;
 using SyncKit.Server.WebSockets.Protocol;
 using SyncKit.Server.WebSockets.Protocol.Messages;
 
@@ -13,6 +15,7 @@ public class AwarenessUpdateMessageHandler : IMessageHandler
 
     private readonly AuthGuard _authGuard;
     private readonly IAwarenessStore _awarenessStore;
+    private readonly IConnectionManager _connectionManager;
     private readonly ILogger<AwarenessUpdateMessageHandler> _logger;
 
     public MessageType[] HandledTypes => _handledTypes;
@@ -20,10 +23,12 @@ public class AwarenessUpdateMessageHandler : IMessageHandler
     public AwarenessUpdateMessageHandler(
         AuthGuard authGuard,
         IAwarenessStore awarenessStore,
+        IConnectionManager connectionManager,
         ILogger<AwarenessUpdateMessageHandler> logger)
     {
         _authGuard = authGuard ?? throw new ArgumentNullException(nameof(authGuard));
         _awarenessStore = awarenessStore ?? throw new ArgumentNullException(nameof(awarenessStore));
+        _connectionManager = connectionManager ?? throw new ArgumentNullException(nameof(connectionManager));
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
     }
 
@@ -47,6 +52,24 @@ public class AwarenessUpdateMessageHandler : IMessageHandler
             return;
         }
 
+        // Verify the connection is subscribed to this document
+        if (!connection.GetSubscriptions().Contains(update.DocumentId))
+        {
+            _logger.LogWarning(
+                "Connection {ConnectionId} sent awareness update for unsubscribed document {DocumentId}",
+                connection.Id, update.DocumentId);
+            connection.SendError("Not subscribed to document", new { documentId = update.DocumentId });
+            return;
+        }
+
+        // Validate state format: must be object or null
+        if (update.State.HasValue && update.State.Value.ValueKind != JsonValueKind.Object && update.State.Value.ValueKind != JsonValueKind.Null)
+        {
+            _logger.LogWarning("Connection {ConnectionId} sent invalid awareness state format for document {DocumentId}", connection.Id, update.DocumentId);
+            connection.SendError("Invalid awareness state format");
+            return;
+        }
+
         // Store the awareness update (SetAsync returns true if applied)
         var applied = await _awarenessStore.SetAsync(update.DocumentId, update.ClientId,
             AwarenessState.Create(update.ClientId, update.State, update.Clock), update.Clock);
@@ -62,6 +85,20 @@ public class AwarenessUpdateMessageHandler : IMessageHandler
             "Connection {ConnectionId} (user {UserId}) sent awareness update for document {DocumentId}",
             connection.Id, connection.UserId, update.DocumentId);
 
-        // TODO: Broadcast awareness update to other subscribers (Phase 5 W5-03)
+        // Broadcast awareness update to other subscribers (excluding sender)
+        var broadcastMessage = new AwarenessUpdateMessage
+        {
+            Id = Guid.NewGuid().ToString(),
+            Timestamp = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds(),
+            DocumentId = update.DocumentId,
+            ClientId = update.ClientId,
+            State = update.State,
+            Clock = update.Clock
+        };
+
+        await _connectionManager.BroadcastToDocumentAsync(
+            update.DocumentId,
+            broadcastMessage,
+            excludeConnectionId: connection.Id);
     }
 }

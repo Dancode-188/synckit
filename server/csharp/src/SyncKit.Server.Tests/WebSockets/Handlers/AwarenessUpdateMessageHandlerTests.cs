@@ -255,6 +255,9 @@ public class AwarenessUpdateMessageHandlerTests
 
         SetupAuthenticatedConnection(connectionId, "user-1");
 
+        // Ensure connection is subscribed to the document
+        _mockConnection.Setup(c => c.GetSubscriptions()).Returns(new HashSet<string> { documentId });
+
         var message = new AwarenessUpdateMessage
         {
             Id = "msg-1",
@@ -269,6 +272,133 @@ public class AwarenessUpdateMessageHandlerTests
         await _handler.HandleAsync(_mockConnection.Object, message);
 
         // Note: Empty state might indicate user left/disconnected (Phase 5 will handle)
+    }
+
+    [Fact]
+    public async Task HandleAsync_NotSubscribedToDocument_ShouldSendErrorAndNotStoreOrBroadcast()
+    {
+        // Arrange
+        var documentId = "doc-123";
+        var connectionId = "conn-456";
+
+        SetupAuthenticatedConnection(connectionId, "user-1");
+
+        // Connection NOT subscribed
+        _mockConnection.Setup(c => c.GetSubscriptions()).Returns(new HashSet<string>());
+
+        var awarenessState = new Dictionary<string, object>
+        {
+            ["cursor"] = new Dictionary<string, object> { ["x"] = 100, ["y"] = 200 }
+        };
+
+        var message = new AwarenessUpdateMessage
+        {
+            Id = "msg-1",
+            Timestamp = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds(),
+            DocumentId = documentId,
+            ClientId = connectionId,
+            State = TestHelpers.ToNullableJsonElement(awarenessState),
+            Clock = 1
+        };
+
+        IMessage? sentMessage = null;
+        _mockConnection.Setup(c => c.Send(It.IsAny<IMessage>()))
+            .Callback<IMessage>(msg => sentMessage = msg)
+            .Returns(true);
+
+        // Act
+        await _handler.HandleAsync(_mockConnection.Object, message);
+
+        // Assert - Error should be sent
+        Assert.NotNull(sentMessage);
+        Assert.IsType<ErrorMessage>(sentMessage);
+        var errorMsg = (ErrorMessage)sentMessage;
+        Assert.Contains("Not subscribed", errorMsg.Error);
+
+        // Should NOT store or broadcast
+        _mockStore.Verify(s => s.SetAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<AwarenessState>(), It.IsAny<long>()), Times.Never);
+        _mockConnectionManager.Verify(cm => cm.BroadcastToDocumentAsync(It.IsAny<string>(), It.IsAny<IMessage>(), It.IsAny<string?>()), Times.Never);
+    }
+
+    [Fact]
+    public async Task HandleAsync_ShouldBroadcastToOtherSubscribers()
+    {
+        // Arrange
+        var documentId = "doc-123";
+        var connectionId = "conn-456";
+
+        SetupAuthenticatedConnection(connectionId, "user-1");
+
+        _mockConnection.Setup(c => c.GetSubscriptions()).Returns(new HashSet<string> { documentId });
+
+        _mockConnectionManager.Setup(cm => cm.BroadcastToDocumentAsync(
+            documentId, It.IsAny<AwarenessUpdateMessage>(), connectionId))
+            .Returns(Task.CompletedTask);
+
+        var awarenessState = new Dictionary<string, object>
+        {
+            ["cursor"] = new Dictionary<string, object> { ["x"] = 100, ["y"] = 200 }
+        };
+
+        var message = new AwarenessUpdateMessage
+        {
+            Id = "msg-1",
+            Timestamp = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds(),
+            DocumentId = documentId,
+            ClientId = connectionId,
+            State = TestHelpers.ToNullableJsonElement(awarenessState),
+            Clock = 1
+        };
+
+        // Act
+        await _handler.HandleAsync(_mockConnection.Object, message);
+
+        // Assert - Broadcast should have been called (excluding sender)
+        _mockConnectionManager.Verify(cm => cm.BroadcastToDocumentAsync(
+            documentId,
+            It.Is<AwarenessUpdateMessage>(m => m.ClientId == connectionId && m.DocumentId == documentId),
+            connectionId),
+            Times.Once);
+    }
+
+    [Fact]
+    public async Task HandleAsync_WithInvalidStateFormat_ShouldSendError()
+    {
+        // Arrange
+        var documentId = "doc-123";
+        var connectionId = "conn-456";
+
+        SetupAuthenticatedConnection(connectionId, "user-1");
+        _mockConnection.Setup(c => c.GetSubscriptions()).Returns(new HashSet<string> { documentId });
+
+        // Invalid state: primitive string
+        var message = new AwarenessUpdateMessage
+        {
+            Id = "msg-1",
+            Timestamp = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds(),
+            DocumentId = documentId,
+            ClientId = connectionId,
+            State = JsonSerializer.Deserialize<JsonElement>("\"bad\""),
+            Clock = 1
+        };
+
+        IMessage? sentMessage = null;
+        _mockConnection.Setup(c => c.Send(It.IsAny<IMessage>()))
+            .Callback<IMessage>(msg => sentMessage = msg)
+            .Returns(true);
+
+        // Act
+        await _handler.HandleAsync(_mockConnection.Object, message);
+
+        // Assert - Error should be sent
+        Assert.NotNull(sentMessage);
+        Assert.IsType<ErrorMessage>(sentMessage);
+        var errorMsg = (ErrorMessage)sentMessage;
+        Assert.Contains("Invalid awareness state", errorMsg.Error);
+
+        // Should not store or broadcast
+        _mockStore.Verify(s => s.SetAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<AwarenessState>(), It.IsAny<long>()), Times.Never);
+        _mockConnectionManager.Verify(cm => cm.BroadcastToDocumentAsync(It.IsAny<string>(), It.IsAny<IMessage>(), It.IsAny<string?>()), Times.Never);
     }
 
     #region Helper Methods

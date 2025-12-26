@@ -1,6 +1,7 @@
 using Microsoft.Extensions.Options;
 using SyncKit.Server.Configuration;
 using SyncKit.Server.Sync;
+using SyncKit.Server.Awareness;
 using SyncKit.Server.WebSockets.Protocol.Messages;
 
 namespace SyncKit.Server.WebSockets;
