@@ -128,7 +128,8 @@ public class AwarenessEntry
     /// <returns>True if the entry has expired</returns>
     public bool IsExpired()
     {
-        return DateTimeOffset.UtcNow.ToUnixTimeMilliseconds() > ExpiresAt;
+        // Treat entries that are at-or-after the expiration timestamp as expired.
+        return DateTimeOffset.UtcNow.ToUnixTimeMilliseconds() >= ExpiresAt;
     }
 
     /// <summary>

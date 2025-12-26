@@ -21,6 +21,7 @@ public class ConnectionManagerTests
     private readonly Mock<ILogger<JsonProtocolHandler>> _mockJsonHandlerLogger;
     private readonly Mock<ILogger<BinaryProtocolHandler>> _mockBinaryHandlerLogger;
     private readonly IOptions<SyncKitConfig> _options;
+    private readonly Mock<SyncKit.Server.Awareness.IAwarenessStore> _mockAwarenessStore;
     private readonly ConnectionManager _connectionManager;
 
     public ConnectionManagerTests()
@@ -50,10 +51,16 @@ public class ConnectionManagerTests
         };
         _options = Options.Create(config);
 
+        _mockAwarenessStore = new Mock<SyncKit.Server.Awareness.IAwarenessStore>();
+        // Default behavior: no awareness entries
+        _mockAwarenessStore.Setup(s => s.GetAsync(It.IsAny<string>(), It.IsAny<string>())).ReturnsAsync((SyncKit.Server.Awareness.AwarenessEntry?)null);
+        _mockAwarenessStore.Setup(s => s.RemoveAsync(It.IsAny<string>(), It.IsAny<string>())).Returns(Task.CompletedTask);
+
         _connectionManager = new ConnectionManager(
             _mockLoggerFactory.Object,
             _mockLogger.Object,
-            _options);
+            _options,
+            _mockAwarenessStore.Object);
     }
 
     #region CreateConnectionAsync Tests
@@ -104,10 +111,14 @@ public class ConnectionManagerTests
             WsHeartbeatTimeout = 60000
         };
         var limitedOptions = Options.Create(limitedConfig);
+        var limitedAwarenessStore = new Mock<SyncKit.Server.Awareness.IAwarenessStore>();
+        limitedAwarenessStore.Setup(s => s.GetAsync(It.IsAny<string>(), It.IsAny<string>())).ReturnsAsync((SyncKit.Server.Awareness.AwarenessEntry?)null);
+        limitedAwarenessStore.Setup(s => s.RemoveAsync(It.IsAny<string>(), It.IsAny<string>())).Returns(Task.CompletedTask);
         var limitedManager = new ConnectionManager(
             _mockLoggerFactory.Object,
             _mockLogger.Object,
-            limitedOptions);
+            limitedOptions,
+            limitedAwarenessStore.Object);
 
         // Fill to max
         for (int i = 0; i < 3; i++)
@@ -134,10 +145,14 @@ public class ConnectionManagerTests
             WsHeartbeatTimeout = 60000
         };
         var limitedOptions = Options.Create(limitedConfig);
+        var limitedAwarenessStore = new Mock<SyncKit.Server.Awareness.IAwarenessStore>();
+        limitedAwarenessStore.Setup(s => s.GetAsync(It.IsAny<string>(), It.IsAny<string>())).ReturnsAsync((SyncKit.Server.Awareness.AwarenessEntry?)null);
+        limitedAwarenessStore.Setup(s => s.RemoveAsync(It.IsAny<string>(), It.IsAny<string>())).Returns(Task.CompletedTask);
         var limitedManager = new ConnectionManager(
             _mockLoggerFactory.Object,
             _mockLogger.Object,
-            limitedOptions);
+            limitedOptions,
+            limitedAwarenessStore.Object);
 
         var firstSocket = CreateMockOpenWebSocket();
         await limitedManager.CreateConnectionAsync(firstSocket.Object);
@@ -667,6 +682,14 @@ public class ConnectionManagerTests
             It.IsAny<CancellationToken>()))
             .Returns(Task.CompletedTask);
 
+        // Also support the ReadOnlyMemory<byte> overload used by JSON protocol handler
+        mockWebSocket.Setup(ws => ws.SendAsync(
+            It.IsAny<ReadOnlyMemory<byte>>(),
+            It.IsAny<WebSocketMessageType>(),
+            It.IsAny<bool>(),
+            It.IsAny<CancellationToken>()))
+            .Returns(new ValueTask());
+
         return mockWebSocket;
     }
 
@@ -691,6 +714,7 @@ public class ConnectionDisconnectFlowTests
     private readonly Mock<ILogger<JsonProtocolHandler>> _mockJsonHandlerLogger;
     private readonly Mock<ILogger<BinaryProtocolHandler>> _mockBinaryHandlerLogger;
     private readonly IOptions<SyncKitConfig> _options;
+    private readonly Mock<SyncKit.Server.Awareness.IAwarenessStore> _mockAwarenessStore;
     private readonly ConnectionManager _connectionManager;
 
     public ConnectionDisconnectFlowTests()
@@ -720,10 +744,22 @@ public class ConnectionDisconnectFlowTests
         };
         _options = Options.Create(config);
 
+        _mockAwarenessStore = new Mock<SyncKit.Server.Awareness.IAwarenessStore>();
+        _mockAwarenessStore.Setup(s => s.GetAsync(It.IsAny<string>(), It.IsAny<string>())).ReturnsAsync((SyncKit.Server.Awareness.AwarenessEntry?)null);
+        _mockAwarenessStore.Setup(s => s.RemoveAsync(It.IsAny<string>(), It.IsAny<string>())).Returns(Task.CompletedTask);
+
         _connectionManager = new ConnectionManager(
             _mockLoggerFactory.Object,
             _mockLogger.Object,
-            _options);
+            _options,
+            _mockAwarenessStore.Object);
+    }
+
+    private void SetConnectionProtocol(IConnection connection, ProtocolType protocol)
+    {
+        typeof(Connection)
+            .GetProperty("Protocol")!
+            .SetValue(connection, protocol);
     }
 
     [Fact]
@@ -761,6 +797,69 @@ public class ConnectionDisconnectFlowTests
         // Assert - subscriptions cleared (connection removed from document lookups)
         Assert.Empty(_connectionManager.GetConnectionsByDocument("doc-1"));
         Assert.Empty(_connectionManager.GetConnectionsByDocument("doc-2"));
+    }
+
+    [Fact]
+    public async Task DisconnectFlow_RemovesAwarenessAndBroadcastsLeave()
+    {
+        // Arrange
+        var mockWebSocket1 = CreateMockOpenWebSocket();
+        var mockWebSocket2 = CreateMockOpenWebSocket();
+
+        var conn1 = await _connectionManager.CreateConnectionAsync(mockWebSocket1.Object);
+        var conn2 = await _connectionManager.CreateConnectionAsync(mockWebSocket2.Object);
+
+        // Both subscribe to the same document
+        conn1.AddSubscription("doc-1");
+        conn2.AddSubscription("doc-1");
+
+        // Ensure JSON protocol for simpler verification
+        SetConnectionProtocol(conn2, ProtocolType.Json);
+
+        // Setup awareness store to return an existing entry with a clock
+        var existingEntry = SyncKit.Server.Awareness.AwarenessEntry.FromState("doc-1", SyncKit.Server.Awareness.AwarenessState.Create(conn1.Id, null, 5));
+        _mockAwarenessStore.Setup(s => s.GetAsync("doc-1", conn1.Id)).ReturnsAsync(existingEntry);
+        _mockAwarenessStore.Setup(s => s.RemoveAsync("doc-1", conn1.Id)).Returns(Task.CompletedTask).Verifiable();
+
+        string? sentPayload = null;
+        mockWebSocket2.Setup(ws => ws.SendAsync(
+            It.IsAny<ReadOnlyMemory<byte>>(),
+            It.IsAny<WebSocketMessageType>(),
+            It.IsAny<bool>(),
+            It.IsAny<CancellationToken>()))
+            .Callback<ReadOnlyMemory<byte>, WebSocketMessageType, bool, CancellationToken>((data, type, end, ct) =>
+            {
+                // Capture sent JSON payload
+                sentPayload = System.Text.Encoding.UTF8.GetString(data.ToArray());
+            })
+            .Returns(new ValueTask());
+
+        // Reset any previous invocations
+        mockWebSocket1.Invocations.Clear();
+        mockWebSocket2.Invocations.Clear();
+
+        // Act
+        await _connectionManager.RemoveConnectionAsync(conn1.Id);
+
+        // Assert
+        _mockAwarenessStore.Verify(s => s.RemoveAsync("doc-1", conn1.Id), Times.Once);
+
+        // Ensure message was sent to other subscribers
+        mockWebSocket2.Verify(ws => ws.SendAsync(
+            It.IsAny<ReadOnlyMemory<byte>>(),
+            It.IsAny<WebSocketMessageType>(),
+            It.IsAny<bool>(),
+            It.IsAny<CancellationToken>()), Times.AtLeastOnce());
+
+        Assert.NotNull(sentPayload);
+
+        var doc = System.Text.Json.JsonDocument.Parse(sentPayload!);
+        var root = doc.RootElement;
+        Assert.Equal("awareness_update", root.GetProperty("type").GetString());
+        Assert.Equal("doc-1", root.GetProperty("documentId").GetString());
+        Assert.Equal(conn1.Id, root.GetProperty("clientId").GetString());
+        Assert.True(root.TryGetProperty("state", out var state) && state.ValueKind == System.Text.Json.JsonValueKind.Null, $"Unexpected state in payload: {sentPayload}");
+        Assert.Equal(6, root.GetProperty("clock").GetInt32());
     }
 
     [Fact]
@@ -818,6 +917,14 @@ public class ConnectionDisconnectFlowTests
             It.IsAny<bool>(),
             It.IsAny<CancellationToken>()))
             .Returns(Task.CompletedTask);
+
+        // Also support the ReadOnlyMemory<byte> overload used by JSON protocol handler
+        mockWebSocket.Setup(ws => ws.SendAsync(
+            It.IsAny<ReadOnlyMemory<byte>>(),
+            It.IsAny<WebSocketMessageType>(),
+            It.IsAny<bool>(),
+            It.IsAny<CancellationToken>()))
+            .Returns(new ValueTask());
 
         return mockWebSocket;
     }

@@ -1,11 +1,13 @@
 using Microsoft.Extensions.Logging;
 using Moq;
 using SyncKit.Server.Auth;
-using SyncKit.Server.Tests;
 using SyncKit.Server.WebSockets;
+using SyncKit.Server.Tests;
 using SyncKit.Server.WebSockets.Handlers;
 using SyncKit.Server.WebSockets.Protocol;
 using SyncKit.Server.WebSockets.Protocol.Messages;
+using SyncKit.Server.Awareness;
+using System.Text.Json;
 
 namespace SyncKit.Server.Tests.WebSockets.Handlers;
 
@@ -19,6 +21,7 @@ public class AwarenessUpdateMessageHandlerTests
     private readonly Mock<IConnection> _mockConnection;
     private readonly Mock<ILogger<AwarenessUpdateMessageHandler>> _mockLogger;
     private readonly Mock<IAwarenessStore> _mockStore;
+    private readonly Mock<IConnectionManager> _mockConnectionManager;
     private readonly AwarenessUpdateMessageHandler _handler;
 
     public AwarenessUpdateMessageHandlerTests()
@@ -30,9 +33,13 @@ public class AwarenessUpdateMessageHandlerTests
         _mockStore.Setup(s => s.SetAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<AwarenessState>(), It.IsAny<long>()))
             .ReturnsAsync(true);
 
+        _mockConnectionManager = new Mock<IConnectionManager>();
+        _mockConnectionManager.Setup(m => m.BroadcastToDocumentAsync(It.IsAny<string>(), It.IsAny<IMessage>(), It.IsAny<string?>())).Returns(Task.CompletedTask);
+
         _handler = new AwarenessUpdateMessageHandler(
             _authGuard,
             _mockStore.Object,
+            _mockConnectionManager.Object,
             _mockLogger.Object);
     }
 
@@ -55,6 +62,7 @@ public class AwarenessUpdateMessageHandlerTests
         var connectionId = "conn-456";
 
         SetupAuthenticatedConnection(connectionId, "user-1");
+        _mockConnection.Setup(c => c.GetSubscriptions()).Returns(new HashSet<string> { documentId });
 
         var awarenessState = new Dictionary<string, object>
         {
@@ -152,6 +160,7 @@ public class AwarenessUpdateMessageHandlerTests
         var userId = "user-789";
 
         SetupAuthenticatedConnection(connectionId, userId);
+        _mockConnection.Setup(c => c.GetSubscriptions()).Returns(new HashSet<string> { documentId });
 
         var awarenessState = new Dictionary<string, object>
         {
@@ -191,6 +200,8 @@ public class AwarenessUpdateMessageHandlerTests
         var exception = Assert.Throws<ArgumentNullException>(() =>
             new AwarenessUpdateMessageHandler(
                 null!,
+                _mockStore.Object,
+                _mockConnectionManager.Object,
                 _mockLogger.Object));
 
         Assert.Equal("authGuard", exception.ParamName);
@@ -203,6 +214,8 @@ public class AwarenessUpdateMessageHandlerTests
         var exception = Assert.Throws<ArgumentNullException>(() =>
             new AwarenessUpdateMessageHandler(
                 _authGuard,
+                _mockStore.Object,
+                _mockConnectionManager.Object,
                 null!));
 
         Assert.Equal("logger", exception.ParamName);
@@ -216,6 +229,7 @@ public class AwarenessUpdateMessageHandlerTests
         var connectionId = "conn-456";
 
         SetupAuthenticatedConnection(connectionId, "user-1");
+        _mockConnection.Setup(c => c.GetSubscriptions()).Returns(new HashSet<string> { documentId });
 
         var awarenessState = new Dictionary<string, object>
         {

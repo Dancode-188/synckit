@@ -402,6 +402,7 @@ public class MessageHandlerAuthEnforcementTests
     {
         // Arrange
         var mockAwarenessStore = new Mock<IAwarenessStore>();
+        mockAwarenessStore.Setup(s => s.GetAllAsync(It.IsAny<string>())).ReturnsAsync(Array.Empty<AwarenessEntry>());
         var handler = new AwarenessSubscribeMessageHandler(
             _authGuard,
             mockAwarenessStore.Object,
@@ -441,8 +442,12 @@ public class MessageHandlerAuthEnforcementTests
     public async Task AwarenessUpdateHandler_NotAuthenticated_SendsError()
     {
         // Arrange
+        var mockAwarenessStore = new Mock<IAwarenessStore>();
+        var mockConnMgr = new Mock<IConnectionManager>();
         var handler = new AwarenessUpdateMessageHandler(
             _authGuard,
+            mockAwarenessStore.Object,
+            mockConnMgr.Object,
             NullLogger<AwarenessUpdateMessageHandler>.Instance);
 
         _mockConnection.Setup(c => c.State).Returns(ConnectionState.Authenticating);
@@ -471,8 +476,12 @@ public class MessageHandlerAuthEnforcementTests
     public async Task AwarenessUpdateHandler_Authenticated_Succeeds()
     {
         // Arrange
+        var mockAwarenessStore = new Mock<IAwarenessStore>();
+        var mockConnMgr = new Mock<IConnectionManager>();
         var handler = new AwarenessUpdateMessageHandler(
             _authGuard,
+            mockAwarenessStore.Object,
+            mockConnMgr.Object,
             NullLogger<AwarenessUpdateMessageHandler>.Instance);
 
         var payload = new TokenPayload
@@ -490,6 +499,7 @@ public class MessageHandlerAuthEnforcementTests
         _mockConnection.Setup(c => c.TokenPayload).Returns(payload);
         _mockConnection.Setup(c => c.Id).Returns("conn-1");
         _mockConnection.Setup(c => c.UserId).Returns("user-1");
+        _mockConnection.Setup(c => c.GetSubscriptions()).Returns(new HashSet<string> { "doc-1" });
 
         var message = new AwarenessUpdateMessage
         {

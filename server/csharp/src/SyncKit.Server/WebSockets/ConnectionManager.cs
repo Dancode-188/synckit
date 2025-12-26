@@ -16,6 +16,7 @@ public class ConnectionManager : IConnectionManager
     private readonly ILoggerFactory _loggerFactory;
     private readonly ILogger<ConnectionManager> _logger;
     private readonly SyncKitConfig _config;
+    private readonly SyncKit.Server.Awareness.IAwarenessStore _awarenessStore;
     private int _connectionCounter;
 
     /// <summary>
@@ -27,11 +28,13 @@ public class ConnectionManager : IConnectionManager
     public ConnectionManager(
         ILoggerFactory loggerFactory,
         ILogger<ConnectionManager> logger,
-        IOptions<SyncKitConfig> options)
+        IOptions<SyncKitConfig> options,
+        SyncKit.Server.Awareness.IAwarenessStore awarenessStore)
     {
         _loggerFactory = loggerFactory ?? throw new ArgumentNullException(nameof(loggerFactory));
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
         _config = options?.Value ?? throw new ArgumentNullException(nameof(options));
+        _awarenessStore = awarenessStore ?? throw new ArgumentNullException(nameof(awarenessStore));
     }
 
     /// <inheritdoc />
@@ -126,6 +129,34 @@ public class ConnectionManager : IConnectionManager
         {
             _logger.LogDebug("Connection removed: {ConnectionId} (Total: {ConnectionCount})",
                 connectionId, _connections.Count);
+
+            // Capture subscribed documents before disposing the connection so we know which documents to notify
+            var subscribedDocs = connection.GetSubscriptions().ToList();
+
+            // Remove awareness entries and notify remaining subscribers for each subscribed document
+            foreach (var docId in subscribedDocs)
+            {
+                // Attempt to fetch existing awareness entry to compute a leave clock
+                var existing = await _awarenessStore.GetAsync(docId, connectionId);
+                var leaveClock = existing?.Clock + 1 ?? 1;
+
+                // Remove the awareness entry from the store
+                await _awarenessStore.RemoveAsync(docId, connectionId);
+
+                // Broadcast a leave (null state) to remaining subscribers
+                var leaveMsg = new Protocol.Messages.AwarenessUpdateMessage
+                {
+                    Id = Guid.NewGuid().ToString(),
+                    Timestamp = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds(),
+                    DocumentId = docId,
+                    ClientId = connectionId,
+                    // Use an explicit Json null element so the JSON serializer emits "state": null
+                    State = System.Text.Json.JsonDocument.Parse("null").RootElement,
+                    Clock = leaveClock
+                };
+
+                await BroadcastToDocumentAsync(docId, leaveMsg, excludeConnectionId: connectionId);
+            }
 
             await connection.DisposeAsync();
         }
