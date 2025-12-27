@@ -15,13 +15,13 @@ public static class HealthExtensions
     /// <summary>
     /// Adds SyncKit health check services to the DI container.
     /// </summary>
-    public static IServiceCollection AddSyncKitHealthChecks(this IServiceCollection services)
+    public static IServiceCollection AddSyncKitHealthChecks(this IServiceCollection services, IConfiguration? configuration = null)
     {
         // Register the server stats service as a singleton
         services.AddSingleton<IServerStatsService, ServerStatsService>();
 
         // Add ASP.NET Core health checks
-        services.AddHealthChecks()
+        var health = services.AddHealthChecks()
             .AddCheck<SyncKitLivenessHealthCheck>(
                 "liveness",
                 failureStatus: HealthStatus.Unhealthy,
@@ -30,6 +30,24 @@ public static class HealthExtensions
                 "readiness",
                 failureStatus: HealthStatus.Unhealthy,
                 tags: new[] { ReadinessTag });
+
+        // Conditionally register readiness checks for PostgreSQL and Redis when configuration is present
+        if (configuration != null)
+        {
+            var config = configuration.GetSection(SyncKit.Server.Configuration.SyncKitConfig.SectionName).Get<SyncKit.Server.Configuration.SyncKitConfig>();
+            if (config != null)
+            {
+                if (!string.IsNullOrEmpty(config.DatabaseUrl))
+                {
+                    health.AddCheck<PostgreSqlHealthCheck>("postgresql", tags: new[] { "db", ReadinessTag });
+                }
+
+                if (!string.IsNullOrEmpty(config.RedisUrl))
+                {
+                    health.AddCheck<RedisHealthCheck>("redis", tags: new[] { "cache", ReadinessTag });
+                }
+            }
+        }
 
         return services;
     }

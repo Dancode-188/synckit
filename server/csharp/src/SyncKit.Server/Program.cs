@@ -50,7 +50,7 @@ try
     builder.Services.AddSyncKitAuth();
 
     // Add health check services
-    builder.Services.AddSyncKitHealthChecks();
+    builder.Services.AddSyncKitHealthChecks(builder.Configuration);
 
     // Add WebSocket services
     builder.Services.AddSyncKitWebSockets();

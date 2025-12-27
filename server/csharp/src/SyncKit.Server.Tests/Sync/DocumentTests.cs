@@ -428,22 +428,24 @@ public class DocumentTests
         var doc = new Document("test-doc");
         var tasks = new List<Task>();
 
-        // Act - Mix subscribes and unsubscribes
+        // Act - For each connection, perform subscribe and optional unsubscribe in the same task to make ordering deterministic per connection.
         for (int i = 0; i < 50; i++)
         {
             var connId = i;
-            tasks.Add(Task.Run(() => doc.Subscribe($"conn-{connId}")));
-
-            if (i % 2 == 0)
+            tasks.Add(Task.Run(() =>
             {
-                tasks.Add(Task.Run(() => doc.Unsubscribe($"conn-{connId}")));
-            }
+                doc.Subscribe($"conn-{connId}");
+                if (connId % 2 == 0)
+                {
+                    doc.Unsubscribe($"conn-{connId}");
+                }
+            }));
         }
 
         await Task.WhenAll(tasks.ToArray());
 
-        // Assert - Should have roughly half subscribed
-        Assert.True(doc.SubscriberCount >= 20 && doc.SubscriberCount <= 30);
+        // Assert - Even connections unsubscribed, odd ones subscribed -> exactly 25 subscribers
+        Assert.Equal(25, doc.SubscriberCount);
     }
 
     [Fact]
