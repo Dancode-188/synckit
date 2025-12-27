@@ -161,3 +161,34 @@ jobs:
           # Ensure tests that rely on environment variables can run in CI
           DATABASE_URL: "Host=localhost;Port=5432;Username=synckit;Password=synckit_test;Database=synckit_test"
           JWT_SECRET: "test-secret-at-least-32-characters-long"
+
+  e2e-js-tests:
+    name: E2E JS Tests (Docker Compose)
+    runs-on: ubuntu-latest
+    needs: [build, docker]
+    timeout-minutes: 40
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v6
+
+      - name: Verify Docker available
+        run: |
+          docker version
+
+      - name: Setup bun (for tests)
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - name: Start test environment and run e2e tests
+        run: |
+          chmod +x server/csharp/src/run-tests.sh
+          server/csharp/src/run-tests.sh
+
+      - name: Upload E2E Artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: dotnet-e2e-artifacts
+          path: artifacts/e2e-tests/**
+
