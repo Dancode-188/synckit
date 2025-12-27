@@ -15,6 +15,15 @@ try
 
     var builder = WebApplication.CreateBuilder(args);
 
+    // Add Aspire service defaults when running under Aspire orchestration
+    // This provides OpenTelemetry, service discovery, and resilience patterns
+    var isAspireManaged = !string.IsNullOrEmpty(builder.Configuration["OTEL_EXPORTER_OTLP_ENDPOINT"]);
+    if (isAspireManaged)
+    {
+        builder.AddServiceDefaults();
+        Log.Information("Running under Aspire orchestration - service defaults enabled");
+    }
+
     // Configure Serilog from appsettings.json
     builder.Host.UseSerilog((context, services, configuration) => configuration
         .ReadFrom.Configuration(context.Configuration)
@@ -71,6 +80,12 @@ try
 
     // Enable WebSocket support with SyncKit middleware
     app.UseSyncKitWebSockets();
+
+    // Map Aspire default endpoints when running under orchestration
+    if (isAspireManaged)
+    {
+        app.MapDefaultEndpoints();
+    }
 
     // Mark server as ready to accept traffic
     SyncKitReadinessHealthCheck.SetReady(true);

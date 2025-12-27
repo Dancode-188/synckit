@@ -1,0 +1,98 @@
+{
+  "$schema": "https://json.schemastore.org/launchsettings.json",
+  "profiles": {
+    "Default (TypeScript + InMemory)": {
+      "commandName": "Project",
+      "dotnetRunMessages": true,
+      "launchBrowser": true,
+      "applicationUrl": "https://localhost:17235;http://localhost:15131",
+      "environmentVariables": {
+        "ASPNETCORE_ENVIRONMENT": "Development",
+        "DOTNET_ENVIRONMENT": "Development",
+        "ASPIRE_DASHBOARD_OTLP_ENDPOINT_URL": "https://localhost:21064",
+        "ASPIRE_DASHBOARD_MCP_ENDPOINT_URL": "https://localhost:23088",
+        "ASPIRE_RESOURCE_SERVICE_ENDPOINT_URL": "https://localhost:22290"
+      }
+    },
+    "C# Backend (InMemory)": {
+      "commandName": "Project",
+      "dotnetRunMessages": true,
+      "launchBrowser": true,
+      "applicationUrl": "https://localhost:17235;http://localhost:15131",
+      "environmentVariables": {
+        "ASPNETCORE_ENVIRONMENT": "Development",
+        "DOTNET_ENVIRONMENT": "Development",
+        "SyncKit__Backend": "csharp",
+        "SyncKit__Storage": "inmemory",
+        "SyncKit__Frontend": "react",
+        "ASPIRE_DASHBOARD_OTLP_ENDPOINT_URL": "https://localhost:21064",
+        "ASPIRE_DASHBOARD_MCP_ENDPOINT_URL": "https://localhost:23088",
+        "ASPIRE_RESOURCE_SERVICE_ENDPOINT_URL": "https://localhost:22290"
+      }
+    },
+    "TypeScript + PostgreSQL": {
+      "commandName": "Project",
+      "dotnetRunMessages": true,
+      "launchBrowser": true,
+      "applicationUrl": "https://localhost:17235;http://localhost:15131",
+      "environmentVariables": {
+        "ASPNETCORE_ENVIRONMENT": "Development",
+        "DOTNET_ENVIRONMENT": "Development",
+        "SyncKit__Backend": "typescript",
+        "SyncKit__Storage": "postgres",
+        "SyncKit__Frontend": "react",
+        "ASPIRE_DASHBOARD_OTLP_ENDPOINT_URL": "https://localhost:21064",
+        "ASPIRE_DASHBOARD_MCP_ENDPOINT_URL": "https://localhost:23088",
+        "ASPIRE_RESOURCE_SERVICE_ENDPOINT_URL": "https://localhost:22290"
+      }
+    },
+    "C# Backend + PostgreSQL": {
+      "commandName": "Project",
+      "dotnetRunMessages": true,
+      "launchBrowser": true,
+      "applicationUrl": "https://localhost:17235;http://localhost:15131",
+      "environmentVariables": {
+        "ASPNETCORE_ENVIRONMENT": "Development",
+        "DOTNET_ENVIRONMENT": "Development",
+        "SyncKit__Backend": "csharp",
+        "SyncKit__Storage": "postgres",
+        "SyncKit__Frontend": "react",
+        "ASPIRE_DASHBOARD_OTLP_ENDPOINT_URL": "https://localhost:21064",
+        "ASPIRE_DASHBOARD_MCP_ENDPOINT_URL": "https://localhost:23088",
+        "ASPIRE_RESOURCE_SERVICE_ENDPOINT_URL": "https://localhost:22290"
+      }
+    },
+    "Full Stack (Both Backends + PostgreSQL)": {
+      "commandName": "Project",
+      "dotnetRunMessages": true,
+      "launchBrowser": true,
+      "applicationUrl": "https://localhost:17235;http://localhost:15131",
+      "environmentVariables": {
+        "ASPNETCORE_ENVIRONMENT": "Development",
+        "DOTNET_ENVIRONMENT": "Development",
+        "SyncKit__Backend": "both",
+        "SyncKit__Storage": "postgres",
+        "SyncKit__Frontend": "react",
+        "ASPIRE_DASHBOARD_OTLP_ENDPOINT_URL": "https://localhost:21064",
+        "ASPIRE_DASHBOARD_MCP_ENDPOINT_URL": "https://localhost:23088",
+        "ASPIRE_RESOURCE_SERVICE_ENDPOINT_URL": "https://localhost:22290"
+      }
+    },
+    "Backend Only (No Frontend)": {
+      "commandName": "Project",
+      "dotnetRunMessages": true,
+      "launchBrowser": true,
+      "applicationUrl": "http://localhost:15131",
+      "environmentVariables": {
+        "ASPNETCORE_ENVIRONMENT": "Development",
+        "DOTNET_ENVIRONMENT": "Development",
+        "SyncKit__Backend": "typescript",
+        "SyncKit__Storage": "inmemory",
+        "SyncKit__Frontend": "none",
+        "ASPIRE_DASHBOARD_OTLP_ENDPOINT_URL": "http://localhost:19057",
+        "ASPIRE_DASHBOARD_MCP_ENDPOINT_URL": "http://localhost:18147",
+        "ASPIRE_RESOURCE_SERVICE_ENDPOINT_URL": "http://localhost:20081"
+      }
+    }
+  }
+}
