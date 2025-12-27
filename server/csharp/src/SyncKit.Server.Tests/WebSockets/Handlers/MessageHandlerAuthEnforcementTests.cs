@@ -33,10 +33,12 @@ public class MessageHandlerAuthEnforcementTests
     public async Task SubscribeHandler_NotAuthenticated_SendsError()
     {
         // Arrange
-        var mockDocStore = new Mock<IDocumentStore>();
+        var mockStorage = new Mock<SyncKit.Server.Storage.IStorageAdapter>();
+        mockStorage.Setup(s => s.GetDeltasAsync(It.IsAny<string>(), It.IsAny<int>()))
+            .ReturnsAsync(new List<SyncKit.Server.Storage.DeltaEntry>());
         var handler = new SubscribeMessageHandler(
             _authGuard,
-            mockDocStore.Object,
+            mockStorage.Object,
             NullLogger<SubscribeMessageHandler>.Instance);
 
         _mockConnection.Setup(c => c.State).Returns(ConnectionState.Authenticating);
@@ -63,10 +65,16 @@ public class MessageHandlerAuthEnforcementTests
     public async Task SubscribeHandler_NoReadPermission_SendsError()
     {
         // Arrange
-        var mockDocStore = new Mock<IDocumentStore>();
+        var mockStorage = new Mock<SyncKit.Server.Storage.IStorageAdapter>();
+        mockStorage.Setup(s => s.GetDeltasAsync(It.IsAny<string>(), It.IsAny<int>()))
+            .ReturnsAsync(new List<SyncKit.Server.Storage.DeltaEntry>());
+        var mockDoc = new Document("doc-1");
+        mockStorage.Setup(s => s.GetDocumentAsync("doc-1", It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new SyncKit.Server.Storage.DocumentState("doc-1", System.Text.Json.JsonDocument.Parse("{}").RootElement, 0, DateTime.UtcNow, DateTime.UtcNow));
+
         var handler = new SubscribeMessageHandler(
             _authGuard,
-            mockDocStore.Object,
+            mockStorage.Object,
             NullLogger<SubscribeMessageHandler>.Instance);
 
         var payload = new TokenPayload
@@ -105,13 +113,15 @@ public class MessageHandlerAuthEnforcementTests
     public async Task SubscribeHandler_WithReadPermission_AllowsSubscription()
     {
         // Arrange
-        var mockDocStore = new Mock<IDocumentStore>();
-        var mockDoc = new Document("doc-1");
-        mockDocStore.Setup(d => d.GetOrCreateAsync("doc-1")).ReturnsAsync(mockDoc);
+        var mockStorage = new Mock<SyncKit.Server.Storage.IStorageAdapter>();
+        mockStorage.Setup(s => s.GetDeltasAsync(It.IsAny<string>(), It.IsAny<int>()))
+            .ReturnsAsync(new List<SyncKit.Server.Storage.DeltaEntry>());
+        mockStorage.Setup(s => s.GetDocumentAsync("doc-1", It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new SyncKit.Server.Storage.DocumentState("doc-1", System.Text.Json.JsonDocument.Parse("{}").RootElement, 0, DateTime.UtcNow, DateTime.UtcNow));
 
         var handler = new SubscribeMessageHandler(
             _authGuard,
-            mockDocStore.Object,
+            mockStorage.Object,
             NullLogger<SubscribeMessageHandler>.Instance);
 
         var payload = new TokenPayload
@@ -149,13 +159,15 @@ public class MessageHandlerAuthEnforcementTests
     public async Task SubscribeHandler_AdminUser_AllowsSubscriptionToAnyDocument()
     {
         // Arrange
-        var mockDocStore = new Mock<IDocumentStore>();
-        var mockDoc = new Document("any-doc");
-        mockDocStore.Setup(d => d.GetOrCreateAsync("any-doc")).ReturnsAsync(mockDoc);
+        var mockStorage = new Mock<SyncKit.Server.Storage.IStorageAdapter>();
+        mockStorage.Setup(s => s.GetDeltasAsync(It.IsAny<string>(), It.IsAny<int>()))
+            .ReturnsAsync(new List<SyncKit.Server.Storage.DeltaEntry>());
+        mockStorage.Setup(s => s.GetDocumentAsync("any-doc", It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new SyncKit.Server.Storage.DocumentState("any-doc", System.Text.Json.JsonDocument.Parse("{}").RootElement, 0, DateTime.UtcNow, DateTime.UtcNow));
 
         var handler = new SubscribeMessageHandler(
             _authGuard,
-            mockDocStore.Object,
+            mockStorage.Object,
             NullLogger<SubscribeMessageHandler>.Instance);
 
         var payload = new TokenPayload
@@ -197,11 +209,11 @@ public class MessageHandlerAuthEnforcementTests
     public async Task DeltaHandler_NotAuthenticated_SendsError()
     {
         // Arrange
-        var mockDocStore = new Mock<IDocumentStore>();
+        var mockStorage = new Mock<SyncKit.Server.Storage.IStorageAdapter>();
         var mockConnManager = new Mock<IConnectionManager>();
         var handler = new DeltaMessageHandler(
             _authGuard,
-            mockDocStore.Object,
+            mockStorage.Object,
             mockConnManager.Object,
             NullLogger<DeltaMessageHandler>.Instance);
 
@@ -230,11 +242,11 @@ public class MessageHandlerAuthEnforcementTests
     public async Task DeltaHandler_NoWritePermission_SendsError()
     {
         // Arrange
-        var mockDocStore = new Mock<IDocumentStore>();
+        var mockStorage = new Mock<SyncKit.Server.Storage.IStorageAdapter>();
         var mockConnManager = new Mock<IConnectionManager>();
         var handler = new DeltaMessageHandler(
             _authGuard,
-            mockDocStore.Object,
+            mockStorage.Object,
             mockConnManager.Object,
             NullLogger<DeltaMessageHandler>.Instance);
 
@@ -275,13 +287,13 @@ public class MessageHandlerAuthEnforcementTests
     public async Task DeltaHandler_HasWritePermission_Succeeds()
     {
         // Arrange
-        var mockDocStore = new Mock<IDocumentStore>();
+        var mockStorage = new Mock<SyncKit.Server.Storage.IStorageAdapter>();
         var mockConnManager = new Mock<IConnectionManager>();
-        mockDocStore.Setup(d => d.AddDeltaAsync(It.IsAny<string>(), It.IsAny<StoredDelta>()))
-            .Returns(Task.CompletedTask);
+        mockStorage.Setup(s => s.SaveDeltaAsync(It.IsAny<SyncKit.Server.Storage.DeltaEntry>(), It.IsAny<CancellationToken>()))
+            .Returns<SyncKit.Server.Storage.DeltaEntry, CancellationToken>((de, ct) => Task.FromResult(de));
         var handler = new DeltaMessageHandler(
             _authGuard,
-            mockDocStore.Object,
+            mockStorage.Object,
             mockConnManager.Object,
             NullLogger<DeltaMessageHandler>.Instance);
 
@@ -323,11 +335,11 @@ public class MessageHandlerAuthEnforcementTests
     public async Task DeltaHandler_NullDelta_SendsError()
     {
         // Arrange
-        var mockDocStore = new Mock<IDocumentStore>();
+        var mockStorage = new Mock<SyncKit.Server.Storage.IStorageAdapter>();
         var mockConnManager = new Mock<IConnectionManager>();
         var handler = new DeltaMessageHandler(
             _authGuard,
-            mockDocStore.Object,
+            mockStorage.Object,
             mockConnManager.Object,
             NullLogger<DeltaMessageHandler>.Instance);
 

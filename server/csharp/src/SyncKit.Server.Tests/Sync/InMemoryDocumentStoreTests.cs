@@ -4,69 +4,78 @@ using Moq;
 using SyncKit.Server.Sync;
 using Xunit;
 
+#pragma warning disable CS0618 // Using obsolete InMemoryDocumentStore in tests during migration
 namespace SyncKit.Server.Tests.Sync;
 
 /// <summary>
-/// Tests for InMemoryDocumentStore implementation.
+/// Tests for InMemoryStorageAdapter implementation.
 /// </summary>
-public class InMemoryDocumentStoreTests
+public class InMemoryStorageAdapterTests
 {
-    private readonly Mock<ILogger<InMemoryDocumentStore>> _mockLogger;
-    private readonly InMemoryDocumentStore _store;
+    private readonly Mock<ILogger> _mockLogger;
+    private readonly InMemoryStorageAdapter _store;
 
-    public InMemoryDocumentStoreTests()
+    public InMemoryStorageAdapterTests()
     {
-        _mockLogger = new Mock<ILogger<InMemoryDocumentStore>>();
-        _store = new InMemoryDocumentStore(_mockLogger.Object);
+        _mockLogger = new Mock<ILogger>();
+        _store = new InMemoryStorageAdapter(_mockLogger.Object);
     }
 
     #region GetOrCreateAsync Tests
 
     [Fact]
-    public async Task GetOrCreateAsync_NewDocument_CreatesDocument()
+    public async Task SaveAndGetDocument_ShouldCreateAndRetrieveDocument()
     {
         // Arrange
         var docId = "test-doc";
 
-        // Act
-        var doc = await _store.GetOrCreateAsync(docId);
+        // Pre-condition: document should not exist
+        var before = await _store.GetDocumentAsync(docId);
+        Assert.Null(before);
 
-        // Assert
-        Assert.NotNull(doc);
-        Assert.Equal(docId, doc.Id);
-        Assert.Equal(0, doc.DeltaCount);
-        Assert.Equal(0, doc.SubscriberCount);
+        // Act - create document
+        await _store.SaveDocumentAsync(docId, JsonDocument.Parse("{}").RootElement);
+
+        // Assert - now document state should be retrievable
+        var ds = await _store.GetDocumentAsync(docId);
+        Assert.NotNull(ds);
+        Assert.Equal(docId, ds!.Id);
     }
 
     [Fact]
-    public async Task GetOrCreateAsync_ExistingDocument_ReturnsExisting()
+    public async Task SaveDocumentAsync_ExistingDocument_ReturnsState()
     {
         // Arrange
         var docId = "test-doc";
-        var first = await _store.GetOrCreateAsync(docId);
+        await _store.SaveDocumentAsync(docId, JsonDocument.Parse("{}").RootElement);
 
         // Act
-        var second = await _store.GetOrCreateAsync(docId);
+        var second = await _store.GetDocumentAsync(docId);
 
         // Assert
-        Assert.Same(first, second);
+        Assert.NotNull(second);
+        Assert.Equal(docId, second!.Id);
     }
 
     [Fact]
-    public async Task GetOrCreateAsync_MultipleDocuments_CreatesSeparately()
+    public async Task SaveDocumentAsync_MultipleDocuments_CreatesSeparately()
     {
         // Arrange
         var docId1 = "doc-1";
         var docId2 = "doc-2";
 
         // Act
-        var doc1 = await _store.GetOrCreateAsync(docId1);
-        var doc2 = await _store.GetOrCreateAsync(docId2);
+        await _store.SaveDocumentAsync(docId1, JsonDocument.Parse("{}").RootElement);
+        await _store.SaveDocumentAsync(docId2, JsonDocument.Parse("{}").RootElement);
+
+        var d1 = await _store.GetDocumentAsync(docId1);
+        var d2 = await _store.GetDocumentAsync(docId2);
 
         // Assert
-        Assert.NotSame(doc1, doc2);
-        Assert.Equal(docId1, doc1.Id);
-        Assert.Equal(docId2, doc2.Id);
+        Assert.NotNull(d1);
+        Assert.NotNull(d2);
+        Assert.Equal(docId1, d1!.Id);
+        Assert.Equal(docId2, d2!.Id);
     }
 
     #endregion
@@ -74,31 +83,31 @@ public class InMemoryDocumentStoreTests
     #region GetAsync Tests
 
     [Fact]
-    public async Task GetAsync_NonExistentDocument_ReturnsNull()
+    public async Task GetDocumentAsync_NonExistentDocument_ReturnsNull()
     {
         // Arrange
         var docId = "non-existent";
 
         // Act
-        var doc = await _store.GetAsync(docId);
+        var ds = await _store.GetDocumentAsync(docId);
 
         // Assert
-        Assert.Null(doc);
+        Assert.Null(ds);
     }
 
     [Fact]
-    public async Task GetAsync_ExistingDocument_ReturnsDocument()
+    public async Task GetDocumentAsync_ExistingDocument_ReturnsDocument()
     {
         // Arrange
         var docId = "test-doc";
-        var created = await _store.GetOrCreateAsync(docId);
+        await _store.SaveDocumentAsync(docId, JsonDocument.Parse("{}").RootElement);
 
         // Act
-        var retrieved = await _store.GetAsync(docId);
+        var retrieved = await _store.GetDocumentAsync(docId);
 
         // Assert
         Assert.NotNull(retrieved);
-        Assert.Same(created, retrieved);
+        Assert.Equal(docId, retrieved!.Id);
     }
 
     #endregion
@@ -141,16 +150,13 @@ public class InMemoryDocumentStoreTests
     {
         // Arrange
         var docId = "test-doc";
-        await _store.GetOrCreateAsync(docId);
+        await _store.SaveDocumentAsync(docId, JsonDocument.Parse("{}").RootElement);
 
         // Act
-        await _store.DeleteAsync(docId);
+        await _store.DeleteDocumentAsync(docId);
 
-        // Assert
-        var exists = await _store.ExistsAsync(docId);
-        Assert.False(exists);
-
-        var doc = await _store.GetAsync(docId);
+        // Assert - Document should no longer exist
+        var doc = await _store.GetDocumentAsync(docId);
         Assert.Null(doc);
     }
 
@@ -170,7 +176,7 @@ public class InMemoryDocumentStoreTests
         // Arrange
         var docId = "test-doc";
         var delta = CreateTestDelta("delta-1", "client-1");
-        await _store.AddDeltaAsync(docId, delta);
+        await _store.SaveDeltaAsync(delta with { DocumentId = docId });
 
         // Act
         await _store.DeleteAsync(docId);
@@ -234,19 +240,18 @@ public class InMemoryDocumentStoreTests
     #region AddDeltaAsync Tests
 
     [Fact]
-    public async Task AddDeltaAsync_NonExistentDocument_CreatesAndAddsDelta()
+    public async Task SaveDeltaAsync_NonExistentDocument_CreatesAndAddsDelta()
     {
         // Arrange
         var docId = "test-doc";
         var delta = CreateTestDelta("delta-1", "client-1");
 
         // Act
-        await _store.AddDeltaAsync(docId, delta);
+        await _store.SaveDeltaAsync(delta with { DocumentId = docId });
 
-        // Assert
-        var doc = await _store.GetAsync(docId);
-        Assert.NotNull(doc);
-        Assert.Equal(1, doc.DeltaCount);
+        // Assert - Verify that a delta was saved
+        var deltas = await _store.GetDeltasAsync(docId);
+        Assert.Equal(1, deltas.Count);
     }
 
     [Fact]
@@ -258,12 +263,11 @@ public class InMemoryDocumentStoreTests
         var delta = CreateTestDelta("delta-1", "client-1");
 
         // Act
-        await _store.AddDeltaAsync(docId, delta);
+        await _store.SaveDeltaAsync(delta with { DocumentId = docId });
 
-        // Assert
-        var doc = await _store.GetAsync(docId);
-        Assert.NotNull(doc);
-        Assert.Equal(1, doc.DeltaCount);
+        // Assert - Verify that a delta was saved
+        var deltas = await _store.GetDeltasAsync(docId);
+        Assert.Equal(1, deltas.Count);
     }
 
     [Fact]
@@ -275,15 +279,14 @@ public class InMemoryDocumentStoreTests
         var delta2 = CreateTestDelta("delta-2", "client-1", 2);
         var delta3 = CreateTestDelta("delta-3", "client-2", 1);
 
-        // Act
-        await _store.AddDeltaAsync(docId, delta1);
-        await _store.AddDeltaAsync(docId, delta2);
-        await _store.AddDeltaAsync(docId, delta3);
+        // Act - Save all deltas
+        await _store.SaveDeltaAsync(delta1 with { DocumentId = docId });
+        await _store.SaveDeltaAsync(delta2 with { DocumentId = docId });
+        await _store.SaveDeltaAsync(delta3 with { DocumentId = docId });
 
-        // Assert
-        var doc = await _store.GetAsync(docId);
-        Assert.NotNull(doc);
-        Assert.Equal(3, doc.DeltaCount);
+        // Assert - All deltas should be present
+        var deltas = await _store.GetDeltasAsync(docId);
+        Assert.Equal(3, deltas.Count);
     }
 
     [Fact]
@@ -294,15 +297,14 @@ public class InMemoryDocumentStoreTests
         var delta1 = CreateTestDelta("delta-1", "client-1", 1);
         var delta2 = CreateTestDelta("delta-2", "client-2", 1);
 
-        // Act
-        await _store.AddDeltaAsync(docId, delta1);
-        await _store.AddDeltaAsync(docId, delta2);
+        // Act - Save both deltas
+        await _store.SaveDeltaAsync(delta1 with { DocumentId = docId });
+        await _store.SaveDeltaAsync(delta2 with { DocumentId = docId });
 
-        // Assert
-        var doc = await _store.GetAsync(docId);
-        Assert.NotNull(doc);
-        Assert.Equal(1, doc.VectorClock.Get("client-1"));
-        Assert.Equal(1, doc.VectorClock.Get("client-2"));
+        // Assert - Vector clock should reflect both clients
+        var vc = await _store.GetVectorClockAsync(docId);
+        Assert.Equal(1L, vc["client-1"]);
+        Assert.Equal(1L, vc["client-2"]);
     }
 
     #endregion
@@ -327,7 +329,7 @@ public class InMemoryDocumentStoreTests
     {
         // Arrange
         var docId = "test-doc";
-        await _store.GetOrCreateAsync(docId);
+        await _store.SaveDocumentAsync(docId, JsonDocument.Parse("{}").RootElement);
 
         // Act
         var deltas = await _store.GetDeltasSinceAsync(docId, null);
@@ -389,13 +391,12 @@ public class InMemoryDocumentStoreTests
         // Arrange
         var docId = "test-doc";
         var delta = CreateTestDelta("delta-1", "client-1", 1);
-        await _store.AddDeltaAsync(docId, delta);
+        await _store.SaveDeltaAsync(delta with { DocumentId = docId });
 
-        var doc = await _store.GetAsync(docId);
-        var currentClock = doc!.VectorClock;
+        var currentClock = await _store.GetVectorClockAsync(docId);
 
         // Act
-        var deltas = await _store.GetDeltasSinceAsync(docId, currentClock);
+        var deltas = await _store.GetDeltasSinceAsync(docId, VectorClock.FromDict(currentClock));
 
         // Assert
         Assert.Empty(deltas);
@@ -403,46 +404,27 @@ public class InMemoryDocumentStoreTests
 
     #endregion
 
-    #region GetStats Tests
+    #region Document listing and delta summary
 
     [Fact]
-    public void GetStats_EmptyStore_ReturnsZeros()
+    public async Task ListDocumentsAndDeltas_ShouldReportCounts()
     {
-        // Act
-        var stats = _store.GetStats();
-
-        // Assert
-        Assert.Equal(0, stats.DocumentCount);
-        Assert.Equal(0, stats.TotalDeltas);
-        Assert.Equal(0, stats.TotalSubscribers);
-    }
-
-    [Fact]
-    public async Task GetStats_WithDocuments_ReturnsAccurateStats()
-    {
-        // Arrange
-        await _store.GetOrCreateAsync("doc-1");
-        await _store.GetOrCreateAsync("doc-2");
+        // Arrange - create two documents
+        await _store.SaveDocumentAsync("doc-1", JsonDocument.Parse("{}").RootElement);
+        await _store.SaveDocumentAsync("doc-2", JsonDocument.Parse("{}").RootElement);
 
         var delta1 = CreateTestDelta("delta-1", "client-1", 1);
         var delta2 = CreateTestDelta("delta-2", "client-1", 2);
-        await _store.AddDeltaAsync("doc-1", delta1);
-        await _store.AddDeltaAsync("doc-1", delta2);
-
-        var doc1 = await _store.GetAsync("doc-1");
-        doc1!.Subscribe("conn-1");
-        doc1.Subscribe("conn-2");
-
-        var doc2 = await _store.GetAsync("doc-2");
-        doc2!.Subscribe("conn-3");
+        await _store.SaveDeltaAsync(delta1 with { DocumentId = "doc-1" });
+        await _store.SaveDeltaAsync(delta2 with { DocumentId = "doc-1" });
 
         // Act
-        var stats = _store.GetStats();
+        var docs = await _store.ListDocumentsAsync();
+        var deltas = await _store.GetDeltasAsync("doc-1");
 
         // Assert
-        Assert.Equal(2, stats.DocumentCount);
-        Assert.Equal(2, stats.TotalDeltas);
-        Assert.Equal(3, stats.TotalSubscribers);
+        Assert.Equal(2, docs.Count);
+        Assert.Equal(2, deltas.Count);
     }
 
     #endregion
@@ -467,23 +449,23 @@ public class InMemoryDocumentStoreTests
                 for (int j = 1; j <= deltasPerClient; j++)
                 {
                     var delta = CreateTestDelta($"{clientId}-delta-{j}", clientId, j);
-                    await _store.AddDeltaAsync(docId, delta);
+                    await _store.SaveDeltaAsync(delta with { DocumentId = docId });
                 }
             }));
         }
 
         await Task.WhenAll(tasks);
 
-        // Assert
-        var doc = await _store.GetAsync(docId);
-        Assert.NotNull(doc);
-        Assert.Equal(clientCount * deltasPerClient, doc.DeltaCount);
+        // Assert - Verify total deltas
+        var deltas = await _store.GetDeltasAsync(docId);
+        Assert.Equal(clientCount * deltasPerClient, deltas.Count);
 
         // Verify all client clocks are correct
+        var vc = await _store.GetVectorClockAsync(docId);
         for (int i = 0; i < clientCount; i++)
         {
             var clientId = $"client-{i}";
-            Assert.Equal(deltasPerClient, doc.VectorClock.Get(clientId));
+            Assert.Equal(deltasPerClient, vc[clientId]);
         }
     }
 
@@ -495,40 +477,41 @@ public class InMemoryDocumentStoreTests
         var tasks = new List<Task<Document>>();
         var threadCount = 100;
 
-        // Act - Multiple threads trying to get/create the same document
+        // Act - Multiple threads trying to save the same document concurrently
         for (int i = 0; i < threadCount; i++)
         {
-            tasks.Add(_store.GetOrCreateAsync(docId));
+            tasks.Add(_store.SaveDocumentAsync(docId, JsonDocument.Parse("{}").RootElement));
         }
 
-        var documents = await Task.WhenAll(tasks);
+        await Task.WhenAll(tasks);
 
-        // Assert - All threads should get the same instance
-        var firstDoc = documents[0];
-        Assert.All(documents, doc => Assert.Same(firstDoc, doc));
+        // Assert - The document should exist and only one entry should be listed
+        var docs = await _store.ListDocumentsAsync();
+        Assert.Single(docs.Where(d => d.Id == docId));
     }
 
     #endregion
 
     #region Helper Methods
 
-    private static StoredDelta CreateTestDelta(
+    private static Storage.DeltaEntry CreateTestDelta(
         string id,
         string clientId,
         long clockValue = 1)
     {
-        var vectorClock = new VectorClock(new Dictionary<string, long>
-        {
-            [clientId] = clockValue
-        });
+        var vc = new Dictionary<string, long> { [clientId] = clockValue };
 
-        return new StoredDelta
+        return new Storage.DeltaEntry
         {
             Id = id,
+            DocumentId = string.Empty, // caller will set DocumentId when needed
             ClientId = clientId,
-            Timestamp = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds(),
-            Data = JsonDocument.Parse("{}").RootElement,
-            VectorClock = vectorClock
+            OperationType = "set",
+            FieldPath = string.Empty,
+            Value = JsonDocument.Parse("{}").RootElement,
+            ClockValue = clockValue,
+            Timestamp = DateTime.UtcNow,
+            VectorClock = vc
         };
     }
 

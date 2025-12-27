@@ -20,8 +20,9 @@ public static class WebSocketExtensions
     {
         services.AddSingleton<IConnectionManager, ConnectionManager>();
 
-        // Register document store
-        services.AddSingleton<IDocumentStore, InMemoryDocumentStore>();
+        // Register in-memory storage adapter (single modern registration)
+        services.AddSingleton<Storage.InMemoryStorageAdapter>();
+        services.AddSingleton<Storage.IStorageAdapter>(sp => sp.GetRequiredService<Storage.InMemoryStorageAdapter>());
 
         // Register awareness store (in-memory for Phase 5)
         services.AddSingleton<IAwarenessStore, InMemoryAwarenessStore>();

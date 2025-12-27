@@ -8,26 +8,86 @@ using SyncKit.Server.WebSockets;
 using SyncKit.Server.WebSockets.Handlers;
 using SyncKit.Server.WebSockets.Protocol;
 using SyncKit.Server.WebSockets.Protocol.Messages;
-
 namespace SyncKit.Server.Tests.WebSockets.Handlers;
 
 public class SyncRequestMessageHandlerTests
 {
     private readonly AuthGuard _authGuard;
-    private readonly Mock<IDocumentStore> _mockDocumentStore;
+    private readonly Mock<SyncKit.Server.Storage.IStorageAdapter> _mockStorage;
     private readonly Mock<IConnection> _mockConnection;
     private readonly SyncRequestMessageHandler _handler;
+
+    // In-memory mapping to simulate document deltas per document id for tests
+    private readonly Dictionary<string, IReadOnlyList<SyncKit.Server.Storage.DeltaEntry>> _storageDeltas = new();
 
     public SyncRequestMessageHandlerTests()
     {
         _authGuard = new AuthGuard(NullLogger<AuthGuard>.Instance);
-        _mockDocumentStore = new Mock<IDocumentStore>();
+        _mockStorage = new Mock<SyncKit.Server.Storage.IStorageAdapter>();
         _mockConnection = new Mock<IConnection>();
+
+        // Default storage behavior: consult _storageDeltas map for entries and compute merged vector clock
+        _mockStorage.Setup(s => s.GetDeltasAsync(It.IsAny<string>(), It.IsAny<int>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync((string id, int limit, CancellationToken ct) =>
+                _storageDeltas.TryGetValue(id, out var list) ? list : Array.Empty<SyncKit.Server.Storage.DeltaEntry>().ToList().AsReadOnly());
+
+        _mockStorage.Setup(s => s.GetVectorClockAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync((string id, CancellationToken ct) =>
+            {
+                if (!_storageDeltas.TryGetValue(id, out var list)) return new Dictionary<string, long>();
+                var merged = new Dictionary<string, long>();
+                foreach (var e in list)
+                {
+                    if (e.VectorClock == null) continue;
+                    foreach (var kv in e.VectorClock)
+                    {
+                        if (!merged.ContainsKey(kv.Key) || merged[kv.Key] < kv.Value)
+                            merged[kv.Key] = kv.Value;
+                    }
+                }
+                return merged;
+            });
+
+        // Document existence is determined by presence in _storageDeltas; return a DocumentState with merged vector clock when present
+        _mockStorage.Setup(s => s.GetDocumentAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync((string id, CancellationToken ct) =>
+            {
+                if (!_storageDeltas.TryGetValue(id, out var list)) return (Storage.DocumentState?)null;
+                var merged = new Dictionary<string, long>();
+                foreach (var e in list)
+                {
+                    if (e.VectorClock == null) continue;
+                    foreach (var kv in e.VectorClock)
+                    {
+                        if (!merged.ContainsKey(kv.Key) || merged[kv.Key] < kv.Value)
+                            merged[kv.Key] = kv.Value;
+                    }
+                }
+                return new Storage.DocumentState(
+                    id,
+                    JsonSerializer.Deserialize<JsonElement>("{}"),
+                    1,
+                    DateTime.UtcNow,
+                    DateTime.UtcNow
+                );
+            });
 
         _handler = new SyncRequestMessageHandler(
             _authGuard,
-            _mockDocumentStore.Object,
+            _mockStorage.Object,
             NullLogger<SyncRequestMessageHandler>.Instance);
+    }
+
+    [Fact]
+    public void Constructor_WithNullStorage_ShouldThrowArgumentNullException()
+    {
+        var exception = Assert.Throws<ArgumentNullException>(() =>
+            new SyncRequestMessageHandler(
+                _authGuard,
+                (SyncKit.Server.Storage.IStorageAdapter)null!,
+                NullLogger<SyncRequestMessageHandler>.Instance));
+
+        Assert.Equal("storage", exception.ParamName);
     }
 
     [Fact]
@@ -50,8 +110,10 @@ public class SyncRequestMessageHandlerTests
         var messageId = "msg-1";
 
         SetupAuthenticatedConnectionWithReadAccess(connectionId, documentId);
-        _mockDocumentStore.Setup(ds => ds.GetAsync(documentId))
-            .ReturnsAsync((Document?)null);
+        _mockStorage.Setup(s => s.GetDeltasAsync(documentId, It.IsAny<int>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new List<SyncKit.Server.Storage.DeltaEntry>());
+        _mockStorage.Setup(s => s.GetVectorClockAsync(documentId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new Dictionary<string, long>());
 
         SyncResponseMessage? response = null;
         _mockConnection.Setup(c => c.Send(It.IsAny<SyncResponseMessage>()))
@@ -84,14 +146,35 @@ public class SyncRequestMessageHandlerTests
 
         SetupAuthenticatedConnectionWithReadAccess(connectionId, documentId);
 
-        var document = new Document(documentId);
-        var delta1 = CreateStoredDelta("delta-1", "client-1", 1);
-        var delta2 = CreateStoredDelta("delta-2", "client-1", 2);
-        document.AddDelta(delta1);
-        document.AddDelta(delta2);
+        var entries = new List<SyncKit.Server.Storage.DeltaEntry>
+        {
+            new SyncKit.Server.Storage.DeltaEntry
+            {
+                Id = "delta-1",
+                DocumentId = documentId,
+                ClientId = "client-1",
+                OperationType = "set",
+                FieldPath = "field",
+                Value = JsonSerializer.Deserialize<JsonElement>("{\"id\":\"delta-1\"}"),
+                ClockValue = 1,
+                Timestamp = DateTime.UtcNow,
+                VectorClock = new Dictionary<string, long> { { "client-1", 1 } }
+            },
+            new SyncKit.Server.Storage.DeltaEntry
+            {
+                Id = "delta-2",
+                DocumentId = documentId,
+                ClientId = "client-1",
+                OperationType = "set",
+                FieldPath = "field",
+                Value = JsonSerializer.Deserialize<JsonElement>("{\"id\":\"delta-2\"}"),
+                ClockValue = 2,
+                Timestamp = DateTime.UtcNow,
+                VectorClock = new Dictionary<string, long> { { "client-1", 2 } }
+            }
+        };
 
-        _mockDocumentStore.Setup(ds => ds.GetAsync(documentId))
-            .ReturnsAsync(document);
+        _storageDeltas[documentId] = entries;
 
         SyncResponseMessage? response = null;
         _mockConnection.Setup(c => c.Send(It.IsAny<SyncResponseMessage>()))
@@ -127,16 +210,47 @@ public class SyncRequestMessageHandlerTests
 
         SetupAuthenticatedConnectionWithReadAccess(connectionId, documentId);
 
-        var document = new Document(documentId);
-        var delta1 = CreateStoredDelta("delta-1", "client-1", 1);
-        var delta2 = CreateStoredDelta("delta-2", "client-1", 2);
-        var delta3 = CreateStoredDelta("delta-3", "client-1", 3);
-        document.AddDelta(delta1);
-        document.AddDelta(delta2);
-        document.AddDelta(delta3);
+        var entries = new List<SyncKit.Server.Storage.DeltaEntry>
+        {
+            new SyncKit.Server.Storage.DeltaEntry
+            {
+                Id = "delta-1",
+                DocumentId = documentId,
+                ClientId = "client-1",
+                OperationType = "set",
+                FieldPath = "field",
+                Value = JsonSerializer.Deserialize<JsonElement>("{\"id\":\"delta-1\"}"),
+                ClockValue = 1,
+                Timestamp = DateTime.UtcNow,
+                VectorClock = new Dictionary<string, long> { { "client-1", 1 } }
+            },
+            new SyncKit.Server.Storage.DeltaEntry
+            {
+                Id = "delta-2",
+                DocumentId = documentId,
+                ClientId = "client-1",
+                OperationType = "set",
+                FieldPath = "field",
+                Value = JsonSerializer.Deserialize<JsonElement>("{\"id\":\"delta-2\"}"),
+                ClockValue = 2,
+                Timestamp = DateTime.UtcNow,
+                VectorClock = new Dictionary<string, long> { { "client-1", 2 } }
+            },
+            new SyncKit.Server.Storage.DeltaEntry
+            {
+                Id = "delta-3",
+                DocumentId = documentId,
+                ClientId = "client-1",
+                OperationType = "set",
+                FieldPath = "field",
+                Value = JsonSerializer.Deserialize<JsonElement>("{\"id\":\"delta-3\"}"),
+                ClockValue = 3,
+                Timestamp = DateTime.UtcNow,
+                VectorClock = new Dictionary<string, long> { { "client-1", 3 } }
+            }
+        };
 
-        _mockDocumentStore.Setup(ds => ds.GetAsync(documentId))
-            .ReturnsAsync(document);
+        _storageDeltas[documentId] = entries;
 
         SyncResponseMessage? response = null;
         _mockConnection.Setup(c => c.Send(It.IsAny<SyncResponseMessage>()))
@@ -183,7 +297,8 @@ public class SyncRequestMessageHandlerTests
             m => m.Error == "Not authenticated")), Times.Once);
 
         // Should NOT query document store
-        _mockDocumentStore.Verify(ds => ds.GetAsync(It.IsAny<string>()), Times.Never);
+        _mockStorage.Verify(s => s.GetDeltasAsync(It.IsAny<string>(), It.IsAny<int>()), Times.Never);
+        _mockStorage.Verify(s => s.GetVectorClockAsync(It.IsAny<string>()), Times.Never);
     }
 
     [Fact]
@@ -219,7 +334,8 @@ public class SyncRequestMessageHandlerTests
             m => m.Error == "Permission denied")), Times.Once);
 
         // Should NOT query document store
-        _mockDocumentStore.Verify(ds => ds.GetAsync(It.IsAny<string>()), Times.Never);
+        _mockStorage.Verify(s => s.GetDeltasAsync(It.IsAny<string>(), It.IsAny<int>()), Times.Never);
+        _mockStorage.Verify(s => s.GetVectorClockAsync(It.IsAny<string>()), Times.Never);
     }
 
     [Fact]
@@ -237,7 +353,8 @@ public class SyncRequestMessageHandlerTests
         await _handler.HandleAsync(_mockConnection.Object, wrongMessage);
 
         // Assert - Should not interact with store
-        _mockDocumentStore.Verify(ds => ds.GetAsync(It.IsAny<string>()), Times.Never);
+        _mockStorage.Verify(s => s.GetDeltasAsync(It.IsAny<string>(), It.IsAny<int>()), Times.Never);
+        _mockStorage.Verify(s => s.GetVectorClockAsync(It.IsAny<string>()), Times.Never);
         _mockConnection.Verify(c => c.Send(It.IsAny<SyncResponseMessage>()), Times.Never);
     }
 
@@ -264,8 +381,12 @@ public class SyncRequestMessageHandlerTests
             }
         });
 
-        _mockDocumentStore.Setup(ds => ds.GetAsync(documentId))
-            .ReturnsAsync((Document?)null);
+        // Mark document as existing in storage so admin path will query deltas
+        _storageDeltas[documentId] = new List<SyncKit.Server.Storage.DeltaEntry>();
+        _mockStorage.Setup(s => s.GetDeltasAsync(documentId, It.IsAny<int>()))
+            .ReturnsAsync(new List<SyncKit.Server.Storage.DeltaEntry>());
+        _mockStorage.Setup(s => s.GetVectorClockAsync(documentId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new Dictionary<string, long>());
 
         var request = CreateSyncRequestMessage("msg-1", documentId);
 
@@ -273,7 +394,8 @@ public class SyncRequestMessageHandlerTests
         await _handler.HandleAsync(_mockConnection.Object, request);
 
         // Assert - Should query document store (admin has access)
-        _mockDocumentStore.Verify(ds => ds.GetAsync(documentId), Times.Once);
+        _mockStorage.Verify(s => s.GetDeltasAsync(documentId, It.IsAny<int>(), It.IsAny<CancellationToken>()), Times.Once);
+        _mockStorage.Verify(s => s.GetVectorClockAsync(documentId), Times.Once);
         _mockConnection.Verify(c => c.Send(It.IsAny<SyncResponseMessage>()), Times.Once);
     }
 
@@ -286,8 +408,10 @@ public class SyncRequestMessageHandlerTests
         var originalRequestId = "original-request-id-12345";
 
         SetupAuthenticatedConnectionWithReadAccess(connectionId, documentId);
-        _mockDocumentStore.Setup(ds => ds.GetAsync(documentId))
-            .ReturnsAsync((Document?)null);
+        _mockStorage.Setup(s => s.GetDeltasAsync(documentId, It.IsAny<int>()))
+            .ReturnsAsync(new List<SyncKit.Server.Storage.DeltaEntry>());
+        _mockStorage.Setup(s => s.GetVectorClockAsync(documentId))
+            .ReturnsAsync(new Dictionary<string, long>());
 
         SyncResponseMessage? response = null;
         _mockConnection.Setup(c => c.Send(It.IsAny<SyncResponseMessage>()))
@@ -313,8 +437,10 @@ public class SyncRequestMessageHandlerTests
         var connectionId = "conn-456";
 
         SetupAuthenticatedConnectionWithReadAccess(connectionId, documentId);
-        _mockDocumentStore.Setup(ds => ds.GetAsync(documentId))
-            .ReturnsAsync((Document?)null);
+        _mockStorage.Setup(s => s.GetDeltasAsync(documentId, It.IsAny<int>()))
+            .ReturnsAsync(new List<SyncKit.Server.Storage.DeltaEntry>());
+        _mockStorage.Setup(s => s.GetVectorClockAsync(documentId))
+            .ReturnsAsync(new Dictionary<string, long>());
 
         var beforeTimestamp = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
 
@@ -345,13 +471,47 @@ public class SyncRequestMessageHandlerTests
 
         SetupAuthenticatedConnectionWithReadAccess(connectionId, documentId);
 
-        var document = new Document(documentId);
-        document.AddDelta(CreateStoredDelta("delta-1", "client-1", 1));
-        document.AddDelta(CreateStoredDelta("delta-2", "client-1", 2));
-        document.AddDelta(CreateStoredDelta("delta-3", "client-2", 1));
+        var entries = new List<SyncKit.Server.Storage.DeltaEntry>
+        {
+            new SyncKit.Server.Storage.DeltaEntry
+            {
+                Id = "delta-1",
+                DocumentId = documentId,
+                ClientId = "client-1",
+                OperationType = "set",
+                FieldPath = "field",
+                Value = JsonSerializer.Deserialize<JsonElement>("{\"id\":\"delta-1\"}"),
+                ClockValue = 1,
+                Timestamp = DateTime.UtcNow,
+                VectorClock = new Dictionary<string, long> { { "client-1", 1 } }
+            },
+            new SyncKit.Server.Storage.DeltaEntry
+            {
+                Id = "delta-2",
+                DocumentId = documentId,
+                ClientId = "client-1",
+                OperationType = "set",
+                FieldPath = "field",
+                Value = JsonSerializer.Deserialize<JsonElement>("{\"id\":\"delta-2\"}"),
+                ClockValue = 2,
+                Timestamp = DateTime.UtcNow,
+                VectorClock = new Dictionary<string, long> { { "client-1", 2 } }
+            },
+            new SyncKit.Server.Storage.DeltaEntry
+            {
+                Id = "delta-3",
+                DocumentId = documentId,
+                ClientId = "client-2",
+                OperationType = "set",
+                FieldPath = "field",
+                Value = JsonSerializer.Deserialize<JsonElement>("{\"id\":\"delta-3\"}"),
+                ClockValue = 1,
+                Timestamp = DateTime.UtcNow,
+                VectorClock = new Dictionary<string, long> { { "client-2", 1 } }
+            }
+        };
 
-        _mockDocumentStore.Setup(ds => ds.GetAsync(documentId))
-            .ReturnsAsync(document);
+        _storageDeltas[documentId] = entries;
 
         SyncResponseMessage? response = null;
         _mockConnection.Setup(c => c.Send(It.IsAny<SyncResponseMessage>()))
@@ -379,12 +539,35 @@ public class SyncRequestMessageHandlerTests
 
         SetupAuthenticatedConnectionWithReadAccess(connectionId, documentId);
 
-        var document = new Document(documentId);
-        document.AddDelta(CreateStoredDelta("delta-1", "client-1", 1));
-        document.AddDelta(CreateStoredDelta("delta-2", "client-1", 2));
+        var entries = new List<SyncKit.Server.Storage.DeltaEntry>
+        {
+            new SyncKit.Server.Storage.DeltaEntry
+            {
+                Id = "delta-1",
+                DocumentId = documentId,
+                ClientId = "client-1",
+                OperationType = "set",
+                FieldPath = "field",
+                Value = JsonSerializer.Deserialize<JsonElement>("{\"id\":\"delta-1\"}"),
+                ClockValue = 1,
+                Timestamp = DateTime.UtcNow,
+                VectorClock = new Dictionary<string, long> { { "client-1", 1 } }
+            },
+            new SyncKit.Server.Storage.DeltaEntry
+            {
+                Id = "delta-2",
+                DocumentId = documentId,
+                ClientId = "client-1",
+                OperationType = "set",
+                FieldPath = "field",
+                Value = JsonSerializer.Deserialize<JsonElement>("{\"id\":\"delta-2\"}"),
+                ClockValue = 2,
+                Timestamp = DateTime.UtcNow,
+                VectorClock = new Dictionary<string, long> { { "client-1", 2 } }
+            }
+        };
 
-        _mockDocumentStore.Setup(ds => ds.GetAsync(documentId))
-            .ReturnsAsync(document);
+        _storageDeltas[documentId] = entries;
 
         SyncResponseMessage? response = null;
         _mockConnection.Setup(c => c.Send(It.IsAny<SyncResponseMessage>()))
@@ -412,12 +595,23 @@ public class SyncRequestMessageHandlerTests
 
         SetupAuthenticatedConnectionWithReadAccess(connectionId, documentId);
 
-        var document = new Document(documentId);
-        var latestDelta = CreateStoredDelta("delta-1", "client-1", 5);
-        document.AddDelta(latestDelta);
+        var entries = new List<SyncKit.Server.Storage.DeltaEntry>
+        {
+            new SyncKit.Server.Storage.DeltaEntry
+            {
+                Id = "delta-1",
+                DocumentId = documentId,
+                ClientId = "client-1",
+                OperationType = "set",
+                FieldPath = "field",
+                Value = JsonSerializer.Deserialize<JsonElement>("{\"id\":\"delta-1\"}"),
+                ClockValue = 5,
+                Timestamp = DateTime.UtcNow,
+                VectorClock = new Dictionary<string, long> { { "client-1", 5 } }
+            }
+        };
 
-        _mockDocumentStore.Setup(ds => ds.GetAsync(documentId))
-            .ReturnsAsync(document);
+        _storageDeltas[documentId] = entries;
 
         SyncResponseMessage? response = null;
         _mockConnection.Setup(c => c.Send(It.IsAny<SyncResponseMessage>()))
@@ -451,32 +645,35 @@ public class SyncRequestMessageHandlerTests
 
         SetupAuthenticatedConnectionWithReadAccess(connectionId, documentId);
 
-        var document = new Document(documentId);
-        var delta1Clock = new VectorClock(new Dictionary<string, long> { { "client-a", 1 } });
-        var delta2Clock = new VectorClock(new Dictionary<string, long> { { "client-a", 1 }, { "client-b", 1 } });
-
-        var delta1 = new StoredDelta
+        var entries = new List<SyncKit.Server.Storage.DeltaEntry>
         {
-            Id = "delta-1",
-            ClientId = "client-a",
-            Timestamp = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds(),
-            Data = JsonSerializer.Deserialize<JsonElement>("{\"op\":\"set\",\"field\":\"a\"}"),
-            VectorClock = delta1Clock
-        };
-        var delta2 = new StoredDelta
-        {
-            Id = "delta-2",
-            ClientId = "client-b",
-            Timestamp = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds(),
-            Data = JsonSerializer.Deserialize<JsonElement>("{\"op\":\"set\",\"field\":\"b\"}"),
-            VectorClock = delta2Clock
+            new SyncKit.Server.Storage.DeltaEntry
+            {
+                Id = "delta-1",
+                DocumentId = documentId,
+                ClientId = "client-a",
+                OperationType = "set",
+                FieldPath = "field",
+                Value = JsonSerializer.Deserialize<JsonElement>("{\"op\":\"set\",\"field\":\"a\"}"),
+                ClockValue = 1,
+                Timestamp = DateTime.UtcNow,
+                VectorClock = new Dictionary<string, long> { { "client-a", 1 } }
+            },
+            new SyncKit.Server.Storage.DeltaEntry
+            {
+                Id = "delta-2",
+                DocumentId = documentId,
+                ClientId = "client-b",
+                OperationType = "set",
+                FieldPath = "field",
+                Value = JsonSerializer.Deserialize<JsonElement>("{\"op\":\"set\",\"field\":\"b\"}"),
+                ClockValue = 1,
+                Timestamp = DateTime.UtcNow,
+                VectorClock = new Dictionary<string, long> { { "client-a", 1 }, { "client-b", 1 } }
+            }
         };
 
-        document.AddDelta(delta1);
-        document.AddDelta(delta2);
-
-        _mockDocumentStore.Setup(ds => ds.GetAsync(documentId))
-            .ReturnsAsync(document);
+        _storageDeltas[documentId] = entries;
 
         SyncResponseMessage? response = null;
         _mockConnection.Setup(c => c.Send(It.IsAny<SyncResponseMessage>()))
@@ -508,7 +705,7 @@ public class SyncRequestMessageHandlerTests
         var exception = Assert.Throws<ArgumentNullException>(() =>
             new SyncRequestMessageHandler(
                 null!,
-                _mockDocumentStore.Object,
+                new Mock<SyncKit.Server.Storage.IStorageAdapter>().Object,
                 NullLogger<SyncRequestMessageHandler>.Instance));
 
         Assert.Equal("authGuard", exception.ParamName);
@@ -521,10 +718,10 @@ public class SyncRequestMessageHandlerTests
         var exception = Assert.Throws<ArgumentNullException>(() =>
             new SyncRequestMessageHandler(
                 _authGuard,
-                null!,
+                (SyncKit.Server.Storage.IStorageAdapter)null!,
                 NullLogger<SyncRequestMessageHandler>.Instance));
 
-        Assert.Equal("documentStore", exception.ParamName);
+        Assert.Equal("storage", exception.ParamName);
     }
 
     [Fact]
@@ -534,7 +731,7 @@ public class SyncRequestMessageHandlerTests
         var exception = Assert.Throws<ArgumentNullException>(() =>
             new SyncRequestMessageHandler(
                 _authGuard,
-                _mockDocumentStore.Object,
+                new Mock<SyncKit.Server.Storage.IStorageAdapter>().Object,
                 null!));
 
         Assert.Equal("logger", exception.ParamName);
@@ -549,20 +746,24 @@ public class SyncRequestMessageHandlerTests
 
         SetupAuthenticatedConnectionWithReadAccess(connectionId, documentId);
 
-        var document = new Document(documentId);
         var deltaData = JsonSerializer.Deserialize<JsonElement>("{\"operation\":\"set\",\"path\":\"title\",\"value\":\"Hello World\"}");
-        var delta = new StoredDelta
+        var entries = new List<SyncKit.Server.Storage.DeltaEntry>
         {
-            Id = "delta-1",
-            ClientId = "client-1",
-            Timestamp = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds(),
-            Data = deltaData,
-            VectorClock = new VectorClock(new Dictionary<string, long> { { "client-1", 1 } })
+            new SyncKit.Server.Storage.DeltaEntry
+            {
+                Id = "delta-1",
+                DocumentId = documentId,
+                ClientId = "client-1",
+                OperationType = "set",
+                FieldPath = "title",
+                Value = deltaData,
+                ClockValue = 1,
+                Timestamp = DateTime.UtcNow,
+                VectorClock = new Dictionary<string, long> { { "client-1", 1 } }
+            }
         };
-        document.AddDelta(delta);
 
-        _mockDocumentStore.Setup(ds => ds.GetAsync(documentId))
-            .ReturnsAsync(document);
+        _storageDeltas[documentId] = entries;
 
         SyncResponseMessage? response = null;
         _mockConnection.Setup(c => c.Send(It.IsAny<SyncResponseMessage>()))
@@ -594,20 +795,47 @@ public class SyncRequestMessageHandlerTests
 
         SetupAuthenticatedConnectionWithReadAccess(connectionId, documentId);
 
-        var document = new Document(documentId);
+        var entries = new List<SyncKit.Server.Storage.DeltaEntry>
+        {
+            new SyncKit.Server.Storage.DeltaEntry
+            {
+                Id = "delta-a1",
+                DocumentId = documentId,
+                ClientId = "client-a",
+                OperationType = "set",
+                FieldPath = "field",
+                Value = JsonSerializer.Deserialize<JsonElement>("{\"id\":\"delta-a1\"}"),
+                ClockValue = 1,
+                Timestamp = DateTime.UtcNow,
+                VectorClock = new Dictionary<string, long> { { "client-a", 1 } }
+            },
+            new SyncKit.Server.Storage.DeltaEntry
+            {
+                Id = "delta-a2",
+                DocumentId = documentId,
+                ClientId = "client-a",
+                OperationType = "set",
+                FieldPath = "field",
+                Value = JsonSerializer.Deserialize<JsonElement>("{\"id\":\"delta-a2\"}"),
+                ClockValue = 2,
+                Timestamp = DateTime.UtcNow,
+                VectorClock = new Dictionary<string, long> { { "client-a", 2 } }
+            },
+            new SyncKit.Server.Storage.DeltaEntry
+            {
+                Id = "delta-b1",
+                DocumentId = documentId,
+                ClientId = "client-b",
+                OperationType = "set",
+                FieldPath = "field",
+                Value = JsonSerializer.Deserialize<JsonElement>("{\"id\":\"delta-b1\"}"),
+                ClockValue = 1,
+                Timestamp = DateTime.UtcNow,
+                VectorClock = new Dictionary<string, long> { { "client-a", 2 }, { "client-b", 1 } }
+            }
+        };
 
-        // Client A makes changes
-        document.AddDelta(CreateStoredDeltaWithClock("delta-a1", "client-a",
-            new Dictionary<string, long> { { "client-a", 1 } }));
-        document.AddDelta(CreateStoredDeltaWithClock("delta-a2", "client-a",
-            new Dictionary<string, long> { { "client-a", 2 } }));
-
-        // Client B makes changes
-        document.AddDelta(CreateStoredDeltaWithClock("delta-b1", "client-b",
-            new Dictionary<string, long> { { "client-a", 2 }, { "client-b", 1 } }));
-
-        _mockDocumentStore.Setup(ds => ds.GetAsync(documentId))
-            .ReturnsAsync(document);
+        _storageDeltas[documentId] = entries;
 
         SyncResponseMessage? response = null;
         _mockConnection.Setup(c => c.Send(It.IsAny<SyncResponseMessage>()))

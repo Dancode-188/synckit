@@ -1,4 +1,5 @@
 using SyncKit.Server.Sync;
+using SyncKit.Server.Storage;
 using SyncKit.Server.WebSockets.Protocol;
 using SyncKit.Server.WebSockets.Protocol.Messages;
 
@@ -12,18 +13,19 @@ public class UnsubscribeMessageHandler : IMessageHandler
 {
     private static readonly MessageType[] _handledTypes = [MessageType.Unsubscribe];
 
-    private readonly IDocumentStore _documentStore;
+    private readonly Storage.IStorageAdapter _storage;
     private readonly ILogger<UnsubscribeMessageHandler> _logger;
 
     public MessageType[] HandledTypes => _handledTypes;
 
     public UnsubscribeMessageHandler(
-        IDocumentStore documentStore,
+        Storage.IStorageAdapter storage,
         ILogger<UnsubscribeMessageHandler> logger)
     {
-        _documentStore = documentStore ?? throw new ArgumentNullException(nameof(documentStore));
+        _storage = storage ?? throw new ArgumentNullException(nameof(storage));
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
     }
+
 
     public async Task HandleAsync(IConnection connection, IMessage message)
     {
@@ -37,14 +39,6 @@ public class UnsubscribeMessageHandler : IMessageHandler
         _logger.LogDebug("Connection {ConnectionId} unsubscribing from document {DocumentId}",
             connection.Id, unsubscribe.DocumentId);
 
-        // Get document if it exists (no error if it doesn't)
-        var document = await _documentStore.GetAsync(unsubscribe.DocumentId);
-
-        // Remove subscription from document (if document exists)
-        if (document != null)
-        {
-            document.Unsubscribe(connection.Id);
-        }
 
         // Remove document from connection's subscriptions
         connection.RemoveSubscription(unsubscribe.DocumentId);

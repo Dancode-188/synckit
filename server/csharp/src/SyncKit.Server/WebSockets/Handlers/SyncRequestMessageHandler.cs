@@ -1,4 +1,5 @@
 using SyncKit.Server.Sync;
+using SyncKit.Server.Storage;
 using SyncKit.Server.WebSockets.Protocol;
 using SyncKit.Server.WebSockets.Protocol.Messages;
 
@@ -13,20 +14,21 @@ public class SyncRequestMessageHandler : IMessageHandler
     private static readonly MessageType[] _handledTypes = [MessageType.SyncRequest];
 
     private readonly AuthGuard _authGuard;
-    private readonly IDocumentStore _documentStore;
+    private readonly Storage.IStorageAdapter _storage;
     private readonly ILogger<SyncRequestMessageHandler> _logger;
 
     public MessageType[] HandledTypes => _handledTypes;
 
     public SyncRequestMessageHandler(
         AuthGuard authGuard,
-        IDocumentStore documentStore,
+        Storage.IStorageAdapter storage,
         ILogger<SyncRequestMessageHandler> logger)
     {
         _authGuard = authGuard ?? throw new ArgumentNullException(nameof(authGuard));
-        _documentStore = documentStore ?? throw new ArgumentNullException(nameof(documentStore));
+        _storage = storage ?? throw new ArgumentNullException(nameof(storage));
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
     }
+
 
     public async Task HandleAsync(IConnection connection, IMessage message)
     {
@@ -48,10 +50,12 @@ public class SyncRequestMessageHandler : IMessageHandler
             return;
         }
 
-        // Get the document (if it exists)
-        var document = await _documentStore.GetAsync(request.DocumentId);
 
-        if (document == null)
+        // Determine whether the document exists. Prefer adapter-check; fall back to legacy store when present.
+        var docState = await _storage.GetDocumentAsync(request.DocumentId);
+        var documentExists = docState != null;
+
+        if (!documentExists)
         {
             // Document doesn't exist - send empty response
             _logger.LogDebug(
@@ -72,13 +76,14 @@ public class SyncRequestMessageHandler : IMessageHandler
             return;
         }
 
+
         // Get client's vector clock (may be null for initial sync)
         var clientClock = request.VectorClock != null
             ? VectorClock.FromDict(request.VectorClock)
             : null;
 
-        // Get deltas since client's vector clock
-        var deltas = document.GetDeltasSince(clientClock);
+        // Get deltas since client's vector clock via adapter helper
+        var deltas = await _storage.GetDeltasSinceViaAdapterAsync(request.DocumentId, clientClock);
 
         _logger.LogDebug(
             "Sync request for {DocumentId}: returning {DeltaCount} deltas since clock {Clock}",
@@ -89,7 +94,7 @@ public class SyncRequestMessageHandler : IMessageHandler
         var deltaPayloads = deltas.Select(d => new DeltaPayload
         {
             Delta = d.Data,
-            VectorClock = d.VectorClock.ToDict()
+            VectorClock = d.VectorClock?.ToDict() ?? new Dictionary<string, long>()
         }).ToList();
 
         // Send SYNC_RESPONSE with current document state and missed deltas
@@ -99,12 +104,11 @@ public class SyncRequestMessageHandler : IMessageHandler
             Timestamp = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds(),
             RequestId = request.Id,
             DocumentId = request.DocumentId,
-            State = document.VectorClock.ToDict(),
+            State = await _storage.GetVectorClockAsync(request.DocumentId),
             Deltas = deltaPayloads
         };
 
         connection.Send(response);
-
         _logger.LogInformation(
             "Connection {ConnectionId} (user {UserId}) sync request for document {DocumentId}: returned {DeltaCount} deltas",
             connection.Id, connection.UserId, request.DocumentId, deltas.Count);

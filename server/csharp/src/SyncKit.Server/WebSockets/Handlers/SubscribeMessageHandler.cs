@@ -1,4 +1,5 @@
 using SyncKit.Server.Sync;
+using SyncKit.Server.Storage;
 using SyncKit.Server.WebSockets.Protocol;
 using SyncKit.Server.WebSockets.Protocol.Messages;
 
@@ -13,20 +14,21 @@ public class SubscribeMessageHandler : IMessageHandler
     private static readonly MessageType[] _handledTypes = [MessageType.Subscribe];
 
     private readonly AuthGuard _authGuard;
-    private readonly IDocumentStore _documentStore;
+    private readonly Storage.IStorageAdapter _storage;
     private readonly ILogger<SubscribeMessageHandler> _logger;
 
     public MessageType[] HandledTypes => _handledTypes;
 
     public SubscribeMessageHandler(
         AuthGuard authGuard,
-        IDocumentStore documentStore,
+        Storage.IStorageAdapter storage,
         ILogger<SubscribeMessageHandler> logger)
     {
         _authGuard = authGuard ?? throw new ArgumentNullException(nameof(authGuard));
-        _documentStore = documentStore ?? throw new ArgumentNullException(nameof(documentStore));
+        _storage = storage ?? throw new ArgumentNullException(nameof(storage));
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
     }
+
 
     public async Task HandleAsync(IConnection connection, IMessage message)
     {
@@ -48,21 +50,21 @@ public class SubscribeMessageHandler : IMessageHandler
             return;
         }
 
-        // Get or create document
-        var document = await _documentStore.GetOrCreateAsync(subscribe.DocumentId);
+        // Get or create document (supports legacy Document operations via adapter)
+        var document = await _storage.GetOrCreateDocumentAsync(subscribe.DocumentId);
 
         // Add subscription (both document and connection track this)
         document.Subscribe(connection.Id);
         connection.AddSubscription(subscribe.DocumentId);
 
         // Get all deltas for initial sync
-        var deltas = document.GetDeltasSince(null);
+        var deltas = await _storage.GetDeltasSinceViaAdapterAsync(subscribe.DocumentId, null);
 
         // Build delta payloads for response
         var deltaPayloads = deltas.Select(d => new DeltaPayload
         {
             Delta = d.Data,
-            VectorClock = d.VectorClock.ToDict()
+            VectorClock = d.VectorClock?.ToDict() ?? new Dictionary<string, long>()
         }).ToList();
 
         // Send SYNC_RESPONSE with current document state
@@ -72,7 +74,7 @@ public class SubscribeMessageHandler : IMessageHandler
             Timestamp = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds(),
             RequestId = subscribe.Id,
             DocumentId = subscribe.DocumentId,
-            State = document.VectorClock.ToDict(),
+            State = await _storage.GetVectorClockAsync(subscribe.DocumentId),
             Deltas = deltaPayloads
         };
 

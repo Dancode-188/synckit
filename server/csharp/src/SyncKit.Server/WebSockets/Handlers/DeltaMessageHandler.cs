@@ -1,5 +1,6 @@
 using System.Text.Json;
 using SyncKit.Server.Sync;
+using SyncKit.Server.Storage;
 using SyncKit.Server.WebSockets.Protocol;
 using SyncKit.Server.WebSockets.Protocol.Messages;
 
@@ -14,7 +15,7 @@ public class DeltaMessageHandler : IMessageHandler
     private static readonly MessageType[] _handledTypes = [MessageType.Delta];
 
     private readonly AuthGuard _authGuard;
-    private readonly IDocumentStore _documentStore;
+    private readonly Storage.IStorageAdapter _storage;
     private readonly IConnectionManager _connectionManager;
     private readonly ILogger<DeltaMessageHandler> _logger;
 
@@ -22,15 +23,16 @@ public class DeltaMessageHandler : IMessageHandler
 
     public DeltaMessageHandler(
         AuthGuard authGuard,
-        IDocumentStore documentStore,
+        Storage.IStorageAdapter storage,
         IConnectionManager connectionManager,
         ILogger<DeltaMessageHandler> logger)
     {
         _authGuard = authGuard ?? throw new ArgumentNullException(nameof(authGuard));
-        _documentStore = documentStore ?? throw new ArgumentNullException(nameof(documentStore));
+        _storage = storage ?? throw new ArgumentNullException(nameof(storage));
         _connectionManager = connectionManager ?? throw new ArgumentNullException(nameof(connectionManager));
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
     }
+
 
     public async Task HandleAsync(IConnection connection, IMessage message)
     {
@@ -82,18 +84,22 @@ public class DeltaMessageHandler : IMessageHandler
             deltaData = JsonSerializer.Deserialize<JsonElement>(jsonString);
         }
 
-        // Create stored delta with vector clock
-        var storedDelta = new StoredDelta
+        // Create storage delta entry from incoming message
+        var deltaEntry = new Storage.DeltaEntry
         {
             Id = delta.Id,
+            DocumentId = delta.DocumentId,
             ClientId = connection.ClientId ?? connection.Id,
-            Timestamp = delta.Timestamp,
-            Data = deltaData,
-            VectorClock = VectorClock.FromDict(delta.VectorClock)
+            OperationType = "set",
+            FieldPath = string.Empty,
+            Value = deltaData,
+            ClockValue = delta.VectorClock.Values.DefaultIfEmpty(0).Max(),
+            Timestamp = DateTimeOffset.FromUnixTimeMilliseconds(delta.Timestamp).UtcDateTime,
+            VectorClock = delta.VectorClock
         };
 
-        // Store the delta
-        await _documentStore.AddDeltaAsync(delta.DocumentId, storedDelta);
+        // Store the delta via storage adapter
+        await _storage.SaveDeltaAsync(deltaEntry);
 
         _logger.LogDebug(
             "Stored delta {DeltaId} for document {DocumentId} from client {ClientId}",

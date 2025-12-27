@@ -8,7 +8,6 @@ using SyncKit.Server.WebSockets;
 using SyncKit.Server.WebSockets.Handlers;
 using SyncKit.Server.WebSockets.Protocol;
 using SyncKit.Server.WebSockets.Protocol.Messages;
-
 namespace SyncKit.Server.Tests.WebSockets.Handlers;
 
 /// <summary>
@@ -17,7 +16,7 @@ namespace SyncKit.Server.Tests.WebSockets.Handlers;
 public class SubscribeMessageHandlerTests
 {
     private readonly AuthGuard _authGuard;
-    private readonly Mock<IDocumentStore> _mockDocumentStore;
+    private readonly Mock<SyncKit.Server.Storage.IStorageAdapter> _mockStorage;
     private readonly Mock<IConnection> _mockConnection;
     private readonly Mock<ILogger<SubscribeMessageHandler>> _mockLogger;
     private readonly SubscribeMessageHandler _handler;
@@ -25,12 +24,12 @@ public class SubscribeMessageHandlerTests
     public SubscribeMessageHandlerTests()
     {
         _authGuard = new AuthGuard(new Mock<ILogger<AuthGuard>>().Object);
-        _mockDocumentStore = new Mock<IDocumentStore>();
+        _mockStorage = new Mock<SyncKit.Server.Storage.IStorageAdapter>();
         _mockConnection = new Mock<IConnection>();
         _mockLogger = new Mock<ILogger<SubscribeMessageHandler>>();
         _handler = new SubscribeMessageHandler(
             _authGuard,
-            _mockDocumentStore.Object,
+            _mockStorage.Object,
             _mockLogger.Object);
     }
 
@@ -53,13 +52,42 @@ public class SubscribeMessageHandlerTests
         var connectionId = "conn-456";
         var messageId = "msg-1";
 
-        var document = new Document(documentId);
-        document.AddDelta(CreateTestDelta("delta-1", "client-1", 1));
-        document.AddDelta(CreateTestDelta("delta-2", "client-1", 2));
+        // Prepare storage to return two deltas and a vector clock
+        var delta1 = new SyncKit.Server.Storage.DeltaEntry
+        {
+            Id = "delta-1",
+            DocumentId = documentId,
+            ClientId = "client-1",
+            OperationType = "set",
+            FieldPath = string.Empty,
+            Value = JsonDocument.Parse("{}").RootElement,
+            ClockValue = 1,
+            Timestamp = DateTime.UtcNow,
+            VectorClock = new Dictionary<string, long> { ["client-1"] = 1 }
+        };
+
+        var delta2 = new SyncKit.Server.Storage.DeltaEntry
+        {
+            Id = "delta-2",
+            DocumentId = documentId,
+            ClientId = "client-1",
+            OperationType = "set",
+            FieldPath = string.Empty,
+            Value = JsonDocument.Parse("{}").RootElement,
+            ClockValue = 2,
+            Timestamp = DateTime.UtcNow,
+            VectorClock = new Dictionary<string, long> { ["client-1"] = 2 }
+        };
 
         SetupAuthenticatedConnectionWithReadAccess(connectionId, documentId);
-        _mockDocumentStore.Setup(ds => ds.GetOrCreateAsync(documentId))
-            .ReturnsAsync(document);
+        _mockStorage.Setup(s => s.GetDeltasAsync(documentId, It.IsAny<int>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new[] { delta1, delta2 });
+        _mockStorage.Setup(s => s.GetVectorClockAsync(documentId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new Dictionary<string, long> { ["client-1"] = 2 });
+
+        // Ensure adapter returns null document state so extension creates a Document instance
+        _mockStorage.Setup(s => s.GetDocumentAsync(documentId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync((SyncKit.Server.Storage.DocumentState?)null);
 
         var message = new SubscribeMessage
         {
@@ -73,8 +101,11 @@ public class SubscribeMessageHandlerTests
             .Callback<IMessage>(msg => sentResponse = msg as SyncResponseMessage)
             .Returns(true);
 
+        // Use the new storage-based handler for this test
+        var handler = new SubscribeMessageHandler(_authGuard, _mockStorage.Object, _mockLogger.Object);
+
         // Act
-        await _handler.HandleAsync(_mockConnection.Object, message);
+        await handler.HandleAsync(_mockConnection.Object, message);
 
         // Assert - Connection subscribed to document
         _mockConnection.Verify(c => c.AddSubscription(documentId), Times.Once);
@@ -97,9 +128,10 @@ public class SubscribeMessageHandlerTests
 
         SetupAuthenticatedConnectionWithReadAccess(connectionId, documentId);
 
-        var emptyDocument = new Document(documentId);
-        _mockDocumentStore.Setup(ds => ds.GetOrCreateAsync(documentId))
-            .ReturnsAsync(emptyDocument);
+        _mockStorage.Setup(s => s.GetDocumentAsync(documentId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync((SyncKit.Server.Storage.DocumentState?)null);
+        _mockStorage.Setup(s => s.SaveDocumentAsync(documentId, It.IsAny<JsonElement>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new SyncKit.Server.Storage.DocumentState(documentId, JsonDocument.Parse("{}").RootElement, 1, DateTime.UtcNow, DateTime.UtcNow));
 
         var message = new SubscribeMessage
         {
@@ -108,11 +140,16 @@ public class SubscribeMessageHandlerTests
             DocumentId = documentId
         };
 
+        // Use the new storage-based handler for this test
+        var handler = new SubscribeMessageHandler(_authGuard, _mockStorage.Object, _mockLogger.Object);
+
         // Act
-        await _handler.HandleAsync(_mockConnection.Object, message);
+        await handler.HandleAsync(_mockConnection.Object, message);
 
         // Assert - GetOrCreate called
-        _mockDocumentStore.Verify(ds => ds.GetOrCreateAsync(documentId), Times.Once);
+        // Assert - storage was queried for deltas/vector clock
+        _mockStorage.Verify(s => s.GetDeltasAsync(documentId, It.IsAny<int>(), It.IsAny<CancellationToken>()), Times.Once);
+        _mockStorage.Verify(s => s.GetVectorClockAsync(documentId, It.IsAny<CancellationToken>()), Times.Once);
 
         // Assert - Subscription added
         _mockConnection.Verify(c => c.AddSubscription(documentId), Times.Once);
@@ -140,7 +177,7 @@ public class SubscribeMessageHandlerTests
 
         // Assert - Should NOT create subscription
         _mockConnection.Verify(c => c.AddSubscription(It.IsAny<string>()), Times.Never);
-        _mockDocumentStore.Verify(ds => ds.GetOrCreateAsync(It.IsAny<string>()), Times.Never);
+        _mockStorage.Verify(s => s.GetDocumentAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()), Times.Never);
 
         // Assert - Should NOT send SYNC_RESPONSE
         _mockConnection.Verify(c => c.Send(It.IsAny<SyncResponseMessage>()), Times.Never);
@@ -169,7 +206,7 @@ public class SubscribeMessageHandlerTests
 
         // Assert - Should NOT create subscription
         _mockConnection.Verify(c => c.AddSubscription(It.IsAny<string>()), Times.Never);
-        _mockDocumentStore.Verify(ds => ds.GetOrCreateAsync(It.IsAny<string>()), Times.Never);
+        _mockStorage.Verify(s => s.GetDocumentAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()), Times.Never);
     }
 
     [Fact]
@@ -196,8 +233,34 @@ public class SubscribeMessageHandlerTests
         });
 
         var document = new Document(documentId);
-        _mockDocumentStore.Setup(ds => ds.GetOrCreateAsync(documentId))
-            .ReturnsAsync(document);
+        var entries = document.GetAllDeltas().Select(sd => new SyncKit.Server.Storage.DeltaEntry
+        {
+            Id = sd.Id,
+            DocumentId = documentId,
+            ClientId = sd.ClientId,
+            OperationType = "set",
+            FieldPath = "field",
+            Value = sd.Data,
+            ClockValue = sd.VectorClock?.ToDict().Values.DefaultIfEmpty().Max() ?? 0,
+            Timestamp = DateTime.UtcNow,
+            VectorClock = sd.VectorClock?.ToDict()
+        }).ToList();
+
+        _mockStorage.Setup(s => s.GetDeltasAsync(documentId, It.IsAny<int>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(entries);
+        var mergedClock = new Dictionary<string, long>();
+        foreach (var sd in document.GetAllDeltas())
+        {
+            var d = sd.VectorClock?.ToDict();
+            if (d == null) continue;
+            foreach (var kv in d)
+            {
+                if (!mergedClock.ContainsKey(kv.Key) || mergedClock[kv.Key] < kv.Value)
+                    mergedClock[kv.Key] = kv.Value;
+            }
+        }
+        _mockStorage.Setup(s => s.GetVectorClockAsync(documentId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(mergedClock);
 
         var message = new SubscribeMessage
         {
@@ -212,6 +275,8 @@ public class SubscribeMessageHandlerTests
         // Assert - Admin can subscribe
         _mockConnection.Verify(c => c.AddSubscription(documentId), Times.Once);
         _mockConnection.Verify(c => c.Send(It.IsAny<SyncResponseMessage>()), Times.Once);
+        // Ensure storage was queried
+        _mockStorage.Verify(s => s.GetDeltasAsync(documentId, It.IsAny<int>(), It.IsAny<CancellationToken>()), Times.Once);
     }
 
     [Fact]
@@ -222,8 +287,23 @@ public class SubscribeMessageHandlerTests
         var document = new Document(documentId);
         document.AddDelta(CreateTestDelta("delta-1", "client-1", 1));
 
-        _mockDocumentStore.Setup(ds => ds.GetOrCreateAsync(documentId))
-            .ReturnsAsync(document);
+        var entries = document.GetAllDeltas().Select(sd => new SyncKit.Server.Storage.DeltaEntry
+        {
+            Id = sd.Id,
+            DocumentId = documentId,
+            ClientId = sd.ClientId,
+            OperationType = "set",
+            FieldPath = "field",
+            Value = sd.Data,
+            ClockValue = sd.VectorClock?.ToDict().Values.DefaultIfEmpty().Max() ?? 0,
+            Timestamp = DateTime.UtcNow,
+            VectorClock = sd.VectorClock?.ToDict()
+        }).ToList();
+
+        _mockStorage.Setup(s => s.GetDeltasAsync(documentId, It.IsAny<int>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(entries);
+        _mockStorage.Setup(s => s.GetVectorClockAsync(documentId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(document.GetAllDeltas().LastOrDefault()?.VectorClock?.ToDict() ?? new Dictionary<string, long>());
 
         var message = new SubscribeMessage
         {
@@ -274,8 +354,34 @@ public class SubscribeMessageHandlerTests
         document.AddDelta(CreateTestDelta("delta-2", "client-2", 3));
 
         SetupAuthenticatedConnectionWithReadAccess(connectionId, documentId);
-        _mockDocumentStore.Setup(ds => ds.GetOrCreateAsync(documentId))
-            .ReturnsAsync(document);
+        var entries = document.GetAllDeltas().Select(sd => new SyncKit.Server.Storage.DeltaEntry
+        {
+            Id = sd.Id,
+            DocumentId = documentId,
+            ClientId = sd.ClientId,
+            OperationType = "set",
+            FieldPath = "field",
+            Value = sd.Data,
+            ClockValue = sd.VectorClock?.ToDict().Values.DefaultIfEmpty().Max() ?? 0,
+            Timestamp = DateTime.UtcNow,
+            VectorClock = sd.VectorClock?.ToDict()
+        }).ToList();
+
+        _mockStorage.Setup(s => s.GetDeltasAsync(documentId, It.IsAny<int>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(entries);
+        var mergedClock = new Dictionary<string, long>();
+        foreach (var sd in document.GetAllDeltas())
+        {
+            var d = sd.VectorClock?.ToDict();
+            if (d == null) continue;
+            foreach (var kv in d)
+            {
+                if (!mergedClock.ContainsKey(kv.Key) || mergedClock[kv.Key] < kv.Value)
+                    mergedClock[kv.Key] = kv.Value;
+            }
+        }
+        _mockStorage.Setup(s => s.GetVectorClockAsync(documentId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(mergedClock);
 
         var message = new SubscribeMessage
         {
@@ -310,8 +416,23 @@ public class SubscribeMessageHandlerTests
         var emptyDocument = new Document(documentId);
 
         SetupAuthenticatedConnectionWithReadAccess(connectionId, documentId);
-        _mockDocumentStore.Setup(ds => ds.GetOrCreateAsync(documentId))
-            .ReturnsAsync(emptyDocument);
+        var entries = emptyDocument.GetAllDeltas().Select(sd => new SyncKit.Server.Storage.DeltaEntry
+        {
+            Id = sd.Id,
+            DocumentId = documentId,
+            ClientId = sd.ClientId,
+            OperationType = "set",
+            FieldPath = "field",
+            Value = sd.Data,
+            ClockValue = sd.VectorClock?.ToDict().Values.DefaultIfEmpty().Max() ?? 0,
+            Timestamp = DateTime.UtcNow,
+            VectorClock = sd.VectorClock?.ToDict()
+        }).ToList();
+
+        _mockStorage.Setup(s => s.GetDeltasAsync(documentId, It.IsAny<int>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(entries);
+        _mockStorage.Setup(s => s.GetVectorClockAsync(documentId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new Dictionary<string, long>());
 
         var message = new SubscribeMessage
         {
@@ -349,7 +470,7 @@ public class SubscribeMessageHandlerTests
         await _handler.HandleAsync(_mockConnection.Object, wrongMessage);
 
         // Assert - Should not interact with store or connection
-        _mockDocumentStore.Verify(ds => ds.GetOrCreateAsync(It.IsAny<string>()), Times.Never);
+        _mockStorage.Verify(s => s.GetDocumentAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()), Times.Never);
         _mockConnection.Verify(c => c.AddSubscription(It.IsAny<string>()), Times.Never);
         _mockConnection.Verify(c => c.Send(It.IsAny<IMessage>()), Times.Never);
     }
@@ -364,8 +485,23 @@ public class SubscribeMessageHandlerTests
         var document = new Document(documentId);
 
         SetupAuthenticatedConnectionWithReadAccess(connectionId, documentId);
-        _mockDocumentStore.Setup(ds => ds.GetOrCreateAsync(documentId))
-            .ReturnsAsync(document);
+        var entries = document.GetAllDeltas().Select(sd => new SyncKit.Server.Storage.DeltaEntry
+        {
+            Id = sd.Id,
+            DocumentId = documentId,
+            ClientId = sd.ClientId,
+            OperationType = "set",
+            FieldPath = "field",
+            Value = sd.Data,
+            ClockValue = sd.VectorClock?.ToDict().Values.DefaultIfEmpty().Max() ?? 0,
+            Timestamp = DateTime.UtcNow,
+            VectorClock = sd.VectorClock?.ToDict()
+        }).ToList();
+
+        _mockStorage.Setup(s => s.GetDeltasAsync(documentId, It.IsAny<int>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(entries);
+        _mockStorage.Setup(s => s.GetVectorClockAsync(documentId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(document.GetAllDeltas().LastOrDefault()?.VectorClock?.ToDict() ?? new Dictionary<string, long>());
 
         var message = new SubscribeMessage
         {
@@ -377,8 +513,8 @@ public class SubscribeMessageHandlerTests
         // Act
         await _handler.HandleAsync(_mockConnection.Object, message);
 
-        // Assert - Document tracks subscriber
-        Assert.Contains(connectionId, document.GetSubscribers());
+        // Assert - Connection subscribed via connection tracking
+        _mockConnection.Verify(c => c.AddSubscription(documentId), Times.Once);
     }
 
     [Fact]
@@ -394,8 +530,23 @@ public class SubscribeMessageHandlerTests
         document.AddDelta(CreateTestDelta("delta-3", "client-1", 3));
 
         SetupAuthenticatedConnectionWithReadAccess(connectionId, documentId);
-        _mockDocumentStore.Setup(ds => ds.GetOrCreateAsync(documentId))
-            .ReturnsAsync(document);
+        var entries = document.GetAllDeltas().Select(sd => new SyncKit.Server.Storage.DeltaEntry
+        {
+            Id = sd.Id,
+            DocumentId = documentId,
+            ClientId = sd.ClientId,
+            OperationType = "set",
+            FieldPath = "field",
+            Value = sd.Data,
+            ClockValue = sd.VectorClock?.ToDict().Values.DefaultIfEmpty().Max() ?? 0,
+            Timestamp = DateTime.UtcNow,
+            VectorClock = sd.VectorClock?.ToDict()
+        }).ToList();
+
+        _mockStorage.Setup(s => s.GetDeltasAsync(documentId, It.IsAny<int>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(entries);
+        _mockStorage.Setup(s => s.GetVectorClockAsync(documentId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(document.GetAllDeltas().LastOrDefault()?.VectorClock?.ToDict() ?? new Dictionary<string, long>());
 
         var message = new SubscribeMessage
         {
@@ -427,7 +578,7 @@ public class SubscribeMessageHandlerTests
         var exception = Assert.Throws<ArgumentNullException>(() =>
             new SubscribeMessageHandler(
                 null!,
-                _mockDocumentStore.Object,
+                _mockStorage.Object,
                 _mockLogger.Object));
 
         Assert.Equal("authGuard", exception.ParamName);
@@ -440,10 +591,10 @@ public class SubscribeMessageHandlerTests
         var exception = Assert.Throws<ArgumentNullException>(() =>
             new SubscribeMessageHandler(
                 _authGuard,
-                null!,
+                (SyncKit.Server.Storage.IStorageAdapter)null!,
                 _mockLogger.Object));
 
-        Assert.Equal("documentStore", exception.ParamName);
+        Assert.Equal("storage", exception.ParamName);
     }
 
     [Fact]
@@ -453,7 +604,7 @@ public class SubscribeMessageHandlerTests
         var exception = Assert.Throws<ArgumentNullException>(() =>
             new SubscribeMessageHandler(
                 _authGuard,
-                _mockDocumentStore.Object,
+                _mockStorage.Object,
                 null!));
 
         Assert.Equal("logger", exception.ParamName);
@@ -469,9 +620,12 @@ public class SubscribeMessageHandlerTests
 
         SetupAuthenticatedConnectionWithReadAccess(connectionId, documentId, userId);
 
-        var document = new Document(documentId);
-        _mockDocumentStore.Setup(ds => ds.GetOrCreateAsync(documentId))
-            .ReturnsAsync(document);
+        _mockStorage.Setup(s => s.GetDeltasAsync(documentId, It.IsAny<int>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new List<SyncKit.Server.Storage.DeltaEntry>());
+        _mockStorage.Setup(s => s.GetVectorClockAsync(documentId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new Dictionary<string, long>());
+        _mockStorage.Setup(s => s.GetDocumentAsync(documentId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync((SyncKit.Server.Storage.DocumentState?)null);
 
         var message = new SubscribeMessage
         {

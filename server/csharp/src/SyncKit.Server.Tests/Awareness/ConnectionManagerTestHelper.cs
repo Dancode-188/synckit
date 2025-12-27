@@ -31,11 +31,26 @@ public static class ConnectionManagerTestHelper
         mock.Setup(cm => cm.BroadcastToDocumentAsync(documentId, It.IsAny<IMessage>(), It.IsAny<string?>()))
             .Returns<string, IMessage, string?>((doc, msg, exclude) =>
             {
+
+                var errors = new List<Exception>();
+
                 foreach (var s in subs)
                 {
                     if (s.Object.Id == exclude) continue;
-                    // Invoke Send on the mocked connection - honoring its configured behavior (including throwing)
-                    s.Object.Send(msg);
+                    try
+                    {
+                        s.Object.Send(msg);
+                    }
+                    catch (Exception ex)
+                    {
+                        // Collect exceptions to rethrow after all subscribers processed so the caller can log
+                        errors.Add(ex);
+                    }
+                }
+
+                if (errors.Any())
+                {
+                    throw new AggregateException(errors);
                 }
 
                 return Task.CompletedTask;
@@ -55,11 +70,24 @@ public static class ConnectionManagerTestHelper
             .Returns<string, IMessage, string?>((doc, msg, exclude) =>
             {
                 if (!documentSubscribers.ContainsKey(doc)) return Task.CompletedTask;
+                var errors = new List<Exception>();
+
                 foreach (var s in documentSubscribers[doc])
                 {
                     if (s.Object.Id == exclude) continue;
-                    // Invoke Send on the mocked connection - honoring its configured behavior (including throwing)
-                    s.Object.Send(msg);
+                    try
+                    {
+                        s.Object.Send(msg);
+                    }
+                    catch (Exception ex)
+                    {
+                        errors.Add(ex);
+                    }
+                }
+
+                if (errors.Any())
+                {
+                    throw new AggregateException(errors);
                 }
 
                 return Task.CompletedTask;

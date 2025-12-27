@@ -5,23 +5,22 @@ using SyncKit.Server.WebSockets;
 using SyncKit.Server.WebSockets.Handlers;
 using SyncKit.Server.WebSockets.Protocol;
 using SyncKit.Server.WebSockets.Protocol.Messages;
-
 namespace SyncKit.Server.Tests.WebSockets.Handlers;
 
 public class UnsubscribeMessageHandlerTests
 {
-    private readonly Mock<IDocumentStore> _mockDocumentStore;
+    private readonly Mock<SyncKit.Server.Storage.IStorageAdapter> _mockStorage;
     private readonly Mock<IConnection> _mockConnection;
     private readonly Mock<ILogger<UnsubscribeMessageHandler>> _mockLogger;
     private readonly UnsubscribeMessageHandler _handler;
 
     public UnsubscribeMessageHandlerTests()
     {
-        _mockDocumentStore = new Mock<IDocumentStore>();
+        _mockStorage = new Mock<SyncKit.Server.Storage.IStorageAdapter>();
         _mockConnection = new Mock<IConnection>();
         _mockLogger = new Mock<ILogger<UnsubscribeMessageHandler>>();
         _handler = new UnsubscribeMessageHandler(
-            _mockDocumentStore.Object,
+            _mockStorage.Object,
             _mockLogger.Object);
     }
 
@@ -37,18 +36,14 @@ public class UnsubscribeMessageHandlerTests
     }
 
     [Fact]
-    public async Task HandleAsync_WithExistingDocument_ShouldUnsubscribeConnectionFromDocument()
+    public async Task HandleAsync_WithExistingDocument_ShouldRemoveSubscriptionAndAck()
     {
         // Arrange
         var documentId = "doc-123";
         var connectionId = "conn-456";
-        var document = new Document(documentId);
-        document.Subscribe(connectionId);
 
         _mockConnection.Setup(c => c.Id).Returns(connectionId);
         _mockConnection.Setup(c => c.Send(It.IsAny<IMessage>())).Returns(true);
-        _mockDocumentStore.Setup(ds => ds.GetAsync(documentId))
-            .ReturnsAsync(document);
 
         var message = new UnsubscribeMessage
         {
@@ -60,9 +55,9 @@ public class UnsubscribeMessageHandlerTests
         // Act
         await _handler.HandleAsync(_mockConnection.Object, message);
 
-        // Assert
-        Assert.DoesNotContain(connectionId, document.GetSubscribers());
-        _mockDocumentStore.Verify(ds => ds.GetAsync(documentId), Times.Once);
+        // Assert - connection subscription removed and ACK sent
+        _mockConnection.Verify(c => c.RemoveSubscription(documentId), Times.Once);
+        _mockConnection.Verify(c => c.Send(It.IsAny<AckMessage>()), Times.Once);
     }
 
     [Fact]
@@ -75,8 +70,6 @@ public class UnsubscribeMessageHandlerTests
 
         _mockConnection.Setup(c => c.Id).Returns(connectionId);
         _mockConnection.Setup(c => c.Send(It.IsAny<IMessage>())).Returns(true);
-        _mockDocumentStore.Setup(ds => ds.GetAsync(documentId))
-            .ReturnsAsync(document);
 
         var message = new UnsubscribeMessage
         {
@@ -102,8 +95,6 @@ public class UnsubscribeMessageHandlerTests
 
         _mockConnection.Setup(c => c.Id).Returns("conn-456");
         _mockConnection.Setup(c => c.Send(It.IsAny<IMessage>())).Returns(true);
-        _mockDocumentStore.Setup(ds => ds.GetAsync(documentId))
-            .ReturnsAsync(document);
 
         var message = new UnsubscribeMessage
         {
@@ -137,8 +128,7 @@ public class UnsubscribeMessageHandlerTests
 
         _mockConnection.Setup(c => c.Id).Returns(connectionId);
         _mockConnection.Setup(c => c.Send(It.IsAny<IMessage>())).Returns(true);
-        _mockDocumentStore.Setup(ds => ds.GetAsync(documentId))
-            .ReturnsAsync((Document?)null);
+
 
         var message = new UnsubscribeMessage
         {
@@ -171,8 +161,8 @@ public class UnsubscribeMessageHandlerTests
         // Act
         await _handler.HandleAsync(_mockConnection.Object, wrongMessage);
 
-        // Assert - should not interact with store or connection
-        _mockDocumentStore.Verify(ds => ds.GetAsync(It.IsAny<string>()), Times.Never);
+        // Assert - should not interact with storage adapter or connection
+        _mockStorage.Verify(s => s.GetDocumentAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()), Times.Never);
         _mockConnection.Verify(c => c.RemoveSubscription(It.IsAny<string>()), Times.Never);
         _mockConnection.Verify(c => c.Send(It.IsAny<IMessage>()), Times.Never);
     }
@@ -182,19 +172,10 @@ public class UnsubscribeMessageHandlerTests
     {
         // Arrange
         var documentId = "doc-123";
-        var connectionId1 = "conn-1";
         var connectionId2 = "conn-2";
-        var connectionId3 = "conn-3";
-
-        var document = new Document(documentId);
-        document.Subscribe(connectionId1);
-        document.Subscribe(connectionId2);
-        document.Subscribe(connectionId3);
 
         _mockConnection.Setup(c => c.Id).Returns(connectionId2);
         _mockConnection.Setup(c => c.Send(It.IsAny<IMessage>())).Returns(true);
-        _mockDocumentStore.Setup(ds => ds.GetAsync(documentId))
-            .ReturnsAsync(document);
 
         var message = new UnsubscribeMessage
         {
@@ -206,12 +187,9 @@ public class UnsubscribeMessageHandlerTests
         // Act
         await _handler.HandleAsync(_mockConnection.Object, message);
 
-        // Assert
-        var subscribers = document.GetSubscribers();
-        Assert.Equal(2, subscribers.Count);
-        Assert.Contains(connectionId1, subscribers);
-        Assert.DoesNotContain(connectionId2, subscribers);
-        Assert.Contains(connectionId3, subscribers);
+        // Assert - Ensure connection subscription removed and ACK sent
+        _mockConnection.Verify(c => c.RemoveSubscription(documentId), Times.Once);
+        _mockConnection.Verify(c => c.Send(It.IsAny<AckMessage>()), Times.Once);
     }
 
     [Fact]
@@ -220,13 +198,10 @@ public class UnsubscribeMessageHandlerTests
         // Arrange
         var documentId = "doc-123";
         var connectionId = "conn-456";
-        var document = new Document(documentId);
         // Note: connection is NOT subscribed
 
         _mockConnection.Setup(c => c.Id).Returns(connectionId);
         _mockConnection.Setup(c => c.Send(It.IsAny<IMessage>())).Returns(true);
-        _mockDocumentStore.Setup(ds => ds.GetAsync(documentId))
-            .ReturnsAsync(document);
 
         var message = new UnsubscribeMessage
         {
@@ -244,13 +219,13 @@ public class UnsubscribeMessageHandlerTests
     }
 
     [Fact]
-    public void Constructor_WithNullDocumentStore_ShouldThrowArgumentNullException()
+    public void Constructor_WithNullStorage_ShouldThrowArgumentNullException()
     {
         // Act & Assert
         var exception = Assert.Throws<ArgumentNullException>(() =>
-            new UnsubscribeMessageHandler(null!, _mockLogger.Object));
+            new UnsubscribeMessageHandler((SyncKit.Server.Storage.IStorageAdapter)null!, _mockLogger.Object));
 
-        Assert.Equal("documentStore", exception.ParamName);
+        Assert.Equal("storage", exception.ParamName);
     }
 
     [Fact]
@@ -258,7 +233,7 @@ public class UnsubscribeMessageHandlerTests
     {
         // Act & Assert
         var exception = Assert.Throws<ArgumentNullException>(() =>
-            new UnsubscribeMessageHandler(_mockDocumentStore.Object, null!));
+            new UnsubscribeMessageHandler(_mockStorage.Object, null!));
 
         Assert.Equal("logger", exception.ParamName);
     }
@@ -272,8 +247,6 @@ public class UnsubscribeMessageHandlerTests
 
         _mockConnection.Setup(c => c.Id).Returns(connectionId);
         _mockConnection.Setup(c => c.Send(It.IsAny<IMessage>())).Returns(true);
-        _mockDocumentStore.Setup(ds => ds.GetAsync(documentId))
-            .ReturnsAsync((Document?)null);
 
         var message = new UnsubscribeMessage
         {
@@ -307,8 +280,6 @@ public class UnsubscribeMessageHandlerTests
         _mockConnection.Setup(c => c.Id).Returns(connectionId);
         _mockConnection.Setup(c => c.UserId).Returns(userId);
         _mockConnection.Setup(c => c.Send(It.IsAny<IMessage>())).Returns(true);
-        _mockDocumentStore.Setup(ds => ds.GetAsync(documentId))
-            .ReturnsAsync(new Document(documentId));
 
         var message = new UnsubscribeMessage
         {
