@@ -25,7 +25,7 @@ public class RedisAwarenessStore : IAwarenessStore
     private readonly JsonSerializerOptions _jsonOptions;
 
     public RedisAwarenessStore(ILogger<RedisAwarenessStore> logger, IOptions<SyncKitConfig> options)
-        : this(logger, options, ConnectionMultiplexer.Connect(options.Value.RedisUrl))
+        : this(logger, options, ConnectionMultiplexer.Connect(options?.Value?.RedisUrl ?? throw new ArgumentException("RedisUrl must be configured for RedisAwarenessStore", nameof(options))))
     {
     }
 
@@ -56,7 +56,7 @@ public class RedisAwarenessStore : IAwarenessStore
         if (val.IsNullOrEmpty) return null;
         try
         {
-            var entry = JsonSerializer.Deserialize<AwarenessEntry>(val!, _jsonOptions);
+            var entry = JsonSerializer.Deserialize<AwarenessEntry>(val.ToString()!, _jsonOptions);
             if (entry == null) return null;
             // Treat expired entries as missing
             if (entry.IsExpired()) return null;
@@ -80,7 +80,7 @@ public class RedisAwarenessStore : IAwarenessStore
             if (v.IsNullOrEmpty) continue;
             try
             {
-                var e = JsonSerializer.Deserialize<AwarenessEntry>(v!, _jsonOptions);
+                var e = JsonSerializer.Deserialize<AwarenessEntry>(v.ToString()!, _jsonOptions);
                 if (e != null && e.ExpiresAt > now)
                 {
                     list.Add(e);
@@ -105,7 +105,7 @@ public class RedisAwarenessStore : IAwarenessStore
         {
             try
             {
-                var existing = JsonSerializer.Deserialize<AwarenessEntry>(existingRaw!, _jsonOptions);
+                var existing = JsonSerializer.Deserialize<AwarenessEntry>(existingRaw.ToString()!, _jsonOptions);
                 if (existing != null && clock <= existing.Clock)
                 {
                     _logger.LogDebug("Ignoring stale awareness update for {ClientId} in {DocumentId}: {Clock} <= {ExistingClock}", clientId, documentId, clock, existing.Clock);
@@ -207,7 +207,7 @@ public class RedisAwarenessStore : IAwarenessStore
                 if (raw.IsNullOrEmpty) continue;
                 try
                 {
-                    var e = JsonSerializer.Deserialize<AwarenessEntry>(raw!, _jsonOptions);
+                    var e = JsonSerializer.Deserialize<AwarenessEntry>(raw.ToString()!, _jsonOptions);
                     if (e != null) expired.Add(e);
                 }
                 catch (Exception ex)

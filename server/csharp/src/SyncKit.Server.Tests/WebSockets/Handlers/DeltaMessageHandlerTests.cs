@@ -7,14 +7,14 @@ using SyncKit.Server.WebSockets;
 using SyncKit.Server.WebSockets.Handlers;
 using SyncKit.Server.WebSockets.Protocol;
 using SyncKit.Server.WebSockets.Protocol.Messages;
-
+using ServerStorage = SyncKit.Server.Storage;
 
 namespace SyncKit.Server.Tests.WebSockets.Handlers;
 
 public class DeltaMessageHandlerTests
 {
     private readonly AuthGuard _authGuard;
-    private readonly Mock<Storage.IStorageAdapter> _mockStorage;
+    private readonly Mock<ServerStorage.IStorageAdapter> _mockStorage;
     private readonly Mock<IConnectionManager> _mockConnectionManager;
     private readonly Mock<IConnection> _mockConnection;
     private readonly DeltaMessageHandler _handler;
@@ -22,7 +22,7 @@ public class DeltaMessageHandlerTests
     public DeltaMessageHandlerTests()
     {
         _authGuard = new AuthGuard(NullLogger<AuthGuard>.Instance);
-        _mockStorage = new Mock<Storage.IStorageAdapter>();
+        _mockStorage = new Mock<ServerStorage.IStorageAdapter>();
         _mockConnectionManager = new Mock<IConnectionManager>();
         _mockConnection = new Mock<IConnection>();
 
@@ -57,8 +57,8 @@ public class DeltaMessageHandlerTests
         var subscriptions = new HashSet<string> { documentId };
 
         SetupAuthenticatedConnectionWithWriteAccess(connectionId, clientId, subscriptions, documentId);
-        _mockStorage.Setup(s => s.SaveDeltaAsync(It.IsAny<Storage.DeltaEntry>(), It.IsAny<CancellationToken>()))
-            .Returns((Storage.DeltaEntry d, CancellationToken _) => Task.FromResult(d));
+        _mockStorage.Setup(s => s.SaveDeltaAsync(It.IsAny<SyncKit.Server.Storage.DeltaEntry>(), It.IsAny<CancellationToken>()))
+            .Returns((SyncKit.Server.Storage.DeltaEntry d, CancellationToken _) => Task.FromResult(d));
         _mockConnectionManager.Setup(cm => cm.BroadcastToDocumentAsync(
             documentId, It.IsAny<DeltaMessage>(), connectionId))
             .Returns(Task.CompletedTask);
@@ -70,7 +70,7 @@ public class DeltaMessageHandlerTests
 
         // Assert - Delta should be stored
         _mockStorage.Verify(s => s.SaveDeltaAsync(
-            It.Is<Storage.DeltaEntry>(de =>
+            It.Is<SyncKit.Server.Storage.DeltaEntry>(de =>
                 de.Id == messageId &&
                 de.ClientId == clientId),
             It.IsAny<CancellationToken>()),
@@ -448,7 +448,7 @@ public class DeltaMessageHandlerTests
         var exception = Assert.Throws<ArgumentNullException>(() =>
             new DeltaMessageHandler(
                 authGuard,
-                (Storage.IStorageAdapter)null!,
+                (ServerStorage.IStorageAdapter)null!,
                 _mockConnectionManager.Object,
                 null,
                 NullLogger<DeltaMessageHandler>.Instance));

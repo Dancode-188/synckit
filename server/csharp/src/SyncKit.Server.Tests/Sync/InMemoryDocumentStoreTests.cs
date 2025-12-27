@@ -3,6 +3,7 @@ using Microsoft.Extensions.Logging;
 using Moq;
 using SyncKit.Server.Sync;
 using SyncKit.Server.Storage;
+using ServerStorage = SyncKit.Server.Storage;
 using Xunit;
 
 namespace SyncKit.Server.Tests.Sync;
@@ -502,7 +503,7 @@ public class InMemoryStorageAdapterTests
 
     #region Helper Methods
 
-    private static Storage.DeltaEntry CreateTestDelta(
+    private static ServerStorage.DeltaEntry CreateTestDelta(
         string id,
         string clientId,
         long clockValue = 1)

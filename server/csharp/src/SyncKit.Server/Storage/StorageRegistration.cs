@@ -2,6 +2,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Npgsql;
 using SyncKit.Server.Configuration;
+using SyncKit.Server.Awareness;
 
 namespace SyncKit.Server.Storage;
 
@@ -86,7 +87,7 @@ public static class StorageRegistration
         else
         {
             // No pubsub -> use noop provider
-            services.AddSingleton<Redis.IRedisPubSub, Redis.NoopRedisPubSub>();
+            services.AddSingleton<PubSub.IRedisPubSub, PubSub.NoopRedisPubSub>();
         }
 
         return services;
@@ -139,7 +140,7 @@ public static class StorageRegistration
         services.AddSingleton(sp => StackExchange.Redis.ConnectionMultiplexer.Connect(redisConn));
 
         // Register the provider using the IConnectionMultiplexer from DI
-        services.AddSingleton<Redis.IRedisPubSub>(sp => new Redis.RedisPubSubProvider(sp.GetRequiredService<ILogger<Redis.RedisPubSubProvider>>(), sp.GetRequiredService<Microsoft.Extensions.Options.IOptions<SyncKitConfig>>(), sp.GetRequiredService<StackExchange.Redis.IConnectionMultiplexer>()));
+        services.AddSingleton<PubSub.IRedisPubSub>(sp => new PubSub.RedisPubSubProvider(sp.GetRequiredService<ILogger<PubSub.RedisPubSubProvider>>(), sp.GetRequiredService<Microsoft.Extensions.Options.IOptions<SyncKitConfig>>(), sp.GetRequiredService<StackExchange.Redis.IConnectionMultiplexer>()));
     }
 
     private static void AddRedisAwarenessStorage(IServiceCollection services, IConfigurationSection awarenessSection, IConfiguration rootConfig)

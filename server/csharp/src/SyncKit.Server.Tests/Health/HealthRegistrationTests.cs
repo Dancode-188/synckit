@@ -1,7 +1,9 @@
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
 using Microsoft.Extensions.Diagnostics.HealthChecks;
+using Microsoft.Extensions.Configuration;
 using SyncKit.Server.Configuration;
+using SyncKit.Server.Health;
 using Xunit;
 
 namespace SyncKit.Server.Tests.Health;

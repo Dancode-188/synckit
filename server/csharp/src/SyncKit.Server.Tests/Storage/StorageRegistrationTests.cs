@@ -36,7 +36,7 @@ public class StorageRegistrationTests
     [Fact]
     public void Postgres_registration_installs_postgres_adapter_and_validator()
     {
-        var dict = new Dictionary<string, string>
+        var dict = new Dictionary<string, string?>
         {
             ["Storage:Provider"] = "postgresql",
             ["Storage:PostgreSql:ConnectionString"] = "Host=localhost;Database=synckit;Username=postgres;Password=postgres"
@@ -59,7 +59,7 @@ public class StorageRegistrationTests
     [Fact]
     public void PubSub_enabled_registers_redis_pubsub_and_sets_options()
     {
-        var dict = new Dictionary<string, string>
+        var dict = new Dictionary<string, string?>
         {
             ["PubSub:Enabled"] = "true",
             ["PubSub:Provider"] = "redis",
@@ -76,7 +76,7 @@ public class StorageRegistrationTests
         services.AddSyncKitStorage(config);
 
         // Examine service descriptors to ensure IRedisPubSub is registered
-        var descriptor = services.FirstOrDefault(sd => sd.ServiceType == typeof(Redis.IRedisPubSub));
+        var descriptor = services.FirstOrDefault(sd => sd.ServiceType == typeof(PubSub.IRedisPubSub));
         Assert.NotNull(descriptor);
 
         // Check that SyncKitConfig options are post-configured with redis values
@@ -104,7 +104,7 @@ public class StorageRegistrationTests
     [Fact]
     public void PubSub_enabled_without_connstring_throws()
     {
-        var dict = new Dictionary<string, string>
+        var dict = new Dictionary<string, string?>
         {
             ["PubSub:Enabled"] = "true",
             ["PubSub:Provider"] = "redis"
@@ -120,7 +120,7 @@ public class StorageRegistrationTests
     [Fact]
     public void Awareness_redis_provider_registers_redis_store()
     {
-        var dict = new Dictionary<string, string>
+        var dict = new Dictionary<string, string?>
         {
             ["Awareness:Provider"] = "redis",
             ["Awareness:Redis:ConnectionString"] = "localhost:6379"
