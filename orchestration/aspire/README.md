@@ -67,6 +67,8 @@ Both backends share the **same PostgreSQL and Redis instances**, enabling:
 - Seamless failover during migration
 - Cross-server pub/sub coordination
 
+Migration note: Aspire now runs the migration runner (`server/typescript/src/storage/migrate.ts`) as a pre-start step and both backends wait for it when `SyncKit:Storage=postgres`. This ensures the canonical schema is applied before services start.
+
 ### Setting Configuration
 
 **Via Environment Variables:**

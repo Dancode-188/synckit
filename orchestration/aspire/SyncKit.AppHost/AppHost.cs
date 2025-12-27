@@ -39,6 +39,7 @@ var jwtSecret = builder.Configuration["SyncKit:JwtSecret"]
 IResourceBuilder<PostgresServerResource>? postgres = null;
 IResourceBuilder<PostgresDatabaseResource>? syncKitDb = null;
 IResourceBuilder<RedisResource>? redis = null;
+IResourceBuilder<ExecutableResource>? migrations = null;
 
 if (storageMode == "postgres")
 {
@@ -49,6 +50,13 @@ if (storageMode == "postgres")
     
     syncKitDb = postgres.AddDatabase("synckit");
     
+    // Run migrations BEFORE starting any server
+    migrations = builder.AddExecutable("synckit-migrations", "bun", Path.GetFullPath(
+            Path.Combine(builder.AppHostDirectory, "..", "..", "..", "server", "typescript")),
+            "run", "src/storage/migrate.ts")
+        .WithEnvironment("DATABASE_URL", syncKitDb.Resource.ConnectionStringExpression)
+        .WaitFor(syncKitDb);
+
     // Redis for pub/sub coordination in multi-server deployments
     redis = builder.AddRedis("redis")
         .WithDataVolume("synckit-redis-data")
@@ -81,7 +89,8 @@ if (backendMode is "typescript" or "both")
             .WithEnvironment("DATABASE_URL", syncKitDb.Resource.ConnectionStringExpression)
             .WithEnvironment("REDIS_URL", redis.Resource.ConnectionStringExpression)
             .WaitFor(syncKitDb)
-            .WaitFor(redis);
+            .WaitFor(redis)
+            .WaitFor(migrations);
     }
 }
 
@@ -104,7 +113,8 @@ if (backendMode is "csharp" or "both")
             .WithReference(syncKitDb)
             .WithReference(redis)
             .WaitFor(syncKitDb)
-            .WaitFor(redis);
+            .WaitFor(redis)
+            .WaitFor(migrations);
     }
 }
 
