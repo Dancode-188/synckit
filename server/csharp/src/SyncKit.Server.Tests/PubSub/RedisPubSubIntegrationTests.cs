@@ -105,6 +105,45 @@ public class RedisPubSubIntegrationTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task AwarenessPublishedOnOneInstance_IsReceivedByTheOther()
+    {
+        if (_dockerUnavailable) return;
+
+        var host = _redisContainer.Hostname;
+        var port = _redisContainer.GetMappedPublicPort(6379);
+        var endpoint = $"{host}:{port}";
+
+        var opts = Options.Create(new SyncKitConfig { RedisUrl = endpoint });
+
+        var conn1 = await ConnectionMultiplexer.ConnectAsync(new ConfigurationOptions { EndPoints = { endpoint }, AbortOnConnectFail = false, ConnectRetry = 3 });
+        var conn2 = await ConnectionMultiplexer.ConnectAsync(new ConfigurationOptions { EndPoints = { endpoint }, AbortOnConnectFail = false, ConnectRetry = 3 });
+
+        await using var providerA = new RedisPubSubProvider(new NullLogger<RedisPubSubProvider>(), opts, conn1);
+        await using var providerB = new RedisPubSubProvider(new NullLogger<RedisPubSubProvider>(), opts, conn2);
+
+        var tcs = new TaskCompletionSource<bool>();
+
+        await providerB.SubscribeAsync("doc1", async (msg) =>
+        {
+            if (msg is AwarenessUpdateMessage)
+            {
+                tcs.TrySetResult(true);
+            }
+            await Task.CompletedTask;
+        });
+
+        var update = new AwarenessUpdateMessage { Id = "au-1", Timestamp = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds(), DocumentId = "doc1", ClientId = "client1", State = null, Clock = 0 };
+        await providerA.PublishAwarenessAsync("doc1", update);
+
+        // Wait for providerB to receive
+        var received = await Task.WhenAny(tcs.Task, Task.Delay(TimeSpan.FromSeconds(10)));
+        Assert.True(tcs.Task.IsCompleted, "Provider B did not receive the awareness update within timeout");
+
+        Assert.Equal(1, providerA.PublishedCount);
+        Assert.Equal(1, providerB.ReceivedCount);
+    }
+
+    [Fact]
     public async Task RestartingRedis_TriggersReconnectionEvent()
     {
         if (_dockerUnavailable) return;

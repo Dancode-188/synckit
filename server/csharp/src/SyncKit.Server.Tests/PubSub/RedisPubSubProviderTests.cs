@@ -32,6 +32,25 @@ public class RedisPubSubProviderTests
     }
 
     [Fact]
+    public async Task PublishAwarenessAsync_CallsRedisPublish()
+    {
+        var mockConn = new Mock<IConnectionMultiplexer>();
+        var mockSub = new Mock<ISubscriber>();
+        mockConn.Setup(c => c.GetSubscriber(It.IsAny<object>())).Returns(mockSub.Object);
+
+        mockSub.Setup(s => s.PublishAsync(It.IsAny<RedisChannel>(), It.IsAny<RedisValue>(), It.IsAny<CommandFlags>())).ReturnsAsync(1L);
+
+        var cfg = Options.Create(new SyncKitConfig { RedisUrl = "localhost:6379" });
+        var provider = new RedisPubSubProvider(new NullLogger<RedisPubSubProvider>(), cfg, mockConn.Object);
+
+        var msg = new AwarenessUpdateMessage { Id = "a1", Timestamp = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds(), DocumentId = "doc1", ClientId = "client1", State = null, Clock = 0 };
+
+        await provider.PublishAwarenessAsync("doc1", msg);
+
+        mockSub.Verify(s => s.PublishAsync(It.Is<RedisChannel>(ch => ch.ToString().Contains("awareness:doc1")), It.IsAny<RedisValue>(), It.IsAny<CommandFlags>()), Times.Once);
+    }
+
+    [Fact]
     public async Task SubscribeAsync_InvokesHandlerOnMessage()
     {
         var mockConn = new Mock<IConnectionMultiplexer>();
