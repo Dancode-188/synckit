@@ -60,8 +60,8 @@ public static class StorageRegistration
         switch (awarenessProvider.ToLowerInvariant())
         {
             case "redis":
-                // Awareness via redis not implemented yet
-                throw new NotImplementedException("Redis-backed awareness store is not implemented yet");
+                AddRedisAwarenessStorage(services, awarenessSection, configuration);
+                break;
             case "postgresql":
             case "postgres":
                 // PostgreSQL-backed awareness store not implemented yet
@@ -144,5 +144,33 @@ public static class StorageRegistration
 
         // Register the provider using the IConnectionMultiplexer from DI
         services.AddSingleton<Redis.IRedisPubSub>(sp => new Redis.RedisPubSubProvider(sp.GetRequiredService<ILogger<Redis.RedisPubSubProvider>>(), sp.GetRequiredService<Microsoft.Extensions.Options.IOptions<SyncKitConfig>>(), sp.GetRequiredService<StackExchange.Redis.IConnectionMultiplexer>()));
+    }
+
+    private static void AddRedisAwarenessStorage(IServiceCollection services, IConfigurationSection awarenessSection, IConfiguration rootConfig)
+    {
+        // Determine redis connection string from Awareness:Redis:ConnectionString or top-level SyncKit config or env vars
+        var redisConn = awarenessSection.GetValue<string>("Redis:ConnectionString");
+        if (string.IsNullOrEmpty(redisConn))
+        {
+            // Try common locations
+            redisConn = rootConfig.GetValue<string>("SyncKit:RedisUrl")
+                        ?? Environment.GetEnvironmentVariable("ConnectionStrings__redis")
+                        ?? Environment.GetEnvironmentVariable("REDIS_URL");
+        }
+
+        if (string.IsNullOrEmpty(redisConn))
+            throw new InvalidOperationException("Redis connection string required for Awareness:Redis:ConnectionString when Awareness:Provider is redis");
+
+        // Ensure SyncKitConfig options have redis values so RedisAwarenessStore can read them via IOptions
+        services.PostConfigure<SyncKitConfig>(cfg =>
+        {
+            cfg.RedisUrl = redisConn;
+        });
+
+        // Register ConnectionMultiplexer
+        services.AddSingleton(sp => StackExchange.Redis.ConnectionMultiplexer.Connect(redisConn));
+
+        // Register the Redis awareness store using DI connection
+        services.AddSingleton<IAwarenessStore>(sp => new SyncKit.Server.Awareness.RedisAwarenessStore(sp.GetRequiredService<ILogger<SyncKit.Server.Awareness.RedisAwarenessStore>>(), sp.GetRequiredService<Microsoft.Extensions.Options.IOptions<SyncKitConfig>>(), sp.GetRequiredService<StackExchange.Redis.IConnectionMultiplexer>()));
     }
 }

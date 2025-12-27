@@ -118,18 +118,23 @@ public class StorageRegistrationTests
     }
 
     [Fact]
-    public void Awareness_redis_provider_not_implemented_yet()
+    public void Awareness_redis_provider_registers_redis_store()
     {
         var dict = new Dictionary<string, string>
         {
-            ["Awareness:Provider"] = "redis"
+            ["Awareness:Provider"] = "redis",
+            ["Awareness:Redis:ConnectionString"] = "localhost:6379"
         };
         var config = new ConfigurationBuilder().AddInMemoryCollection(dict).Build();
         var services = new ServiceCollection();
 
         services.AddSyncKitConfiguration(config);
 
-        Assert.Throws<NotImplementedException>(() => services.AddSyncKitStorage(config));
+        // Should not throw
+        services.AddSyncKitStorage(config);
+
+        var descriptor = services.FirstOrDefault(sd => sd.ServiceType == typeof(SyncKit.Server.Awareness.IAwarenessStore));
+        Assert.NotNull(descriptor);
     }
 
     [Fact]
