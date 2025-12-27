@@ -149,6 +149,6 @@ public class StorageRegistrationTests
 
         services.AddSyncKitConfiguration(config);
 
-        Assert.Throws<NotImplementedException>(() => services.AddSyncKitStorage(config));
+        Assert.Throws<InvalidOperationException>(() => services.AddSyncKitStorage(config));
     }
 }

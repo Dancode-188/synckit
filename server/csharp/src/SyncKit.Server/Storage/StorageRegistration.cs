@@ -62,10 +62,6 @@ public static class StorageRegistration
             case "redis":
                 AddRedisAwarenessStorage(services, awarenessSection, configuration);
                 break;
-            case "postgresql":
-            case "postgres":
-                // PostgreSQL-backed awareness store not implemented yet
-                throw new NotImplementedException("PostgreSQL-backed awareness store is not implemented yet");
             case "inmemory":
             default:
                 services.AddSingleton<IAwarenessStore, SyncKit.Server.Awareness.InMemoryAwarenessStore>();
