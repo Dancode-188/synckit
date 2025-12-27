@@ -1,10 +1,11 @@
 using Microsoft.Extensions.Logging;
 using Moq;
 using SyncKit.Server.Storage;
+using Storage = SyncKit.Server.Storage;
 using System.Text.Json;
 using Xunit;
 
-namespace SyncKit.Server.Tests.Storage;
+namespace SyncKit.Server.Tests.Unit.Storage;
 
 public class InMemoryStorageAdapterLifecycleTests
 {
@@ -108,4 +109,26 @@ public class InMemoryStorageAdapterLifecycleTests
         Assert.Single(deltas);
         Assert.Equal("d3", deltas[0].Id);
     }
+
+    #region Helpers
+
+    private static SyncKit.Server.Storage.DeltaEntry CreateTestDelta(string id, string clientId, long clockValue = 1)
+    {
+        var vc = new Dictionary<string, long> { [clientId] = clockValue };
+
+        return new SyncKit.Server.Storage.DeltaEntry
+        {
+            Id = id,
+            DocumentId = string.Empty,
+            ClientId = clientId,
+            OperationType = "set",
+            FieldPath = string.Empty,
+            Value = JsonDocument.Parse("{}").RootElement,
+            ClockValue = clockValue,
+            Timestamp = DateTime.UtcNow,
+            VectorClock = vc
+        };
+    }
+
+    #endregion
 }

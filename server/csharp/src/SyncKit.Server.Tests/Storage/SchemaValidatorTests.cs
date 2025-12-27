@@ -4,7 +4,7 @@ using Moq;
 using SyncKit.Server.Storage;
 using Xunit;
 
-namespace SyncKit.Server.Tests.Storage;
+namespace SyncKit.Server.Tests.Unit.Storage;
 
 public class SchemaValidatorTests
 {

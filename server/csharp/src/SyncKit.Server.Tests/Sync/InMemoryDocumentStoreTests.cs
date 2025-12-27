@@ -2,6 +2,7 @@ using System.Text.Json;
 using Microsoft.Extensions.Logging;
 using Moq;
 using SyncKit.Server.Sync;
+using SyncKit.Server.Storage;
 using Xunit;
 
 namespace SyncKit.Server.Tests.Sync;
@@ -258,7 +259,7 @@ public class InMemoryStorageAdapterTests
 
         // Assert - Verify that a delta was saved
         var deltas = await _store.GetDeltasAsync(docId);
-        Assert.Equal(1, deltas.Count);
+        Assert.Single(deltas);
     }
 
     [Fact]
@@ -274,7 +275,7 @@ public class InMemoryStorageAdapterTests
 
         // Assert - Verify that a delta was saved
         var deltas = await _store.GetDeltasAsync(docId);
-        Assert.Equal(1, deltas.Count);
+        Assert.Single(deltas);
     }
 
     [Fact]
@@ -481,7 +482,7 @@ public class InMemoryStorageAdapterTests
     {
         // Arrange
         var docId = "test-doc";
-        var tasks = new List<Task<Document>>();
+        var tasks = new List<Task<DocumentState>>();
         var threadCount = 100;
 
         // Act - Multiple threads trying to save the same document concurrently
@@ -494,7 +495,7 @@ public class InMemoryStorageAdapterTests
 
         // Assert - The document should exist and only one entry should be listed
         var docs = await _store.ListDocumentsAsync();
-        Assert.Single(docs.Where(d => d.Id == docId));
+        Assert.Single(docs, d => d.Id == docId);
     }
 
     #endregion

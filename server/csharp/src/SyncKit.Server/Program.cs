@@ -3,6 +3,7 @@ using SyncKit.Server.Auth;
 using SyncKit.Server.Configuration;
 using SyncKit.Server.Health;
 using SyncKit.Server.WebSockets;
+using SyncKit.Server.Storage;
 
 // Bootstrap logger for startup errors
 Log.Logger = new LoggerConfiguration()
@@ -40,6 +41,10 @@ try
 
     // Add SyncKit configuration with environment variable support and validation
     builder.Services.AddSyncKitConfiguration(builder.Configuration);
+
+    // Register storage provider (in-memory or postgres)
+    var syncConfig = builder.Configuration.GetSection(SyncKitConfig.SectionName).Get<SyncKitConfig>() ?? new SyncKitConfig();
+    builder.Services.AddSyncKitStorage(syncConfig);
 
     // Add auth services
     builder.Services.AddSyncKitAuth();
@@ -85,6 +90,19 @@ try
     if (isAspireManaged)
     {
         app.MapDefaultEndpoints();
+    }
+
+    // Attempt to connect storage provider and fail fast if necessary
+    try
+    {
+        var storage = app.Services.GetRequiredService<IStorageAdapter>();
+        await storage.ConnectAsync();
+        Log.Information("Storage provider connected and validated");
+    }
+    catch (Exception ex)
+    {
+        Log.Fatal(ex, "Storage provider failed to connect or validate. Exiting.");
+        return;
     }
 
     // Mark server as ready to accept traffic

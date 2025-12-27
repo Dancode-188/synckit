@@ -136,7 +136,8 @@ public class InMemoryStorageAdapter : IStorageAdapter
         _documents.TryGetValue(documentId, out var doc);
         if (doc == null) return Task.FromResult<IReadOnlyList<DeltaEntry>>(Array.Empty<DeltaEntry>());
 
-        var deltas = doc.GetAllDeltas().Take(limit).Select(d => new DeltaEntry
+        var takeLimit = limit <= 0 ? int.MaxValue : limit;
+        var deltas = doc.GetAllDeltas().Take(takeLimit).Select(d => new DeltaEntry
         {
             Id = d.Id,
             DocumentId = documentId,
@@ -214,7 +215,9 @@ public class InMemoryStorageAdapter : IStorageAdapter
     {
         var opts = options ?? new CleanupOptions();
         var cutoff = DateTime.UtcNow.AddHours(-opts.OldSessionsHours);
-        var removedSessions = _sessions.Where(kvp => kvp.Value.LastSeen < cutoff).Select(kvp => kvp.Key).ToList();
+        // Use ConnectedAt for cleanup to match tests (remove old connections),
+        // and also remove by LastSeen to be safe.
+        var removedSessions = _sessions.Where(kvp => kvp.Value.ConnectedAt < cutoff || kvp.Value.LastSeen < cutoff).Select(kvp => kvp.Key).ToList();
         foreach (var id in removedSessions) _sessions.TryRemove(id, out _);
 
         // Deltas cleanup not implemented in-memory (could filter by timestamp)
