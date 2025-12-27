@@ -4,7 +4,6 @@ using Moq;
 using SyncKit.Server.Sync;
 using Xunit;
 
-#pragma warning disable CS0618 // Using obsolete InMemoryDocumentStore in tests during migration
 namespace SyncKit.Server.Tests.Sync;
 
 /// <summary>
@@ -21,7 +20,7 @@ public class InMemoryStorageAdapterTests
         _store = new InMemoryStorageAdapter(_mockLogger.Object);
     }
 
-    #region GetOrCreateAsync Tests
+    #region SaveDocument Tests
 
     [Fact]
     public async Task SaveAndGetDocument_ShouldCreateAndRetrieveDocument()
@@ -112,30 +111,30 @@ public class InMemoryStorageAdapterTests
 
     #endregion
 
-    #region ExistsAsync Tests
+    #region Existence Tests
 
     [Fact]
-    public async Task ExistsAsync_NonExistentDocument_ReturnsFalse()
+    public async Task DocumentExistence_NonExistentDocument_ReturnsFalse()
     {
         // Arrange
         var docId = "non-existent";
 
         // Act
-        var exists = await _store.ExistsAsync(docId);
+        var exists = (await _store.GetDocumentAsync(docId)) != null;
 
         // Assert
         Assert.False(exists);
     }
 
     [Fact]
-    public async Task ExistsAsync_ExistingDocument_ReturnsTrue()
+    public async Task DocumentExistence_ExistingDocument_ReturnsTrue()
     {
         // Arrange
         var docId = "test-doc";
-        await _store.GetOrCreateAsync(docId);
+        await _store.SaveDocumentAsync(docId, JsonDocument.Parse("{}").RootElement);
 
         // Act
-        var exists = await _store.ExistsAsync(docId);
+        var exists = (await _store.GetDocumentAsync(docId)) != null;
 
         // Assert
         Assert.True(exists);
@@ -143,35 +142,39 @@ public class InMemoryStorageAdapterTests
 
     #endregion
 
-    #region DeleteAsync Tests
+    #region Delete Tests
 
     [Fact]
-    public async Task DeleteAsync_ExistingDocument_RemovesDocument()
+    public async Task DeleteDocument_ExistingDocument_RemovesDocument()
     {
         // Arrange
         var docId = "test-doc";
         await _store.SaveDocumentAsync(docId, JsonDocument.Parse("{}").RootElement);
 
         // Act
-        await _store.DeleteDocumentAsync(docId);
+        var removed = await _store.DeleteDocumentAsync(docId);
 
         // Assert - Document should no longer exist
+        Assert.True(removed);
         var doc = await _store.GetDocumentAsync(docId);
         Assert.Null(doc);
     }
 
     [Fact]
-    public async Task DeleteAsync_NonExistentDocument_NoError()
+    public async Task DeleteDocument_NonExistentDocument_NoError()
     {
         // Arrange
         var docId = "non-existent";
 
-        // Act & Assert (should not throw)
-        await _store.DeleteAsync(docId);
+        // Act
+        var removed = await _store.DeleteDocumentAsync(docId);
+
+        // Assert - should return false and not throw
+        Assert.False(removed);
     }
 
     [Fact]
-    public async Task DeleteAsync_DocumentWithDeltas_RemovesEverything()
+    public async Task DeleteDocument_DocumentWithDeltas_RemovesEverything()
     {
         // Arrange
         var docId = "test-doc";
@@ -179,37 +182,40 @@ public class InMemoryStorageAdapterTests
         await _store.SaveDeltaAsync(delta with { DocumentId = docId });
 
         // Act
-        await _store.DeleteAsync(docId);
+        var removed = await _store.DeleteDocumentAsync(docId);
 
         // Assert
-        var deltas = await _store.GetDeltasSinceAsync(docId, null);
+        Assert.True(removed);
+        var deltas = await _store.GetDeltasAsync(docId);
         Assert.Empty(deltas);
     }
 
     #endregion
 
-    #region GetDocumentIdsAsync Tests
+    #region Document Listing Tests
 
     [Fact]
-    public async Task GetDocumentIdsAsync_NoDocuments_ReturnsEmpty()
+    public async Task ListDocuments_NoDocuments_ReturnsEmpty()
     {
         // Act
-        var ids = await _store.GetDocumentIdsAsync();
+        var docs = await _store.ListDocumentsAsync();
+        var ids = docs.Select(d => d.Id).ToList();
 
         // Assert
         Assert.Empty(ids);
     }
 
     [Fact]
-    public async Task GetDocumentIdsAsync_MultipleDocuments_ReturnsAllIds()
+    public async Task ListDocuments_MultipleDocuments_ReturnsAllIds()
     {
         // Arrange
-        await _store.GetOrCreateAsync("doc-1");
-        await _store.GetOrCreateAsync("doc-2");
-        await _store.GetOrCreateAsync("doc-3");
+        await _store.SaveDocumentAsync("doc-1", JsonDocument.Parse("{}").RootElement);
+        await _store.SaveDocumentAsync("doc-2", JsonDocument.Parse("{}").RootElement);
+        await _store.SaveDocumentAsync("doc-3", JsonDocument.Parse("{}").RootElement);
 
         // Act
-        var ids = await _store.GetDocumentIdsAsync();
+        var docs = await _store.ListDocumentsAsync();
+        var ids = docs.Select(d => d.Id).ToList();
 
         // Assert
         Assert.Equal(3, ids.Count);
@@ -219,15 +225,16 @@ public class InMemoryStorageAdapterTests
     }
 
     [Fact]
-    public async Task GetDocumentIdsAsync_AfterDeletion_ExcludesDeleted()
+    public async Task ListDocuments_AfterDeletion_ExcludesDeleted()
     {
         // Arrange
-        await _store.GetOrCreateAsync("doc-1");
-        await _store.GetOrCreateAsync("doc-2");
-        await _store.DeleteAsync("doc-1");
+        await _store.SaveDocumentAsync("doc-1", JsonDocument.Parse("{}").RootElement);
+        await _store.SaveDocumentAsync("doc-2", JsonDocument.Parse("{}").RootElement);
+        await _store.DeleteDocumentAsync("doc-1");
 
         // Act
-        var ids = await _store.GetDocumentIdsAsync();
+        var docs = await _store.ListDocumentsAsync();
+        var ids = docs.Select(d => d.Id).ToList();
 
         // Assert
         Assert.Single(ids);
@@ -237,7 +244,7 @@ public class InMemoryStorageAdapterTests
 
     #endregion
 
-    #region AddDeltaAsync Tests
+    #region Delta Tests
 
     [Fact]
     public async Task SaveDeltaAsync_NonExistentDocument_CreatesAndAddsDelta()
@@ -255,11 +262,11 @@ public class InMemoryStorageAdapterTests
     }
 
     [Fact]
-    public async Task AddDeltaAsync_ExistingDocument_AddsDelta()
+    public async Task SaveDeltaAsync_ExistingDocument_AddsDelta()
     {
         // Arrange
         var docId = "test-doc";
-        await _store.GetOrCreateAsync(docId);
+        await _store.SaveDocumentAsync(docId, JsonDocument.Parse("{}").RootElement);
         var delta = CreateTestDelta("delta-1", "client-1");
 
         // Act
@@ -271,7 +278,7 @@ public class InMemoryStorageAdapterTests
     }
 
     [Fact]
-    public async Task AddDeltaAsync_MultipleDeltas_AddsAll()
+    public async Task SaveDeltaAsync_MultipleDeltas_AddsAll()
     {
         // Arrange
         var docId = "test-doc";
@@ -290,7 +297,7 @@ public class InMemoryStorageAdapterTests
     }
 
     [Fact]
-    public async Task AddDeltaAsync_UpdatesVectorClock()
+    public async Task SaveDeltaAsync_UpdatesVectorClock()
     {
         // Arrange
         var docId = "test-doc";
@@ -309,37 +316,37 @@ public class InMemoryStorageAdapterTests
 
     #endregion
 
-    #region GetDeltasSinceAsync Tests
+    #region GetDeltasSince (VectorClock-based) Tests
 
     [Fact]
-    public async Task GetDeltasSinceAsync_NonExistentDocument_ReturnsEmpty()
+    public async Task GetDeltasSince_NonExistentDocument_ReturnsEmpty()
     {
         // Arrange
         var docId = "non-existent";
 
         // Act
-        var deltas = await _store.GetDeltasSinceAsync(docId, null);
+        var deltas = await _store.GetDeltasSinceViaAdapterAsync(docId, null);
 
         // Assert
         Assert.Empty(deltas);
     }
 
     [Fact]
-    public async Task GetDeltasSinceAsync_NoDeltas_ReturnsEmpty()
+    public async Task GetDeltasSince_NoDeltas_ReturnsEmpty()
     {
         // Arrange
         var docId = "test-doc";
         await _store.SaveDocumentAsync(docId, JsonDocument.Parse("{}").RootElement);
 
         // Act
-        var deltas = await _store.GetDeltasSinceAsync(docId, null);
+        var deltas = await _store.GetDeltasSinceViaAdapterAsync(docId, null);
 
         // Assert
         Assert.Empty(deltas);
     }
 
     [Fact]
-    public async Task GetDeltasSinceAsync_NullSince_ReturnsAllDeltas()
+    public async Task GetDeltasSince_NullSince_ReturnsAllDeltas()
     {
         // Arrange
         var docId = "test-doc";
@@ -347,19 +354,19 @@ public class InMemoryStorageAdapterTests
         var delta2 = CreateTestDelta("delta-2", "client-1", 2);
         var delta3 = CreateTestDelta("delta-3", "client-2", 1);
 
-        await _store.AddDeltaAsync(docId, delta1);
-        await _store.AddDeltaAsync(docId, delta2);
-        await _store.AddDeltaAsync(docId, delta3);
+        await _store.SaveDeltaAsync(delta1 with { DocumentId = docId });
+        await _store.SaveDeltaAsync(delta2 with { DocumentId = docId });
+        await _store.SaveDeltaAsync(delta3 with { DocumentId = docId });
 
         // Act
-        var deltas = await _store.GetDeltasSinceAsync(docId, null);
+        var deltas = await _store.GetDeltasSinceViaAdapterAsync(docId, null);
 
         // Assert
         Assert.Equal(3, deltas.Count);
     }
 
     [Fact]
-    public async Task GetDeltasSinceAsync_WithSince_FiltersCorrectly()
+    public async Task GetDeltasSince_WithSince_FiltersCorrectly()
     {
         // Arrange
         var docId = "test-doc";
@@ -367,9 +374,9 @@ public class InMemoryStorageAdapterTests
         var delta2 = CreateTestDelta("delta-2", "client-1", 2);
         var delta3 = CreateTestDelta("delta-3", "client-2", 1);
 
-        await _store.AddDeltaAsync(docId, delta1);
-        await _store.AddDeltaAsync(docId, delta2);
-        await _store.AddDeltaAsync(docId, delta3);
+        await _store.SaveDeltaAsync(delta1 with { DocumentId = docId });
+        await _store.SaveDeltaAsync(delta2 with { DocumentId = docId });
+        await _store.SaveDeltaAsync(delta3 with { DocumentId = docId });
 
         var since = new VectorClock(new Dictionary<string, long>
         {
@@ -377,7 +384,7 @@ public class InMemoryStorageAdapterTests
         });
 
         // Act
-        var deltas = await _store.GetDeltasSinceAsync(docId, since);
+        var deltas = await _store.GetDeltasSinceViaAdapterAsync(docId, since);
 
         // Assert
         Assert.Equal(2, deltas.Count);
@@ -386,7 +393,7 @@ public class InMemoryStorageAdapterTests
     }
 
     [Fact]
-    public async Task GetDeltasSinceAsync_CurrentState_ReturnsEmpty()
+    public async Task GetDeltasSince_CurrentState_ReturnsEmpty()
     {
         // Arrange
         var docId = "test-doc";
@@ -396,7 +403,7 @@ public class InMemoryStorageAdapterTests
         var currentClock = await _store.GetVectorClockAsync(docId);
 
         // Act
-        var deltas = await _store.GetDeltasSinceAsync(docId, VectorClock.FromDict(currentClock));
+        var deltas = await _store.GetDeltasSinceViaAdapterAsync(docId, VectorClock.FromDict(currentClock));
 
         // Assert
         Assert.Empty(deltas);
