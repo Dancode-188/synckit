@@ -19,8 +19,11 @@ public class UnsubscribeMessageHandlerTests
         _mockStorage = new Mock<SyncKit.Server.Storage.IStorageAdapter>();
         _mockConnection = new Mock<IConnection>();
         _mockLogger = new Mock<ILogger<UnsubscribeMessageHandler>>();
+        var mockConnManager = new Mock<IConnectionManager>();
         _handler = new UnsubscribeMessageHandler(
             _mockStorage.Object,
+            mockConnManager.Object,
+            null,
             _mockLogger.Object);
     }
 
@@ -223,7 +226,7 @@ public class UnsubscribeMessageHandlerTests
     {
         // Act & Assert
         var exception = Assert.Throws<ArgumentNullException>(() =>
-            new UnsubscribeMessageHandler((SyncKit.Server.Storage.IStorageAdapter)null!, _mockLogger.Object));
+            new UnsubscribeMessageHandler((SyncKit.Server.Storage.IStorageAdapter)null!, new Mock<IConnectionManager>().Object, null!, _mockLogger.Object));
 
         Assert.Equal("storage", exception.ParamName);
     }
@@ -233,7 +236,7 @@ public class UnsubscribeMessageHandlerTests
     {
         // Act & Assert
         var exception = Assert.Throws<ArgumentNullException>(() =>
-            new UnsubscribeMessageHandler(_mockStorage.Object, null!));
+            new UnsubscribeMessageHandler(_mockStorage.Object, new Mock<IConnectionManager>().Object, null!, null!));
 
         Assert.Equal("logger", exception.ParamName);
     }

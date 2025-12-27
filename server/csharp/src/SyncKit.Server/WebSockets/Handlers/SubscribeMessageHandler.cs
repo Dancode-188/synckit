@@ -15,19 +15,35 @@ public class SubscribeMessageHandler : IMessageHandler
 
     private readonly AuthGuard _authGuard;
     private readonly Storage.IStorageAdapter _storage;
+    private readonly IConnectionManager _connectionManager;
+    private readonly PubSub.IRedisPubSub? _redis;
     private readonly ILogger<SubscribeMessageHandler> _logger;
 
     public MessageType[] HandledTypes => _handledTypes;
 
+    // Backwards-compatible constructor for tests that used old 3-arg constructor
     public SubscribeMessageHandler(
         AuthGuard authGuard,
         Storage.IStorageAdapter storage,
         ILogger<SubscribeMessageHandler> logger)
+        : this(authGuard, storage, new DefaultConnectionManager(), null, logger)
+    {
+    }
+
+    public SubscribeMessageHandler(
+        AuthGuard authGuard,
+        Storage.IStorageAdapter storage,
+        IConnectionManager connectionManager,
+        PubSub.IRedisPubSub? redis,
+        ILogger<SubscribeMessageHandler> logger)
     {
         _authGuard = authGuard ?? throw new ArgumentNullException(nameof(authGuard));
         _storage = storage ?? throw new ArgumentNullException(nameof(storage));
+        _connectionManager = connectionManager ?? throw new ArgumentNullException(nameof(connectionManager));
+        _redis = redis;
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
     }
+
 
 
     public async Task HandleAsync(IConnection connection, IMessage message)
@@ -56,6 +72,20 @@ public class SubscribeMessageHandler : IMessageHandler
         // Add subscription (both document and connection track this)
         document.Subscribe(connection.Id);
         connection.AddSubscription(subscribe.DocumentId);
+
+        // If Redis is configured and this is the first local subscriber, subscribe to Redis channels
+        if (_redis != null)
+        {
+            var localSubs = _connectionManager.GetConnectionsByDocument(subscribe.DocumentId).Count;
+            if (localSubs == 1)
+            {
+                // Register a handler that broadcasts messages to local connections
+                await _redis.SubscribeAsync(subscribe.DocumentId, async (msg) =>
+                {
+                    await _connectionManager.BroadcastToDocumentAsync(subscribe.DocumentId, msg, excludeConnectionId: null);
+                });
+            }
+        }
 
         // Get all deltas for initial sync
         var deltas = await _storage.GetDeltasSinceViaAdapterAsync(subscribe.DocumentId, null);

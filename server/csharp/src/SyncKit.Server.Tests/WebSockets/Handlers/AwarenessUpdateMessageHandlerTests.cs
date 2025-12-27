@@ -40,6 +40,7 @@ public class AwarenessUpdateMessageHandlerTests
             _authGuard,
             _mockStore.Object,
             _mockConnectionManager.Object,
+            null,
             _mockLogger.Object);
     }
 
@@ -202,6 +203,7 @@ public class AwarenessUpdateMessageHandlerTests
                 null!,
                 _mockStore.Object,
                 _mockConnectionManager.Object,
+                null,
                 _mockLogger.Object));
 
         Assert.Equal("authGuard", exception.ParamName);
@@ -216,6 +218,7 @@ public class AwarenessUpdateMessageHandlerTests
                 _authGuard,
                 _mockStore.Object,
                 _mockConnectionManager.Object,
+                null,
                 null!));
 
         Assert.Equal("logger", exception.ParamName);

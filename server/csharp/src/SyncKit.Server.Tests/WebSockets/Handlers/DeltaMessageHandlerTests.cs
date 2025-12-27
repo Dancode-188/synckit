@@ -30,6 +30,7 @@ public class DeltaMessageHandlerTests
             _authGuard,
             _mockStorage.Object,
             _mockConnectionManager.Object,
+            null,
             NullLogger<DeltaMessageHandler>.Instance);
     }
 
@@ -431,6 +432,7 @@ public class DeltaMessageHandlerTests
                 null!,
                 _mockStorage.Object,
                 _mockConnectionManager.Object,
+                null,
                 NullLogger<DeltaMessageHandler>.Instance));
 
         Assert.Equal("authGuard", exception.ParamName);
@@ -448,6 +450,7 @@ public class DeltaMessageHandlerTests
                 authGuard,
                 (Storage.IStorageAdapter)null!,
                 _mockConnectionManager.Object,
+                null,
                 NullLogger<DeltaMessageHandler>.Instance));
 
         Assert.Equal("storage", exception.ParamName);
@@ -465,6 +468,7 @@ public class DeltaMessageHandlerTests
                 authGuard,
                 _mockStorage.Object,
                 null!,
+                null,
                 NullLogger<DeltaMessageHandler>.Instance));
 
         Assert.Equal("connectionManager", exception.ParamName);
@@ -482,6 +486,7 @@ public class DeltaMessageHandlerTests
                 authGuard,
                 _mockStorage.Object,
                 _mockConnectionManager.Object,
+                null,
                 null!));
 
         Assert.Equal("logger", exception.ParamName);

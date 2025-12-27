@@ -27,6 +27,17 @@ public static class WebSocketExtensions
         // Register awareness store (in-memory for Phase 5)
         services.AddSingleton<IAwarenessStore, InMemoryAwarenessStore>();
 
+        // Register Redis pub/sub provider (noop by default)
+        services.AddSingleton<PubSub.IRedisPubSub, PubSub.NoopRedisPubSub>();
+
+        // Replace with real Redis provider if configured
+        var provider = services.BuildServiceProvider();
+        var config = provider.GetRequiredService<IOptions<SyncKitConfig>>().Value;
+        if (!string.IsNullOrEmpty(config.RedisUrl))
+        {
+            services.AddSingleton<PubSub.IRedisPubSub, PubSub.RedisPubSubProvider>();
+        }
+
         // Register AuthGuard for permission enforcement
         services.AddSingleton<AuthGuard>();
 

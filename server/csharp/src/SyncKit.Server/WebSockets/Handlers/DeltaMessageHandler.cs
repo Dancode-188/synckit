@@ -17,19 +17,32 @@ public class DeltaMessageHandler : IMessageHandler
     private readonly AuthGuard _authGuard;
     private readonly Storage.IStorageAdapter _storage;
     private readonly IConnectionManager _connectionManager;
+    private readonly PubSub.IRedisPubSub? _redis;
     private readonly ILogger<DeltaMessageHandler> _logger;
 
     public MessageType[] HandledTypes => _handledTypes;
 
+    // Backwards-compatible constructor for existing tests (no redis parameter)
     public DeltaMessageHandler(
         AuthGuard authGuard,
         Storage.IStorageAdapter storage,
         IConnectionManager connectionManager,
         ILogger<DeltaMessageHandler> logger)
+        : this(authGuard, storage, connectionManager, null, logger)
+    {
+    }
+
+    public DeltaMessageHandler(
+        AuthGuard authGuard,
+        Storage.IStorageAdapter storage,
+        IConnectionManager connectionManager,
+        PubSub.IRedisPubSub? redis,
+        ILogger<DeltaMessageHandler> logger)
     {
         _authGuard = authGuard ?? throw new ArgumentNullException(nameof(authGuard));
         _storage = storage ?? throw new ArgumentNullException(nameof(storage));
         _connectionManager = connectionManager ?? throw new ArgumentNullException(nameof(connectionManager));
+        _redis = redis;
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
     }
 
@@ -119,6 +132,19 @@ public class DeltaMessageHandler : IMessageHandler
             delta.DocumentId,
             broadcastMessage,
             excludeConnectionId: connection.Id);
+
+        // Publish to Redis for other instances
+        if (_redis != null)
+        {
+            try
+            {
+                await _redis.PublishDeltaAsync(delta.DocumentId, broadcastMessage);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "Failed to publish delta to Redis for document {DocumentId}", delta.DocumentId);
+            }
+        }
 
         // Send ACK to the sender
         var ackMessage = new AckMessage

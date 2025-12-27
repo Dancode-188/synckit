@@ -16,19 +16,32 @@ public class AwarenessUpdateMessageHandler : IMessageHandler
     private readonly AuthGuard _authGuard;
     private readonly IAwarenessStore _awarenessStore;
     private readonly IConnectionManager _connectionManager;
+    private readonly PubSub.IRedisPubSub? _redis;
     private readonly ILogger<AwarenessUpdateMessageHandler> _logger;
 
     public MessageType[] HandledTypes => _handledTypes;
 
+    // Backwards-compatible constructor (old tests that didn't include redis param)
     public AwarenessUpdateMessageHandler(
         AuthGuard authGuard,
         IAwarenessStore awarenessStore,
         IConnectionManager connectionManager,
         ILogger<AwarenessUpdateMessageHandler> logger)
+        : this(authGuard, awarenessStore, connectionManager, null, logger)
+    {
+    }
+
+    public AwarenessUpdateMessageHandler(
+        AuthGuard authGuard,
+        IAwarenessStore awarenessStore,
+        IConnectionManager connectionManager,
+        PubSub.IRedisPubSub? redis,
+        ILogger<AwarenessUpdateMessageHandler> logger)
     {
         _authGuard = authGuard ?? throw new ArgumentNullException(nameof(authGuard));
         _awarenessStore = awarenessStore ?? throw new ArgumentNullException(nameof(awarenessStore));
         _connectionManager = connectionManager ?? throw new ArgumentNullException(nameof(connectionManager));
+        _redis = redis;
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
     }
 
@@ -100,5 +113,17 @@ public class AwarenessUpdateMessageHandler : IMessageHandler
             update.DocumentId,
             broadcastMessage,
             excludeConnectionId: connection.Id);
+
+        if (_redis != null)
+        {
+            try
+            {
+                await _redis.PublishAwarenessAsync(update.DocumentId, broadcastMessage);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "Failed to publish awareness to Redis for document {DocumentId}", update.DocumentId);
+            }
+        }
     }
 }

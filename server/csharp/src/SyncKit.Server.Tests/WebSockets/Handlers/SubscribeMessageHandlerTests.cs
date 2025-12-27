@@ -27,9 +27,12 @@ public class SubscribeMessageHandlerTests
         _mockStorage = new Mock<SyncKit.Server.Storage.IStorageAdapter>();
         _mockConnection = new Mock<IConnection>();
         _mockLogger = new Mock<ILogger<SubscribeMessageHandler>>();
+        var mockConnManager = new Mock<IConnectionManager>();
         _handler = new SubscribeMessageHandler(
             _authGuard,
             _mockStorage.Object,
+            mockConnManager.Object,
+            null,
             _mockLogger.Object);
     }
 

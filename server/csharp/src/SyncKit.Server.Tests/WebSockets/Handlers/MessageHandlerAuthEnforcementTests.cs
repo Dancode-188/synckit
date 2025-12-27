@@ -39,6 +39,8 @@ public class MessageHandlerAuthEnforcementTests
         var handler = new SubscribeMessageHandler(
             _authGuard,
             mockStorage.Object,
+            new Mock<IConnectionManager>().Object,
+            null,
             NullLogger<SubscribeMessageHandler>.Instance);
 
         _mockConnection.Setup(c => c.State).Returns(ConnectionState.Authenticating);
@@ -75,6 +77,8 @@ public class MessageHandlerAuthEnforcementTests
         var handler = new SubscribeMessageHandler(
             _authGuard,
             mockStorage.Object,
+            new Mock<IConnectionManager>().Object,
+            null,
             NullLogger<SubscribeMessageHandler>.Instance);
 
         var payload = new TokenPayload
@@ -122,6 +126,8 @@ public class MessageHandlerAuthEnforcementTests
         var handler = new SubscribeMessageHandler(
             _authGuard,
             mockStorage.Object,
+            new Mock<IConnectionManager>().Object,
+            null,
             NullLogger<SubscribeMessageHandler>.Instance);
 
         var payload = new TokenPayload
@@ -168,6 +174,8 @@ public class MessageHandlerAuthEnforcementTests
         var handler = new SubscribeMessageHandler(
             _authGuard,
             mockStorage.Object,
+            new Mock<IConnectionManager>().Object,
+            null,
             NullLogger<SubscribeMessageHandler>.Instance);
 
         var payload = new TokenPayload
@@ -215,6 +223,7 @@ public class MessageHandlerAuthEnforcementTests
             _authGuard,
             mockStorage.Object,
             mockConnManager.Object,
+            null,
             NullLogger<DeltaMessageHandler>.Instance);
 
         _mockConnection.Setup(c => c.State).Returns(ConnectionState.Authenticating);
