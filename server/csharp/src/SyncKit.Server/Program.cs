@@ -43,8 +43,8 @@ try
     builder.Services.AddSyncKitConfiguration(builder.Configuration);
 
     // Register storage provider (in-memory or postgres)
-    var syncConfig = builder.Configuration.GetSection(SyncKitConfig.SectionName).Get<SyncKitConfig>() ?? new SyncKitConfig();
-    builder.Services.AddSyncKitStorage(syncConfig);
+    // Register storage, awareness, and optional pub/sub based on configuration
+    builder.Services.AddSyncKitStorage(builder.Configuration);
 
     // Add auth services
     builder.Services.AddSyncKitAuth();
