@@ -1,7 +1,9 @@
 using System.Net.WebSockets;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
 using Moq;
 using SyncKit.Server.Auth;
+using SyncKit.Server.Configuration;
 using SyncKit.Server.Tests;
 using SyncKit.Server.WebSockets;
 using SyncKit.Server.WebSockets.Handlers;
@@ -22,30 +24,54 @@ namespace SyncKit.Server.Tests.WebSockets.Handlers;
 /// 4. Auth Fallback - JWT fails, API key succeeds
 /// 5. Auth Failure Scenarios - Invalid credentials
 /// 6. Connection State Management - State transitions
-/// 7. Already Authenticated - Re-auth handling
+/// 7. Already Authenticated - Re-auth handling (now sends auth_success)
 /// 8. Message Response Validation - AUTH_SUCCESS and AUTH_ERROR messages
 /// 9. Edge Cases - Empty, null, malformed inputs
+/// 10. Anonymous Auth - When AuthRequired=false
 /// </summary>
 public class AuthMessageHandlerTests
 {
     private readonly Mock<IJwtValidator> _jwtValidator;
     private readonly Mock<IApiKeyValidator> _apiKeyValidator;
+    private readonly IOptions<SyncKitConfig> _configAuthRequired;
+    private readonly IOptions<SyncKitConfig> _configAuthDisabled;
     private readonly Mock<ILogger<AuthMessageHandler>> _logger;
     private readonly AuthMessageHandler _handler;
+    private readonly AuthMessageHandler _handlerAuthDisabled;
 
     public AuthMessageHandlerTests()
     {
         _jwtValidator = new Mock<IJwtValidator>();
         _apiKeyValidator = new Mock<IApiKeyValidator>();
         _logger = new Mock<ILogger<AuthMessageHandler>>();
-        _handler = new AuthMessageHandler(_jwtValidator.Object, _apiKeyValidator.Object, _logger.Object);
+
+        // Config with auth required (default behavior)
+        _configAuthRequired = Options.Create(new SyncKitConfig
+        {
+            AuthRequired = true,
+            JwtSecret = "test-secret-key-at-least-32-characters-long"
+        });
+
+        // Config with auth disabled (anonymous access allowed)
+        _configAuthDisabled = Options.Create(new SyncKitConfig
+        {
+            AuthRequired = false,
+            JwtSecret = "test-secret-key-at-least-32-characters-long"
+        });
+
+        _handler = new AuthMessageHandler(_jwtValidator.Object, _apiKeyValidator.Object, _configAuthRequired, _logger.Object);
+        _handlerAuthDisabled = new AuthMessageHandler(_jwtValidator.Object, _apiKeyValidator.Object, _configAuthDisabled, _logger.Object);
     }
 
     private Mock<IConnection> CreateMockConnection(ConnectionState state = ConnectionState.Authenticating)
     {
         var connection = new Mock<IConnection>();
         connection.Setup(c => c.Id).Returns("test-conn-123");
-        connection.Setup(c => c.State).Returns(state);
+        // Use SetupProperty to track property values that are set and then read
+        connection.SetupProperty(c => c.State, state);
+        connection.SetupProperty(c => c.UserId);
+        connection.SetupProperty(c => c.ClientId);
+        connection.SetupProperty(c => c.TokenPayload);
         connection.Setup(c => c.Send(It.IsAny<IMessage>())).Returns(true);
         return connection;
     }
@@ -68,7 +94,7 @@ public class AuthMessageHandlerTests
     {
         // Act & Assert
         Assert.Throws<ArgumentNullException>(() =>
-            new AuthMessageHandler(null!, _apiKeyValidator.Object, _logger.Object));
+            new AuthMessageHandler(null!, _apiKeyValidator.Object, _configAuthRequired, _logger.Object));
     }
 
     [Fact]
@@ -76,7 +102,15 @@ public class AuthMessageHandlerTests
     {
         // Act & Assert
         Assert.Throws<ArgumentNullException>(() =>
-            new AuthMessageHandler(_jwtValidator.Object, null!, _logger.Object));
+            new AuthMessageHandler(_jwtValidator.Object, null!, _configAuthRequired, _logger.Object));
+    }
+
+    [Fact]
+    public void Constructor_ThrowsArgumentNullException_WhenOptionsIsNull()
+    {
+        // Act & Assert
+        Assert.Throws<ArgumentNullException>(() =>
+            new AuthMessageHandler(_jwtValidator.Object, _apiKeyValidator.Object, null!, _logger.Object));
     }
 
     [Fact]
@@ -84,7 +118,7 @@ public class AuthMessageHandlerTests
     {
         // Act & Assert
         Assert.Throws<ArgumentNullException>(() =>
-            new AuthMessageHandler(_jwtValidator.Object, _apiKeyValidator.Object, null!));
+            new AuthMessageHandler(_jwtValidator.Object, _apiKeyValidator.Object, _configAuthRequired, null!));
     }
 
     #endregion
@@ -459,10 +493,16 @@ public class AuthMessageHandlerTests
     #region Already Authenticated
 
     [Fact]
-    public async Task HandleAsync_AlreadyAuthenticated_IgnoresMessage()
+    public async Task HandleAsync_AlreadyAuthenticated_SendsAuthSuccess()
     {
         // Arrange
         var connection = CreateMockConnection(ConnectionState.Authenticated);
+        connection.Setup(c => c.UserId).Returns("existing-user");
+        connection.Setup(c => c.TokenPayload).Returns(new TokenPayload
+        {
+            UserId = "existing-user",
+            Permissions = new DocumentPermissions { IsAdmin = true }
+        });
 
         var authMessage = new AuthMessage
         {
@@ -474,8 +514,9 @@ public class AuthMessageHandlerTests
         // Act
         await _handler.HandleAsync(connection.Object, authMessage);
 
-        // Assert
-        connection.Verify(c => c.Send(It.IsAny<IMessage>()), Times.Never);
+        // Assert - Now sends auth_success for already authenticated connections
+        connection.Verify(c => c.Send(It.Is<AuthSuccessMessage>(m =>
+            m.UserId == "existing-user")), Times.Once);
         connection.Verify(c => c.CloseAsync(
             It.IsAny<WebSocketCloseStatus>(),
             It.IsAny<string>(),
@@ -488,6 +529,12 @@ public class AuthMessageHandlerTests
     {
         // Arrange
         var connection = CreateMockConnection(ConnectionState.Authenticated);
+        connection.Setup(c => c.UserId).Returns("existing-user");
+        connection.Setup(c => c.TokenPayload).Returns(new TokenPayload
+        {
+            UserId = "existing-user",
+            Permissions = new DocumentPermissions()
+        });
 
         var authMessage = new AuthMessage
         {
@@ -499,10 +546,84 @@ public class AuthMessageHandlerTests
         // Act
         await _handler.HandleAsync(connection.Object, authMessage);
 
-        // Assert
+        // Assert - State should not change, but auth_success is sent
         connection.VerifySet(c => c.State = It.IsAny<ConnectionState>(), Times.Never);
         connection.VerifySet(c => c.UserId = It.IsAny<string>(), Times.Never);
         connection.VerifySet(c => c.TokenPayload = It.IsAny<TokenPayload>(), Times.Never);
+    }
+
+    #endregion
+
+    #region Anonymous Auth (AuthRequired=false)
+
+    [Fact]
+    public async Task HandleAsync_NoCredentials_AuthDisabled_AllowsAnonymous()
+    {
+        // Arrange
+        var connection = CreateMockConnection();
+
+        var authMessage = new AuthMessage
+        {
+            Id = "msg-1",
+            Timestamp = 1234567890,
+            Token = null,
+            ApiKey = null
+        };
+
+        // Act
+        await _handlerAuthDisabled.HandleAsync(connection.Object, authMessage);
+
+        // Assert - Should authenticate as anonymous
+        connection.Verify(c => c.Send(It.Is<AuthSuccessMessage>(m =>
+            m.UserId == "anonymous")), Times.Once);
+        connection.VerifySet(c => c.State = ConnectionState.Authenticated);
+        connection.VerifySet(c => c.UserId = "anonymous");
+    }
+
+    [Fact]
+    public async Task HandleAsync_InvalidCredentials_AuthDisabled_AllowsAnonymous()
+    {
+        // Arrange
+        var connection = CreateMockConnection();
+        _jwtValidator.Setup(v => v.Validate(It.IsAny<string>())).Returns((TokenPayload?)null);
+        _apiKeyValidator.Setup(v => v.Validate(It.IsAny<string>())).Returns((TokenPayload?)null);
+
+        var authMessage = new AuthMessage
+        {
+            Id = "msg-1",
+            Timestamp = 1234567890,
+            Token = "invalid-token",
+            ApiKey = "invalid-key"
+        };
+
+        // Act
+        await _handlerAuthDisabled.HandleAsync(connection.Object, authMessage);
+
+        // Assert - Should fall back to anonymous when auth disabled
+        connection.Verify(c => c.Send(It.Is<AuthSuccessMessage>(m =>
+            m.UserId == "anonymous")), Times.Once);
+        connection.VerifySet(c => c.State = ConnectionState.Authenticated);
+    }
+
+    [Fact]
+    public async Task HandleAsync_AnonymousAuth_HasAdminPermissions()
+    {
+        // Arrange
+        var connection = CreateMockConnection();
+
+        var authMessage = new AuthMessage
+        {
+            Id = "msg-1",
+            Timestamp = 1234567890
+        };
+
+        // Act
+        await _handlerAuthDisabled.HandleAsync(connection.Object, authMessage);
+
+        // Assert - Anonymous should have admin permissions for dev/test mode
+        connection.Verify(c => c.Send(It.Is<AuthSuccessMessage>(m =>
+            TestHelpers.AsDictionary(m.Permissions) != null &&
+            (bool)TestHelpers.AsDictionary(m.Permissions)!["isAdmin"] == true)), Times.Once);
     }
 
     #endregion

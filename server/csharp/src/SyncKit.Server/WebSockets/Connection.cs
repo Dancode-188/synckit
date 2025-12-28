@@ -80,7 +80,11 @@ public class Connection : IConnection
     /// <inheritdoc />
     public async Task ProcessMessagesAsync(CancellationToken cancellationToken = default)
     {
-        State = ConnectionState.Authenticating;
+        // Only transition to Authenticating if not already authenticated (e.g., auto-auth when auth disabled)
+        if (State != ConnectionState.Authenticated)
+        {
+            State = ConnectionState.Authenticating;
+        }
         _rentedBuffer = ArrayPool<byte>.Shared.Rent(BufferSize);
         var buffer = _rentedBuffer;
 

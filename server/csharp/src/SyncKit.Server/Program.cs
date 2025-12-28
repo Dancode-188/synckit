@@ -16,6 +16,29 @@ try
 
     var builder = WebApplication.CreateBuilder(args);
 
+    // URL binding precedence (highest to lowest):
+    // 1. SYNCKIT_SERVER_URL env var (SyncKit-specific, for test harness compatibility)
+    // 2. --urls CLI argument (standard ASP.NET Core)
+    // 3. ASPNETCORE_URLS env var (standard ASP.NET Core)
+    // 4. Kestrel configuration in appsettings.json
+    // 5. launchSettings.json (development only)
+    // 6. Default: http://localhost:8080
+    var syncKitServerUrl = Environment.GetEnvironmentVariable("SYNCKIT_SERVER_URL");
+    if (!string.IsNullOrEmpty(syncKitServerUrl))
+    {
+        // Parse WebSocket URL to HTTP URL if needed (ws:// -> http://, wss:// -> https://)
+        var httpUrl = syncKitServerUrl
+            .Replace("ws://", "http://")
+            .Replace("wss://", "https://");
+
+        // Remove /ws path suffix if present (we want the base URL)
+        if (httpUrl.EndsWith("/ws"))
+            httpUrl = httpUrl[..^3];
+
+        Log.Information("Using SYNCKIT_SERVER_URL: {Url}", httpUrl);
+        builder.WebHost.UseUrls(httpUrl);
+    }
+
     // Add Aspire service defaults when running under Aspire orchestration
     // This provides OpenTelemetry, service discovery, and resilience patterns
     var isAspireManaged = !string.IsNullOrEmpty(builder.Configuration["OTEL_EXPORTER_OTLP_ENDPOINT"]);

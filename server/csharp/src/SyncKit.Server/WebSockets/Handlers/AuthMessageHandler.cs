@@ -1,5 +1,7 @@
 using System.Net.WebSockets;
+using Microsoft.Extensions.Options;
 using SyncKit.Server.Auth;
+using SyncKit.Server.Configuration;
 using SyncKit.Server.WebSockets.Protocol;
 using SyncKit.Server.WebSockets.Protocol.Messages;
 
@@ -15,6 +17,7 @@ public class AuthMessageHandler : IMessageHandler
 
     private readonly IJwtValidator _jwtValidator;
     private readonly IApiKeyValidator _apiKeyValidator;
+    private readonly SyncKitConfig _config;
     private readonly ILogger<AuthMessageHandler> _logger;
 
     public MessageType[] HandledTypes => _handledTypes;
@@ -22,10 +25,12 @@ public class AuthMessageHandler : IMessageHandler
     public AuthMessageHandler(
         IJwtValidator jwtValidator,
         IApiKeyValidator apiKeyValidator,
+        IOptions<SyncKitConfig> options,
         ILogger<AuthMessageHandler> logger)
     {
         _jwtValidator = jwtValidator ?? throw new ArgumentNullException(nameof(jwtValidator));
         _apiKeyValidator = apiKeyValidator ?? throw new ArgumentNullException(nameof(apiKeyValidator));
+        _config = options?.Value ?? throw new ArgumentNullException(nameof(options));
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
     }
 
@@ -37,11 +42,15 @@ public class AuthMessageHandler : IMessageHandler
             return;
         }
 
-        // Don't re-authenticate already authenticated connections
+        // If already authenticated (e.g., auto-auth when auth disabled), send success and return
+        _logger.LogDebug("Connection {ConnectionId} state is {State}", connection.Id, connection.State);
         if (connection.State == ConnectionState.Authenticated)
         {
-            _logger.LogDebug("Connection {ConnectionId} already authenticated, ignoring auth message",
+            _logger.LogDebug("Connection {ConnectionId} already authenticated, sending auth_success",
                 connection.Id);
+
+            // Send success response for already authenticated connection
+            SendAuthSuccess(connection);
             return;
         }
 
@@ -71,6 +80,22 @@ public class AuthMessageHandler : IMessageHandler
             {
                 _logger.LogDebug("API key validation failed for connection {ConnectionId}", connection.Id);
             }
+        }
+
+        // If no valid credentials but auth is not required, allow anonymous access
+        if (payload == null && !_config.AuthRequired)
+        {
+            _logger.LogDebug("No credentials provided, allowing anonymous access (auth disabled)");
+            payload = new TokenPayload
+            {
+                UserId = "anonymous",
+                Permissions = new DocumentPermissions
+                {
+                    CanRead = [],
+                    CanWrite = [],
+                    IsAdmin = true // Give admin permissions for test/dev mode
+                }
+            };
         }
 
         // Auth failed - send error and close
@@ -108,19 +133,26 @@ public class AuthMessageHandler : IMessageHandler
             connection.Id, payload.UserId);
 
         // Send success response
-        // Convert DocumentPermissions to Dictionary for protocol compatibility
+        SendAuthSuccess(connection);
+    }
+
+    /// <summary>
+    /// Sends an auth_success message to the connection.
+    /// </summary>
+    private void SendAuthSuccess(IConnection connection)
+    {
         var permissionsDict = new Dictionary<string, object>
         {
-            ["canRead"] = payload.Permissions.CanRead,
-            ["canWrite"] = payload.Permissions.CanWrite,
-            ["isAdmin"] = payload.Permissions.IsAdmin
+            ["canRead"] = connection.TokenPayload?.Permissions.CanRead ?? [],
+            ["canWrite"] = connection.TokenPayload?.Permissions.CanWrite ?? [],
+            ["isAdmin"] = connection.TokenPayload?.Permissions.IsAdmin ?? false
         };
 
         var successMessage = new AuthSuccessMessage
         {
             Id = Guid.NewGuid().ToString(),
             Timestamp = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds(),
-            UserId = payload.UserId,
+            UserId = connection.UserId ?? "anonymous",
             Permissions = permissionsDict
         };
 

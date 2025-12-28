@@ -87,6 +87,25 @@ public class ConnectionManager : IConnectionManager
         // Start heartbeat monitoring
         connection.StartHeartbeat(_config.WsHeartbeatInterval, _config.WsHeartbeatTimeout);
 
+        // Auto-authenticate if auth is disabled (development/testing mode)
+        if (!_config.AuthRequired)
+        {
+            connection.State = ConnectionState.Authenticated;
+            connection.UserId = "anonymous";
+            connection.ClientId = "anonymous";
+            connection.TokenPayload = new Auth.TokenPayload
+            {
+                UserId = "anonymous",
+                Permissions = new Auth.DocumentPermissions
+                {
+                    CanRead = [],
+                    CanWrite = [],
+                    IsAdmin = true
+                }
+            };
+            _logger.LogInformation("Connection {ConnectionId} auto-authenticated (auth disabled)", connectionId);
+        }
+
         _logger.LogDebug("Connection created: {ConnectionId} (Total: {ConnectionCount})",
             connectionId, _connections.Count);
 
