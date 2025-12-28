@@ -50,7 +50,7 @@ if command -v bun >/dev/null 2>&1; then
   echo "Using bun to run tests"
   bun test --reporter junit --reporter-outfile="$ARTIFACTS_DIR/junit-default.xml" || true
   echo "Running parallel (4 jobs) to validate parallel execution"
-  bun test --jobs 4 --reporter junit --reporter-outfile="$ARTIFACTS_DIR/junit-parallel-4.xml" || true
+  bun test --jobs=4 --reporter junit --reporter-outfile="$ARTIFACTS_DIR/junit-parallel-4.xml" || true
 else
   echo "bun not found. Please install bun (https://bun.sh) or run the tests locally with bun. Attempting using npm test..."
   npm ci
