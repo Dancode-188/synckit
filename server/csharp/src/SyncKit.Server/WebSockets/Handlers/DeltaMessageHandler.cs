@@ -98,7 +98,7 @@ public class DeltaMessageHandler : IMessageHandler
         }
 
         // Create storage delta entry from incoming message
-        var deltaEntry = new Storage.DeltaEntry
+        var deltaEntry = new SyncKit.Server.Storage.DeltaEntry
         {
             Id = delta.Id,
             DocumentId = delta.DocumentId,

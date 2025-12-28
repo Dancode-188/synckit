@@ -52,7 +52,7 @@ public class SyncRequestMessageHandlerTests
         _mockStorage.Setup(s => s.GetDocumentAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync((string id, CancellationToken ct) =>
             {
-                if (!_storageDeltas.TryGetValue(id, out var list)) return (Storage.DocumentState?)null;
+                if (!_storageDeltas.TryGetValue(id, out var list)) return (SyncKit.Server.Storage.DocumentState?)null;
                 var merged = new Dictionary<string, long>();
                 foreach (var e in list)
                 {
@@ -63,7 +63,7 @@ public class SyncRequestMessageHandlerTests
                             merged[kv.Key] = kv.Value;
                     }
                 }
-                return new Storage.DocumentState(
+                return new SyncKit.Server.Storage.DocumentState(
                     id,
                     JsonSerializer.Deserialize<JsonElement>("{}"),
                     1,

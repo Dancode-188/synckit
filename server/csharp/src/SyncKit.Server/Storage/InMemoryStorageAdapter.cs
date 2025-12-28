@@ -12,10 +12,10 @@ public class InMemoryStorageAdapter : IStorageAdapter
 {
     private readonly ConcurrentDictionary<string, Document> _documents = new();
     private readonly ConcurrentDictionary<string, SessionEntry> _sessions = new();
-    private readonly ILogger _logger;
+    private readonly ILogger<InMemoryStorageAdapter> _logger;
 
-    // Accept non-generic ILogger for easier compatibility with legacy wrappers
-    public InMemoryStorageAdapter(ILogger logger)
+    // Accept generic ILogger for proper DI resolution
+    public InMemoryStorageAdapter(ILogger<InMemoryStorageAdapter> logger)
     {
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
     }

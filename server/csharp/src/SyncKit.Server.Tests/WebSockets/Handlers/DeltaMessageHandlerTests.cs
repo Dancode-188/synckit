@@ -7,7 +7,6 @@ using SyncKit.Server.WebSockets;
 using SyncKit.Server.WebSockets.Handlers;
 using SyncKit.Server.WebSockets.Protocol;
 using SyncKit.Server.WebSockets.Protocol.Messages;
-using ServerStorage = SyncKit.Server.Storage;
 
 namespace SyncKit.Server.Tests.WebSockets.Handlers;
 
@@ -122,7 +121,7 @@ public class DeltaMessageHandlerTests
         Assert.Contains("Not subscribed", errorMsg.Error);
 
         // Assert - Should NOT store or broadcast
-        _mockStorage.Verify(s => s.SaveDeltaAsync(It.IsAny<Storage.DeltaEntry>(), It.IsAny<CancellationToken>()), Times.Never);
+        _mockStorage.Verify(s => s.SaveDeltaAsync(It.IsAny<SyncKit.Server.Storage.DeltaEntry>(), It.IsAny<CancellationToken>()), Times.Never);
         _mockConnectionManager.Verify(cm => cm.BroadcastToDocumentAsync(
             It.IsAny<string>(), It.IsAny<IMessage>(), It.IsAny<string?>()), Times.Never);
     }
@@ -144,7 +143,7 @@ public class DeltaMessageHandlerTests
         await _handler.HandleAsync(_mockConnection.Object, delta);
 
         // Assert - Should NOT store or broadcast
-        _mockStorage.Verify(s => s.SaveDeltaAsync(It.IsAny<Storage.DeltaEntry>(), It.IsAny<CancellationToken>()), Times.Never);
+        _mockStorage.Verify(s => s.SaveDeltaAsync(It.IsAny<SyncKit.Server.Storage.DeltaEntry>(), It.IsAny<CancellationToken>()), Times.Never);
         _mockConnectionManager.Verify(cm => cm.BroadcastToDocumentAsync(
             It.IsAny<string>(), It.IsAny<IMessage>(), It.IsAny<string?>()), Times.Never);
         _mockConnection.Verify(c => c.Send(It.IsAny<AckMessage>()), Times.Never);
@@ -172,7 +171,7 @@ public class DeltaMessageHandlerTests
             m => m.Error == "Not authenticated")), Times.Once);
 
         // Assert - Should NOT store or broadcast
-        _mockStorage.Verify(s => s.SaveDeltaAsync(It.IsAny<Storage.DeltaEntry>(), It.IsAny<CancellationToken>()), Times.Never);
+        _mockStorage.Verify(s => s.SaveDeltaAsync(It.IsAny<SyncKit.Server.Storage.DeltaEntry>(), It.IsAny<CancellationToken>()), Times.Never);
         _mockConnectionManager.Verify(cm => cm.BroadcastToDocumentAsync(
             It.IsAny<string>(), It.IsAny<IMessage>(), It.IsAny<string?>()), Times.Never);
     }
@@ -225,7 +224,7 @@ public class DeltaMessageHandlerTests
         await _handler.HandleAsync(_mockConnection.Object, wrongMessage);
 
         // Assert - Should not interact with store or connection manager
-        _mockStorage.Verify(s => s.SaveDeltaAsync(It.IsAny<Storage.DeltaEntry>(), It.IsAny<CancellationToken>()), Times.Never);
+        _mockStorage.Verify(s => s.SaveDeltaAsync(It.IsAny<SyncKit.Server.Storage.DeltaEntry>(), It.IsAny<CancellationToken>()), Times.Never);
         _mockConnectionManager.Verify(cm => cm.BroadcastToDocumentAsync(
             It.IsAny<string>(), It.IsAny<IMessage>(), It.IsAny<string?>()), Times.Never);
         _mockConnection.Verify(c => c.Send(It.IsAny<AckMessage>()), Times.Never);
@@ -240,8 +239,8 @@ public class DeltaMessageHandlerTests
         var subscriptions = new HashSet<string> { documentId };
 
         SetupAuthenticatedConnectionWithWriteAccess(senderConnectionId, "client-1", subscriptions, documentId);
-        _mockStorage.Setup(s => s.SaveDeltaAsync(It.IsAny<Storage.DeltaEntry>(), It.IsAny<CancellationToken>()))
-            .Returns((Storage.DeltaEntry d, CancellationToken _) => Task.FromResult(d));
+        _mockStorage.Setup(s => s.SaveDeltaAsync(It.IsAny<SyncKit.Server.Storage.DeltaEntry>(), It.IsAny<CancellationToken>()))
+            .Returns((SyncKit.Server.Storage.DeltaEntry d, CancellationToken _) => Task.FromResult(d));
 
         var delta = CreateDeltaMessage("msg-1", documentId);
 
@@ -273,10 +272,10 @@ public class DeltaMessageHandlerTests
 
         SetupAuthenticatedConnectionWithWriteAccess(connectionId, clientId, subscriptions, documentId);
 
-        Storage.DeltaEntry? storedDelta = null;
-        _mockStorage.Setup(s => s.SaveDeltaAsync(It.IsAny<Storage.DeltaEntry>(), It.IsAny<CancellationToken>()))
-            .Callback<Storage.DeltaEntry, CancellationToken>((delta, ct) => storedDelta = delta)
-            .Returns((Storage.DeltaEntry d, CancellationToken _) => Task.FromResult(d));
+        SyncKit.Server.Storage.DeltaEntry? storedDelta = null;
+        _mockStorage.Setup(s => s.SaveDeltaAsync(It.IsAny<SyncKit.Server.Storage.DeltaEntry>(), It.IsAny<CancellationToken>()))
+            .Callback<SyncKit.Server.Storage.DeltaEntry, CancellationToken>((delta, ct) => storedDelta = delta)
+            .Returns((SyncKit.Server.Storage.DeltaEntry d, CancellationToken _) => Task.FromResult(d));
 
         var message = new DeltaMessage
         {
@@ -307,10 +306,10 @@ public class DeltaMessageHandlerTests
         // Client ID is null - should fall back to connection ID
         SetupAuthenticatedConnectionWithWriteAccess(connectionId, clientId: null, subscriptions, documentId);
 
-        Storage.DeltaEntry? storedDelta = null;
-        _mockStorage.Setup(s => s.SaveDeltaAsync(It.IsAny<Storage.DeltaEntry>(), It.IsAny<CancellationToken>()))
-            .Callback<Storage.DeltaEntry, CancellationToken>((delta, _) => storedDelta = delta)
-            .Returns((Storage.DeltaEntry d, CancellationToken _) => Task.FromResult(d));
+        SyncKit.Server.Storage.DeltaEntry? storedDelta = null;
+        _mockStorage.Setup(s => s.SaveDeltaAsync(It.IsAny<SyncKit.Server.Storage.DeltaEntry>(), It.IsAny<CancellationToken>()))
+            .Callback<SyncKit.Server.Storage.DeltaEntry, CancellationToken>((delta, _) => storedDelta = delta)
+            .Returns((SyncKit.Server.Storage.DeltaEntry d, CancellationToken _) => Task.FromResult(d));
 
         var delta = CreateDeltaMessage("msg-1", documentId);
 
@@ -331,8 +330,8 @@ public class DeltaMessageHandlerTests
         var subscriptions = new HashSet<string> { documentId };
 
         SetupAuthenticatedConnectionWithWriteAccess("conn-1", "client-1", subscriptions, documentId);
-        _mockStorage.Setup(s => s.SaveDeltaAsync(It.IsAny<Storage.DeltaEntry>(), It.IsAny<CancellationToken>()))
-            .Returns((Storage.DeltaEntry d, CancellationToken _) => Task.FromResult(d));
+        _mockStorage.Setup(s => s.SaveDeltaAsync(It.IsAny<SyncKit.Server.Storage.DeltaEntry>(), It.IsAny<CancellationToken>()))
+            .Returns((SyncKit.Server.Storage.DeltaEntry d, CancellationToken _) => Task.FromResult(d));
 
         AckMessage? ackMessage = null;
         _mockConnection.Setup(c => c.Send(It.IsAny<AckMessage>()))
@@ -361,8 +360,8 @@ public class DeltaMessageHandlerTests
         var subscriptions = new HashSet<string> { documentId };
 
         SetupAuthenticatedConnectionWithWriteAccess("conn-1", "client-1", subscriptions, documentId);
-        _mockStorage.Setup(s => s.SaveDeltaAsync(It.IsAny<Storage.DeltaEntry>(), It.IsAny<CancellationToken>()))
-            .Returns((Storage.DeltaEntry d, CancellationToken _) => Task.FromResult(d));
+        _mockStorage.Setup(s => s.SaveDeltaAsync(It.IsAny<SyncKit.Server.Storage.DeltaEntry>(), It.IsAny<CancellationToken>()))
+            .Returns((SyncKit.Server.Storage.DeltaEntry d, CancellationToken _) => Task.FromResult(d));
 
         DeltaMessage? broadcastMessage = null;
         _mockConnectionManager.Setup(cm => cm.BroadcastToDocumentAsync(
@@ -389,8 +388,8 @@ public class DeltaMessageHandlerTests
         var subscriptions = new HashSet<string> { documentId };
 
         SetupAuthenticatedConnectionWithWriteAccess("conn-1", "client-1", subscriptions, documentId);
-        _mockStorage.Setup(s => s.SaveDeltaAsync(It.IsAny<Storage.DeltaEntry>(), It.IsAny<CancellationToken>()))
-            .Returns((Storage.DeltaEntry d, CancellationToken _) => Task.FromResult(d));
+        _mockStorage.Setup(s => s.SaveDeltaAsync(It.IsAny<SyncKit.Server.Storage.DeltaEntry>(), It.IsAny<CancellationToken>()))
+            .Returns((SyncKit.Server.Storage.DeltaEntry d, CancellationToken _) => Task.FromResult(d));
 
         DeltaMessage? broadcastMessage = null;
         _mockConnectionManager.Setup(cm => cm.BroadcastToDocumentAsync(
@@ -501,10 +500,10 @@ public class DeltaMessageHandlerTests
 
         SetupAuthenticatedConnectionWithWriteAccess("conn-1", "client-1", subscriptions, documentId);
 
-        Storage.DeltaEntry? storedDelta = null;
-        _mockStorage.Setup(s => s.SaveDeltaAsync(It.IsAny<Storage.DeltaEntry>(), It.IsAny<CancellationToken>()))
-            .Callback<Storage.DeltaEntry, CancellationToken>((delta, _) => storedDelta = delta)
-            .Returns((Storage.DeltaEntry d, CancellationToken _) => Task.FromResult(d));
+        SyncKit.Server.Storage.DeltaEntry? storedDelta = null;
+        _mockStorage.Setup(s => s.SaveDeltaAsync(It.IsAny<SyncKit.Server.Storage.DeltaEntry>(), It.IsAny<CancellationToken>()))
+            .Callback<SyncKit.Server.Storage.DeltaEntry, CancellationToken>((delta, _) => storedDelta = delta)
+            .Returns((SyncKit.Server.Storage.DeltaEntry d, CancellationToken _) => Task.FromResult(d));
 
         // Using an anonymous object as delta (not JsonElement)
         var delta = new DeltaMessage
@@ -551,8 +550,8 @@ public class DeltaMessageHandlerTests
             }
         });
 
-        _mockStorage.Setup(s => s.SaveDeltaAsync(It.IsAny<Storage.DeltaEntry>(), It.IsAny<CancellationToken>()))
-            .Returns((Storage.DeltaEntry d, CancellationToken _) => Task.FromResult(d));
+        _mockStorage.Setup(s => s.SaveDeltaAsync(It.IsAny<SyncKit.Server.Storage.DeltaEntry>(), It.IsAny<CancellationToken>()))
+            .Returns((SyncKit.Server.Storage.DeltaEntry d, CancellationToken _) => Task.FromResult(d));
 
         var delta = CreateDeltaMessage("msg-1", documentId);
 
@@ -561,7 +560,7 @@ public class DeltaMessageHandlerTests
 
         // Assert - Delta should be stored
         _mockStorage.Verify(s => s.SaveDeltaAsync(
-            It.Is<Storage.DeltaEntry>(de => de.DocumentId == documentId && de.ClientId == "admin-client"),
+            It.Is<ServerStorage.DeltaEntry>(de => de.DocumentId == documentId && de.ClientId == "admin-client"),
             It.IsAny<CancellationToken>()), Times.Once);
     }
 

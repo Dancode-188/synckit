@@ -29,8 +29,8 @@ public class StorageRegistrationTests
         var awareness = sp.GetRequiredService<SyncKit.Server.Awareness.IAwarenessStore>();
         Assert.IsType<SyncKit.Server.Awareness.InMemoryAwarenessStore>(awareness);
 
-        var pubsub = sp.GetRequiredService<Redis.IRedisPubSub>();
-        Assert.IsType<Redis.NoopRedisPubSub>(pubsub);
+        var pubsub = sp.GetRequiredService<SyncKit.Server.PubSub.IRedisPubSub>();
+        Assert.IsType<SyncKit.Server.PubSub.NoopRedisPubSub>(pubsub);
     }
 
     [Fact]
@@ -76,7 +76,7 @@ public class StorageRegistrationTests
         services.AddSyncKitStorage(config);
 
         // Examine service descriptors to ensure IRedisPubSub is registered
-        var descriptor = services.FirstOrDefault(sd => sd.ServiceType == typeof(PubSub.IRedisPubSub));
+        var descriptor = services.FirstOrDefault(sd => sd.ServiceType == typeof(SyncKit.Server.PubSub.IRedisPubSub));
         Assert.NotNull(descriptor);
 
         // Check that SyncKitConfig options are post-configured with redis values
@@ -89,7 +89,7 @@ public class StorageRegistrationTests
     [Fact]
     public void Missing_postgres_connectionstring_throws()
     {
-        var dict = new Dictionary<string, string>
+        var dict = new Dictionary<string, string?>
         {
             ["Storage:Provider"] = "postgresql"
         };
@@ -140,7 +140,7 @@ public class StorageRegistrationTests
     [Fact]
     public void Awareness_postgres_provider_not_implemented_yet()
     {
-        var dict = new Dictionary<string, string>
+        var dict = new Dictionary<string, string?>
         {
             ["Awareness:Provider"] = "postgresql"
         };

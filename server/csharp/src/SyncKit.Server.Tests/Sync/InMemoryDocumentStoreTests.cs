@@ -3,7 +3,6 @@ using Microsoft.Extensions.Logging;
 using Moq;
 using SyncKit.Server.Sync;
 using SyncKit.Server.Storage;
-using ServerStorage = SyncKit.Server.Storage;
 using Xunit;
 
 namespace SyncKit.Server.Tests.Sync;
@@ -13,12 +12,12 @@ namespace SyncKit.Server.Tests.Sync;
 /// </summary>
 public class InMemoryStorageAdapterTests
 {
-    private readonly Mock<ILogger> _mockLogger;
+    private readonly Mock<ILogger<InMemoryStorageAdapter>> _mockLogger;
     private readonly InMemoryStorageAdapter _store;
 
     public InMemoryStorageAdapterTests()
     {
-        _mockLogger = new Mock<ILogger>();
+        _mockLogger = new Mock<ILogger<InMemoryStorageAdapter>>();
         _store = new InMemoryStorageAdapter(_mockLogger.Object);
     }
 
@@ -510,7 +509,7 @@ public class InMemoryStorageAdapterTests
     {
         var vc = new Dictionary<string, long> { [clientId] = clockValue };
 
-        return new Storage.DeltaEntry
+        return new SyncKit.Server.Storage.DeltaEntry
         {
             Id = id,
             DocumentId = string.Empty, // caller will set DocumentId when needed

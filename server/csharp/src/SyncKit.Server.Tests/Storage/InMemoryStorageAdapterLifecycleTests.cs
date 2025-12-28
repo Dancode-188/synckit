@@ -1,7 +1,6 @@
 using Microsoft.Extensions.Logging;
 using Moq;
 using SyncKit.Server.Storage;
-using Storage = SyncKit.Server.Storage;
 using System.Text.Json;
 using Xunit;
 
@@ -9,7 +8,7 @@ namespace SyncKit.Server.Tests.Unit.Storage;
 
 public class InMemoryStorageAdapterLifecycleTests
 {
-    private readonly Mock<ILogger> _mockLogger = new();
+    private readonly Mock<ILogger<InMemoryStorageAdapter>> _mockLogger = new();
     private readonly InMemoryStorageAdapter _store;
 
     public InMemoryStorageAdapterLifecycleTests()

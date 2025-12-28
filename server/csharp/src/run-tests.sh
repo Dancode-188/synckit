@@ -2,7 +2,7 @@
 set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "$0")/../../.." && pwd)"
-COMPOSE_FILE="$(dirname "$0")/docker-compose.test.yml"
+COMPOSE_FILE="$(cd "$(dirname "$0")" && pwd)/docker-compose.test.yml"
 ARTIFACTS_DIR="$ROOT_DIR/artifacts/e2e-tests"
 mkdir -p "$ARTIFACTS_DIR"
 
@@ -48,9 +48,9 @@ cd "$ROOT_DIR/tests"
 # Check for bun; if not present, try to use node/npm as fallback
 if command -v bun >/dev/null 2>&1; then
   echo "Using bun to run tests"
-  bun test --reporter junit --output="$ARTIFACTS_DIR/junit-default.xml" || true
+  bun test --reporter junit --reporter-outfile="$ARTIFACTS_DIR/junit-default.xml" || true
   echo "Running parallel (4 jobs) to validate parallel execution"
-  bun test --jobs 4 --reporter junit --output="$ARTIFACTS_DIR/junit-parallel-4.xml" || true
+  bun test --jobs 4 --reporter junit --reporter-outfile="$ARTIFACTS_DIR/junit-parallel-4.xml" || true
 else
   echo "bun not found. Please install bun (https://bun.sh) or run the tests locally with bun. Attempting using npm test..."
   npm ci
@@ -58,8 +58,11 @@ else
 fi
 
 # Collect logs and docker inspect
-docker logs synckit-dotnet > "$ARTIFACTS_DIR/server.log" || true
-docker inspect synckit-dotnet > "$ARTIFACTS_DIR/server.inspect.json" || true
+container_id=$(docker compose -f "$COMPOSE_FILE" ps -q synckit-dotnet || true)
+if [[ -n "$container_id" ]]; then
+  docker logs "$container_id" > "$ARTIFACTS_DIR/server.log" || true
+  docker inspect "$container_id" > "$ARTIFACTS_DIR/server.inspect.json" || true
+fi
 
 # Cleanup
 echo "Cleaning up test environment..."
