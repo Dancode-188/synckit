@@ -72,37 +72,43 @@ export {
 } from './types'
 
 // Version
-export const VERSION = '0.1.0-alpha.1'
+export const VERSION = '0.2.3'
 export const VARIANT = 'default'
-export const WASM_SIZE = '49 KB (gzipped)'
+export const WASM_SIZE = '154 KB (gzipped)'
 
 /**
  * Default Variant (Recommended)
  *
  * This is the full-featured SyncKit variant. Recommended for 95% of applications.
  *
- * **Bundle Size:** 49 KB (WASM gzipped)
+ * **Bundle Size:** 154 KB gzipped (JS + WASM core)
  *
  * **Features:**
  * - ✅ Last-Write-Wins (LWW) conflict resolution
  * - ✅ Vector Clock for causality tracking
  * - ✅ Network protocol support (Protocol Buffers)
- * - ✅ Text CRDT for collaborative editing
- * - ✅ Counters (distributed increment/decrement)
- * - ✅ Sets (add/remove operations)
+ * - ✅ Fugue Text CRDT for collaborative editing
+ * - ✅ Peritext Rich Text CRDT with formatting
+ * - ✅ PN-Counter (distributed increment/decrement)
+ * - ✅ OR-Set (add/remove operations)
  * - ✅ DateTime support
+ * - ✅ Undo/Redo manager with cross-tab sync
+ * - ✅ Awareness & Presence system
+ * - ✅ Selection/Cursor sharing
+ * - ✅ Cross-tab synchronization
  * - ✅ Server synchronization
  * - ✅ Storage adapters (Memory, IndexedDB)
+ * - ✅ Offline queue with automatic replay
  *
  * **Use When:**
  * - Building any production application (recommended default)
  * - Need server synchronization
  * - Want all features available
  * - Building collaborative apps
- * - 5 KB difference from Lite variant doesn't matter
+ * - 108 KB difference from Lite variant is acceptable
  *
  * **Size-Critical Apps:**
- * - If every KB matters → Use `@synckit/sdk/lite` (44 KB, local-only)
+ * - If every KB matters → Use `@synckit/sdk/lite` (46 KB, local-only)
  */
 
 /**

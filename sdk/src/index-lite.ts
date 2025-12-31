@@ -37,16 +37,16 @@ export {
 } from './types'
 
 // Version
-export const VERSION = '0.1.0-alpha.1-lite'
+export const VERSION = '0.2.3-lite'
 export const VARIANT = 'lite'
-export const WASM_SIZE = '44 KB (gzipped)'
+export const WASM_SIZE = '46 KB (gzipped)'
 
 /**
  * Lite Variant
  *
  * This is the minimal SyncKit variant, optimized for smallest bundle size.
  *
- * **Bundle Size:** 44 KB (WASM gzipped)
+ * **Bundle Size:** 46 KB gzipped
  *
  * **Features:**
  * - ✅ Last-Write-Wins (LWW) conflict resolution

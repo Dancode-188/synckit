@@ -17,6 +17,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [0.2.3] - 2025-12-30
+
+**Critical bug fix for VERSION export! 🐛**
+
+### Fixed
+
+- **🔧 VERSION Export Bug** - Fixed incorrect VERSION constant exports
+  - `sdk/src/index.ts` now exports `'0.2.3'` instead of `'0.1.0-alpha.1'`
+  - `sdk/src/index-lite.ts` now exports `'0.2.3-lite'` instead of `'0.1.0-alpha.1-lite'`
+  - This bug caused debug logs and version checks to report incorrect version
+  - All users should upgrade to ensure accurate version reporting
+
+### Notes
+
+- No API changes or breaking changes
+- Safe to upgrade from any 0.2.x version
+
+---
+
 ## [0.2.2] - 2025-12-19
 
 **Production-ready demo and cross-tab sync improvements! 🎉**
