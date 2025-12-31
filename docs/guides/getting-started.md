@@ -83,7 +83,7 @@ console.log('SyncKit initialized!')
 Let's create a todo item and sync it:
 
 ```typescript
-interface Todo {
+interface Todo extends Record<string, unknown> {
   id: string
   text: string
   completed: boolean
@@ -232,7 +232,7 @@ import React, { useEffect, useState } from 'react'
 import { SyncKit } from '@synckit-js/sdk'
 import { SyncProvider, useSyncDocument } from '@synckit-js/sdk/react'
 
-interface Todo {
+interface Todo extends Record<string, unknown> {
   id: string
   text: string
   completed: boolean
@@ -424,7 +424,7 @@ const todo = sync.document<Todo>('todo-' + Math.random())
 
 ```typescript
 // Define your interface
-interface Todo {
+interface Todo extends Record<string, unknown> {
   id: string
   text: string
   completed: boolean
