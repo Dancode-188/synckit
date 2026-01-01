@@ -210,7 +210,7 @@ const todo = sync.document<Todo>('todo-1')  // Same ID in both tabs - syncs auto
 **TypeScript errors**
 ```typescript
 // Define your interface
-interface Todo {
+interface Todo extends Record<string, unknown> {
   id: string
   text: string
   completed: boolean

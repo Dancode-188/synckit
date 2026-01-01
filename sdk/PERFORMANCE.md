@@ -37,8 +37,8 @@ Performance characteristics of SyncKit v0.1.0 network layer.
 
 | Build | Total Size | JS | WASM | Use Case |
 |-------|------------|----|----- |----------|
-| **Full SDK** | **59KB** | 10KB | 49KB | Complete with network sync |
-| **Lite SDK** | **45KB** | 1.5KB | 44KB | Offline-only, no network |
+| **Full SDK** | **154KB** | 16KB | 138KB | Complete collaboration suite |
+| **Lite SDK** | **46KB** | 1.5KB | 44KB | Offline-only, no network |
 
 **Network Layer Overhead**: 14KB gzipped for complete WebSocket + sync implementation
 
@@ -51,7 +51,7 @@ Performance characteristics of SyncKit v0.1.0 network layer.
 | **Lite SDK (ESM)** | 85KB | 5.1KB | 80KB |
 | **Lite SDK (CJS)** | 102KB | 22KB | 80KB |
 
-**Analysis**: The full SDK with network synchronization is **59KB gzipped** - highly competitive with alternatives. The network layer adds only **14KB gzipped** over the lite version, which is excellent value given the features:
+**Analysis**: The full SDK with complete collaboration features is **154KB gzipped** - includes text CRDTs, rich text, undo/redo, cursors, and framework adapters out of the box. This is **108KB more** than the lite version, which provides:
 - WebSocket client with auto-reconnection
 - Binary message protocol
 - Persistent offline queue
@@ -71,7 +71,7 @@ Performance characteristics of SyncKit v0.1.0 network layer.
 
 1. **Real-time collaboration** - Sub-millisecond operation latency
 2. **Offline-first apps** - Efficient queue handles thousands of pending operations
-3. **Mobile applications** - Small bundle size (59KB gzipped) and efficient memory use
+3. **Mobile applications** - Efficient memory use and optional lite version (46KB gzipped)
 4. **High-frequency updates** - Can handle 47K+ operations/sec
 
 ### Performance Tips
@@ -87,7 +87,7 @@ All sizes are **gzipped** for fair comparison:
 
 | Feature | SyncKit | Yjs | Automerge | Supabase Realtime |
 |---------|---------|-----|-----------|-------------------|
-| **Bundle size** | 59KB | ~60KB | ~150KB | ~80KB |
+| **Bundle size** | 154KB | ~65KB | ~300KB+ | ~80KB |
 | **Offline-first** | ✅ Native | ⚠️ Limited | ✅ Native | ❌ Online-only |
 | **React integration** | ✅ Built-in hooks | ⚠️ External | ⚠️ External | ⚠️ External |
 | **Binary protocol** | ✅ Custom | ✅ Custom | ✅ Custom | ✅ WebSocket |

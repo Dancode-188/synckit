@@ -1,7 +1,7 @@
 # SyncKit SDK API Reference
 
-**Version:** 0.2.0
-**Last Updated:** December 17, 2025
+**Version:** 0.2.3
+**Last Updated:** January 1, 2026
 
 ---
 
@@ -233,7 +233,7 @@ class SyncKit {
 ### Basic Usage
 
 ```typescript
-interface Todo {
+interface Todo extends Record<string, unknown> {
   id: string
   text: string
   completed: boolean
@@ -461,7 +461,7 @@ await likesCounter.increment(5)
 await likesCounter.decrement()
 
 // Get current value
-const currentCount = likesCounter.get()
+const currentCount = likesCounter.value
 ```
 
 ### Counter API
@@ -478,8 +478,8 @@ class SyncCounter {
   // Decrement counter
   decrement(delta?: number): Promise<void>
 
-  // Get current value
-  get(): number
+  // Get current value (getter property)
+  get value(): number
 
   // Reset to zero (not recommended - loses history)
   reset(): Promise<void>
@@ -519,7 +519,7 @@ const hasTag = tags.has('urgent')
 const allTags = tags.get()  // Returns Set<string>
 
 // Get size
-const count = tags.size()
+const count = tags.size
 ```
 
 ### Set API
@@ -545,8 +545,8 @@ class SyncSet<T> {
   // Get all items
   get(): Set<T>
 
-  // Get size
-  size(): number
+  // Get size (getter property)
+  get size(): number
 
   // Clear set
   clear(): Promise<void>
@@ -674,14 +674,14 @@ function useSyncText(id: string): [
 ]
 ```
 
-### useSyncRichText ✅ v0.2.0
+### useRichText ✅ v0.2.0
 
 ```typescript
-import { useSyncRichText } from '@synckit-js/sdk/react'
+import { useRichText } from '@synckit-js/sdk/react'
 import { QuillBinding } from '@synckit-js/sdk'
 
 function RichEditor({ id }: { id: string }) {
-  const [richText] = useSyncRichText(id)
+  const [richText] = useRichText(id)
   const quillRef = useRef()
 
   useEffect(() => {
@@ -1118,7 +1118,7 @@ export {
   useSyncDocument,
   useSyncField,
   useSyncText,
-  useSyncRichText,
+  useRichText,
   useSyncCounter,
   useSyncSet,
   useUndo,

@@ -38,7 +38,7 @@ npm install @synckit-js/sdk vue@^3.3.0
 import { useSyncDocument } from '@synckit-js/sdk/vue'
 import { ref } from 'vue'
 
-interface Todo {
+interface Todo extends Record<string, unknown> {
   title: string
   completed: boolean
 }
@@ -127,7 +127,7 @@ Reactive document synchronization with automatic lifecycle management.
 import { useSyncDocument } from '@synckit-js/sdk/vue'
 import { computed } from 'vue'
 
-interface UserProfile {
+interface UserProfile extends Record<string, unknown> {
   name: string
   email: string
   avatar: string
@@ -659,7 +659,7 @@ import { useSyncDocument } from '@synckit-js/sdk/vue'
 import { useUndo } from '@synckit-js/sdk/vue'
 import { ref } from 'vue'
 
-interface Note {
+interface Note extends Record<string, unknown> {
   title: string
   content: string
 }
@@ -830,7 +830,7 @@ Track who's online with real-time presence updates.
 import { useAwareness } from '@synckit-js/sdk/vue'
 import { computed } from 'vue'
 
-interface UserPresence {
+interface UserPresence extends Record<string, unknown> {
   id: string
   name: string
   avatar: string
@@ -1002,7 +1002,7 @@ Higher-level composable combining awareness with cursor positions.
 import { usePresence } from '@synckit-js/sdk/vue'
 import { ref, onMounted } from 'vue'
 
-interface PresenceState {
+interface PresenceState extends Record<string, unknown> {
   name: string
   color: string
   cursor: { x: number; y: number } | null
@@ -1159,7 +1159,7 @@ import { usePresence } from '@synckit-js/sdk/vue'
 import { createSpring, createAdaptiveThrottle } from '@synckit-js/sdk/cursor'
 import { ref, onMounted, onUnmounted, watch } from 'vue'
 
-interface CursorState {
+interface CursorState extends Record<string, unknown> {
   name: string
   color: string
   x: number
@@ -1394,7 +1394,7 @@ import { useSyncDocument } from '@synckit-js/sdk/vue'
 import type { Ref } from 'vue'
 
 // Define your document schema
-interface Task {
+interface Task extends Record<string, unknown> {
   id: string
   title: string
   description: string
@@ -1467,7 +1467,7 @@ function useEntity<T extends DocumentData>(id: string) {
 }
 
 // Usage with type inference
-interface User {
+interface User extends Record<string, unknown> {
   name: string
   email: string
 }
@@ -1488,7 +1488,7 @@ Only subscribe to fields you need.
 import { useSyncDocument } from '@synckit-js/sdk/vue'
 import { computed } from 'vue'
 
-interface LargeDocument {
+interface LargeDocument extends Record<string, unknown> {
   metadata: { title: string; author: string }
   content: string // Very large field
   comments: Array<{/* ... */}> // Another large field
@@ -1536,7 +1536,7 @@ import { useSyncDocument } from '@synckit-js/sdk/vue'
 import { useVirtualList } from '@vueuse/core'
 import { computed } from 'vue'
 
-interface TodoList {
+interface TodoList extends Record<string, unknown> {
   todos: Array<{ id: string; title: string; completed: boolean }>
 }
 
@@ -1595,7 +1595,7 @@ const average = computed(() => {
 import { useSyncDocument } from '@synckit-js/sdk/vue'
 import { reactive, watch } from 'vue'
 
-interface FormData {
+interface FormData extends Record<string, unknown> {
   name: string
   email: string
   message: string
@@ -1630,7 +1630,7 @@ async function handleSubmit() {
 import { useSyncDocument } from '@synckit-js/sdk/vue'
 import { ref } from 'vue'
 
-interface Todo {
+interface Todo extends Record<string, unknown> {
   title: string
   completed: boolean
 }
@@ -1662,12 +1662,12 @@ async function toggleCompleted() {
 <script setup lang="ts">
 import { useSyncDocument } from '@synckit-js/sdk/vue'
 
-interface User {
+interface User extends Record<string, unknown> {
   name: string
   projectIds: string[]
 }
 
-interface Project {
+interface Project extends Record<string, unknown> {
   title: string
   description: string
 }
@@ -1755,7 +1755,7 @@ onUnmounted(() => {
 import { useSyncDocument } from '@synckit-js/sdk/vue'
 import { computed } from 'vue'
 
-interface Todo {
+interface Todo extends Record<string, unknown> {
   title: string
 }
 

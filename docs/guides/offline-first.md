@@ -529,7 +529,7 @@ if (status.state === 'granted') {
 Handle multiple users editing the same document:
 
 ```typescript
-interface Task {
+interface Task extends Record<string, unknown> {
   id: string
   title: string
   assignee: string
@@ -560,13 +560,13 @@ task.subscribe((data) => {
 Evolve your data structure over time:
 
 ```typescript
-interface TodoV1 {
+interface TodoV1 extends Record<string, unknown> {
   id: string
   text: string
   done: boolean  // Old field name
 }
 
-interface TodoV2 {
+interface TodoV2 extends Record<string, unknown> {
   id: string
   text: string
   completed: boolean  // New field name

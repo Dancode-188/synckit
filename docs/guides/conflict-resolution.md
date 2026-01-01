@@ -119,7 +119,7 @@ await task.update({
 **Most common** - Two users update different fields.
 
 ```typescript
-interface Task {
+interface Task extends Record<string, unknown> {
   id: string
   title: string
   assignee: string
@@ -455,13 +455,13 @@ await doc.insert(5, ' World', { italic: true })
 
 ```typescript
 // ❌ Bad: Single shared description field
-interface Task {
+interface Task extends Record<string, unknown> {
   id: string
   description: string  // Multiple users editing = conflicts
 }
 
 // ✅ Good: Separate comment thread
-interface Task {
+interface Task extends Record<string, unknown> {
   id: string
   description: string  // Owner only
   comments: Comment[]  // Multiple users can add without conflict
@@ -480,7 +480,7 @@ interface Comment {
 Assign **ownership** to reduce conflicts:
 
 ```typescript
-interface Task {
+interface Task extends Record<string, unknown> {
   id: string
   title: string        // Creator only
   assignee: string     // Manager only
@@ -494,7 +494,7 @@ interface Task {
 Track when changes happened:
 
 ```typescript
-interface Task {
+interface Task extends Record<string, unknown> {
   id: string
   title: string
   lastEditedBy: string
@@ -755,7 +755,7 @@ class SumCounter {
 
 ```typescript
 // ✅ WORKS IN v0.1.0 - Optimistic locking pattern
-interface Task {
+interface Task extends Record<string, unknown> {
   id: string
   title: string
   version: number  // Increment on every update

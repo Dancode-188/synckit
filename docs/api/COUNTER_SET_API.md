@@ -66,7 +66,7 @@ await likesCounter.decrement()
 await likesCounter.decrement(3)
 
 // Get current value
-const currentCount = likesCounter.get()
+const currentCount = likesCounter.value
 
 // Reset to zero (use with caution - see notes below)
 await likesCounter.reset()
@@ -218,7 +218,7 @@ class SyncCounter {
   decrement(delta?: number): Promise<void>
 
   // Get current value (synchronous)
-  get(): number
+  get value(): number
 
   // Reset counter to zero
   // WARNING: Loses history - use carefully in distributed scenarios
@@ -508,8 +508,8 @@ class SyncSet<T> {
   // Get all items (synchronous)
   get(): Set<T>
 
-  // Get size
-  size(): number
+  // Get size (getter property)
+  get size(): number
 
   // Clear all items
   clear(): Promise<void>
@@ -783,7 +783,7 @@ export interface SyncCounter {
   subscribe(callback: (value: number) => void): () => void
   increment(delta?: number): Promise<void>
   decrement(delta?: number): Promise<void>
-  get(): number
+  get value(): number
   reset(): Promise<void>
   readonly id: string
 }
@@ -813,7 +813,7 @@ export interface SyncSet<T> {
   remove(item: T): Promise<void>
   has(item: T): boolean
   get(): Set<T>
-  size(): number
+  get size(): number
   clear(): Promise<void>
   readonly id: string
 }
@@ -859,7 +859,7 @@ await counter.increment(10)
 await counter.reset()
 
 // ✅ Calculate delta to reach target value
-const current = counter.get()
+const current = counter.value
 const target = 0
 const delta = target - current
 await counter.decrement(Math.abs(delta))

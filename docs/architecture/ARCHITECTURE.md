@@ -610,12 +610,12 @@ fn contains(&self, element: &T) -> bool {
 
 | Component | Size (gzipped) | Notes |
 |-----------|----------------|-------|
-| WASM Core (default) | 48KB | Full-featured with all CRDTs |
-| WASM Core (lite) | 43KB | Local-only, LWW + vector clocks |
-| TypeScript SDK | ~10KB | JavaScript wrapper |
-| React Adapter | ~1KB | Hooks (included in SDK) |
-| Total (default) | ~59KB | Production-ready (48KB WASM + 10KB JS) |
-| Total (lite) | ~45KB | Size-critical apps (43KB WASM + 1.5KB JS) |
+| WASM Core (default) | 138KB | Full collaboration suite with text CRDTs, rich text, undo/redo |
+| WASM Core (lite) | 44KB | Local-only, LWW + vector clocks |
+| TypeScript SDK | ~16KB | JavaScript wrapper + framework adapters |
+| React/Vue/Svelte | ~0KB | Included in SDK (no extra cost) |
+| Total (default) | ~154KB | Production-ready collaboration platform |
+| Total (lite) | ~46KB | Size-critical apps, offline-only |
 
 ### Throughput Targets
 

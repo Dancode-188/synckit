@@ -1,6 +1,6 @@
 {
   "name": "@synckit-js/sdk",
-  "version": "0.2.2",
+  "version": "0.2.3",
   "description": "Production-ready local-first sync with rich text editing, undo/redo, live cursors, and framework adapters for React, Vue, and Svelte",
   "main": "./dist/index.js",
   "module": "./dist/index.mjs",

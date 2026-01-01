@@ -37,7 +37,7 @@ npm install @synckit-js/sdk svelte@^5.0.0
 <script lang="ts">
 import { syncDocument } from '@synckit-js/sdk/svelte'
 
-interface Todo {
+interface Todo extends Record<string, unknown> {
   title: string
   completed: boolean
 }
@@ -127,7 +127,7 @@ Reactive document synchronization with automatic lifecycle management.
 <script lang="ts">
 import { syncDocument } from '@synckit-js/sdk/svelte'
 
-interface UserProfile {
+interface UserProfile extends Record<string, unknown> {
   name: string
   email: string
   avatar: string
@@ -736,7 +736,7 @@ Cross-tab undo/redo with persistent history.
 import { syncDocument } from '@synckit-js/sdk/svelte'
 import { syncUndo } from '@synckit-js/sdk/svelte'
 
-interface Note {
+interface Note extends Record<string, unknown> {
   title: string
   content: string
 }
@@ -907,7 +907,7 @@ Track who's online with real-time presence updates.
 import { syncAwareness } from '@synckit-js/sdk/svelte'
 import { onMount } from 'svelte'
 
-interface UserPresence {
+interface UserPresence extends Record<string, unknown> {
   id: string
   name: string
   avatar: string
@@ -1085,7 +1085,7 @@ Higher-level store combining awareness with cursor positions.
 import { syncPresence } from '@synckit-js/sdk/svelte'
 import { onMount } from 'svelte'
 
-interface PresenceState {
+interface PresenceState extends Record<string, unknown> {
   name: string
   color: string
   cursor: { x: number; y: number } | null
@@ -1241,7 +1241,7 @@ import { syncPresence } from '@synckit-js/sdk/svelte'
 import { createSpring, createAdaptiveThrottle } from '@synckit-js/sdk/cursor'
 import { onMount, onDestroy } from 'svelte'
 
-interface CursorState {
+interface CursorState extends Record<string, unknown> {
   name: string
   color: string
   x: number
@@ -1477,7 +1477,7 @@ import { syncDocument } from '@synckit-js/sdk/svelte'
 import type { Readable } from 'svelte/store'
 
 // Define your document schema
-interface Task {
+interface Task extends Record<string, unknown> {
   id: string
   title: string
   description: string
@@ -1548,7 +1548,7 @@ function createEntityStore<T extends DocumentData>(id: string) {
 }
 
 // Usage with type inference
-interface User {
+interface User extends Record<string, unknown> {
   name: string
   email: string
 }
@@ -1568,7 +1568,7 @@ Only subscribe to fields you need.
 <script lang="ts">
 import { syncDocument } from '@synckit-js/sdk/svelte'
 
-interface LargeDocument {
+interface LargeDocument extends Record<string, unknown> {
   metadata: { title: string; author: string }
   content: string // Very large field
   comments: Array<{/* ... */}> // Another large field
@@ -1612,7 +1612,7 @@ function debouncedInsert(pos: number, text: string) {
 import { syncDocument } from '@synckit-js/sdk/svelte'
 import { VirtualList } from 'svelte-virtual-list'
 
-interface TodoList {
+interface TodoList extends Record<string, unknown> {
   todos: Array<{ id: string; title: string; completed: boolean }>
 }
 
@@ -1656,7 +1656,7 @@ let average = $derived.by(() => {
 <script lang="ts">
 import { syncDocument } from '@synckit-js/sdk/svelte'
 
-interface FormData {
+interface FormData extends Record<string, unknown> {
   name: string
   email: string
   message: string
@@ -1697,7 +1697,7 @@ async function handleSubmit() {
 <script lang="ts">
 import { syncDocument } from '@synckit-js/sdk/svelte'
 
-interface Todo {
+interface Todo extends Record<string, unknown> {
   title: string
   completed: boolean
 }
@@ -1735,12 +1735,12 @@ async function toggleCompleted() {
 <script lang="ts">
 import { syncDocument } from '@synckit-js/sdk/svelte'
 
-interface User {
+interface User extends Record<string, unknown> {
   name: string
   projectIds: string[]
 }
 
-interface Project {
+interface Project extends Record<string, unknown> {
   title: string
   description: string
 }
@@ -1806,7 +1806,7 @@ onDestroy(() => {
 <script lang="ts">
 import { syncDocument } from '@synckit-js/sdk/svelte'
 
-interface Todo {
+interface Todo extends Record<string, unknown> {
   title: string
 }
 

@@ -41,7 +41,7 @@ SyncKit v0.2.0 is a major release that adds text editing, rich formatting, undo/
 - ✅ `SyncSet` - Conflict-free set (OR-Set)
 
 **Framework Adapters:**
-- ✅ React hooks: `useSyncText`, `useSyncRichText`, `useCounter`, `useSet`, `useUndoRedo`, `usePresence`, `useCursor`
+- ✅ React hooks: `useSyncText`, `useRichText`, `useSyncCounter`, `useSyncSet`, `useUndo`, `usePresence`, `useCursor`
 - ✅ Vue 3 composables: Complete Composition API support
 - ✅ Svelte 5 stores: Full runes integration
 
