@@ -1,7 +1,7 @@
 # SyncKit SDK API Reference
 
-**Version:** 0.2.0
-**Last Updated:** December 17, 2025
+**Version:** 0.2.3
+**Last Updated:** January 1, 2026
 
 ---
 

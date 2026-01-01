@@ -2,7 +2,7 @@
 
 TypeScript SDK for SyncKit - Production-grade local-first sync with real-time collaboration.
 
-**Bundle Size:** 59KB gzipped (full) or 45KB gzipped (lite) - Competitive with Yjs (~19KB), Automerge (~60-78KB), and Firebase (~150KB).
+**Bundle Size:** 154KB gzipped (full) or 46KB gzipped (lite) - Includes text CRDTs, rich text, undo/redo, cursors, and framework adapters out of the box.
 
 ## 🚀 Quick Start
 
@@ -30,9 +30,12 @@ const doc = sync.document<Todo>('todo-1')
 // Initialize document
 await doc.init()
 
-// Set fields
-await doc.set('title', 'Buy milk')
-await doc.set('completed', false)
+// Update document
+await doc.update({ title: 'Buy milk', completed: false })
+
+// Or set individual fields
+// await doc.set('title', 'Buy milk')
+// await doc.set('completed', false)
 
 // Subscribe to changes
 doc.subscribe((todo) => {
@@ -43,7 +46,7 @@ doc.subscribe((todo) => {
 const todo = doc.get()
 ```
 
-### With Network Sync (v0.1.0)
+### With Network Sync
 
 ```typescript
 import { SyncKit } from '@synckit-js/sdk'
@@ -98,7 +101,7 @@ pnpm add @synckit-js/sdk
 - ✅ **Offline-first**: Works completely without network
 - ✅ **Zero-config**: Sensible defaults, no setup required
 
-### Network Features (v0.1.0)
+### Network Features
 - ✅ **Real-time sync**: WebSocket-based server synchronization
 - ✅ **Conflict resolution**: Automatic LWW with vector clocks
 - ✅ **Offline queue**: Persistent operation queue with retry logic
@@ -106,19 +109,36 @@ pnpm add @synckit-js/sdk
 - ✅ **Network monitoring**: Connection state tracking
 - ✅ **Sync state tracking**: Per-document sync status
 
-### Framework Integration
-- ✅ **React hooks**: Built-in hooks for React 18+
-- ✅ **Vue composables**: Full Vue 3 Composition API support
-- ✅ **Svelte stores**: Hybrid Svelte 4/5 store implementation
-- ✅ **Network-aware hooks**: Monitor connection and sync state
-- ✅ **TypeScript support**: Full type inference throughout
+### Collaborative Text Editing (v0.2.0)
+- ✅ **Text CRDT (Fugue)**: Collaborative editing with conflict-free convergence
+- ✅ **Rich Text (Peritext)**: Bold, italic, links, colors with formatting conflict resolution
+- ✅ **Quill Integration**: QuillBinding for Quill editor
+- ✅ **Delta Utilities**: Interoperability with Quill's delta format
+
+### Additional CRDTs (v0.2.0)
+- ✅ **Counters (PN-Counter)**: Distributed increment/decrement operations
+- ✅ **Sets (OR-Set)**: Conflict-free add/remove operations
+- ✅ **Framework hooks**: useCounter, useSet for React/Vue/Svelte
 
 ### Undo/Redo (v0.2.0)
 - ✅ **Intelligent merging**: Automatically merges consecutive operations
 - ✅ **Cross-tab sync**: Undo/redo state syncs across browser tabs
 - ✅ **Persistent history**: Survives page refreshes via IndexedDB
-- ✅ **Framework adapters**: Native React/Vue/Svelte integrations
+- ✅ **Framework adapters**: useUndo hook for React/Vue/Svelte
 - ✅ **Customizable**: Configure merge strategies and stack size
+
+### Presence & Awareness (v0.2.0)
+- ✅ **Real-time presence**: Track who's online and active
+- ✅ **Cursor sharing**: Live cursor positions with XPath serialization
+- ✅ **Selection tracking**: Share text selections across clients
+- ✅ **Framework hooks**: usePresence, useOthers for React/Vue/Svelte
+
+### Framework Integration
+- ✅ **React hooks**: useSyncDocument, useSyncText, useRichText, useUndo, usePresence, useCounter, useSet
+- ✅ **Vue composables**: Full Vue 3 Composition API support for all features
+- ✅ **Svelte stores**: Svelte 5 stores with runes support for all features
+- ✅ **Network-aware hooks**: Monitor connection and sync state
+- ✅ **TypeScript support**: Full type inference throughout
 
 ## 🔌 React Integration
 
@@ -337,14 +357,25 @@ interface SyncKitConfig {
 
 **Core Methods:**
 - `init()` - Initialize the SDK
-- `document<T>(id)` - Get or create a document
+- `document<T>(id)` - Get or create a document (LWW-CRDT)
 - `listDocuments()` - List all document IDs
 - `deleteDocument(id)` - Delete a document
 - `clearAll()` - Clear all documents
 - `getClientId()` - Get client identifier
 - `isInitialized()` - Check initialization status
 
-**Network Methods (v0.1.0):**
+**Collaborative Text Methods (v0.2.0):**
+- `text(id)` - Get or create a text document (Fugue CRDT)
+- `richText(id)` - Get or create a rich text document (Peritext)
+
+**Additional CRDT Methods (v0.2.0):**
+- `counter(id)` - Get or create a counter (PN-Counter)
+- `set<T>(id)` - Get or create a set (OR-Set)
+
+**Presence Methods (v0.2.0):**
+- `awareness()` - Get awareness instance for presence tracking
+
+**Network Methods:**
 - `getNetworkStatus()` - Get current network status
 - `getSyncState(documentId)` - Get document sync state
 - `onNetworkStatusChange(callback)` - Subscribe to network changes
@@ -367,6 +398,118 @@ interface SyncKitConfig {
 
 **Important:** Always call `await doc.init()` before using a document. When a `serverUrl` is configured, `init()` automatically subscribes the document to real-time server updates, enabling instant synchronization with other clients.
 
+### SyncText (v0.2.0)
+
+Plain text collaboration using Fugue CRDT.
+
+**Methods:**
+- `insert(index, text)` - Insert text at position
+- `delete(index, length)` - Delete text at position
+- `toString()` - Get full text content
+- `length()` - Get text length
+- `subscribe(callback)` - Subscribe to changes
+
+**Example:**
+```typescript
+const text = sync.text('doc-1')
+await text.insert(0, 'Hello ')
+await text.insert(6, 'world')
+console.log(text.toString()) // "Hello world"
+```
+
+### RichText (v0.2.0)
+
+Rich text with formatting using Peritext CRDT.
+
+**Methods:**
+- `insert(index, text, formats?)` - Insert formatted text
+- `delete(index, length)` - Delete text at position
+- `format(index, length, formats)` - Apply formatting to range
+- `toDelta()` - Export as Quill Delta
+- `toString()` - Get plain text
+- `subscribe(callback)` - Subscribe to changes
+
+**Supported formats:**
+- `bold`, `italic`, `underline`, `strike`
+- `link: { href: string }`
+- `color: string`, `background: string`
+
+**Example:**
+```typescript
+const richText = sync.richText('doc-1')
+await richText.insert(0, 'Hello ', { bold: true })
+await richText.insert(6, 'world', { italic: true, color: '#ff0000' })
+await richText.format(0, 5, { underline: true })
+```
+
+### SyncCounter (v0.2.0)
+
+Distributed counter using PN-Counter CRDT.
+
+**Methods:**
+- `increment(amount?)` - Increment counter (default: 1)
+- `decrement(amount?)` - Decrement counter (default: 1)
+- `value()` - Get current value
+- `subscribe(callback)` - Subscribe to changes
+
+**Example:**
+```typescript
+const counter = sync.counter('likes')
+await counter.increment()     // +1
+await counter.increment(5)    // +5
+await counter.decrement(2)    // -2
+console.log(counter.value())  // 4
+```
+
+### SyncSet (v0.2.0)
+
+Conflict-free set using OR-Set CRDT.
+
+**Methods:**
+- `add(value)` - Add value to set
+- `remove(value)` - Remove value from set
+- `has(value)` - Check if value exists
+- `values()` - Get all values as array
+- `size()` - Get set size
+- `subscribe(callback)` - Subscribe to changes
+
+**Example:**
+```typescript
+const tags = sync.set<string>('post-tags')
+await tags.add('typescript')
+await tags.add('react')
+await tags.remove('typescript')
+console.log(tags.values())  // ['react']
+```
+
+### Awareness (v0.2.0)
+
+Real-time presence and cursor tracking.
+
+**Methods:**
+- `setLocalState(state)` - Set current user's presence
+- `getLocalState()` - Get current user's presence
+- `getStates()` - Get all users' presence
+- `subscribe(callback)` - Subscribe to presence changes
+
+**Example:**
+```typescript
+const awareness = sync.awareness()
+
+// Set your presence
+awareness.setLocalState({
+  user: { name: 'Alice', color: '#ff0000' },
+  cursor: { position: 42, selection: [42, 50] }
+})
+
+// Get others' presence
+awareness.subscribe((states) => {
+  states.forEach((state, clientId) => {
+    console.log(`${state.user.name} cursor at ${state.cursor.position}`)
+  })
+})
+```
+
 ### React Hooks
 
 **Core Hooks:**
@@ -375,43 +518,52 @@ interface SyncKitConfig {
 - `useSyncField<T, K>(id, field)` - Sync a single field
 - `useSyncDocumentList()` - List all document IDs
 
-**Network Hooks (v0.1.0):**
+**Network Hooks:**
 - `useNetworkStatus()` - Monitor connection status
 - `useSyncState(documentId)` - Monitor document sync state
 - `useSyncDocumentWithState<T>(id)` - Document + sync state combined
+
+**Collaborative Text Hooks (v0.2.0):**
+- `useSyncText(id)` - Plain text collaboration with Fugue CRDT
+- `useRichText(id)` - Rich text with Peritext formatting
+
+**Additional CRDT Hooks (v0.2.0):**
+- `useCounter(id)` - Distributed counter (PN-Counter)
+- `useSet<T>(id)` - Conflict-free set (OR-Set)
+
+**Presence Hooks (v0.2.0):**
+- `usePresence()` - Get/set current user's presence
+- `useOthers()` - Get other users' presence
+- `useCursors()` - Track cursor positions
+
+**Undo/Redo Hooks (v0.2.0):**
+- `useUndo(id)` - Undo/redo with cross-tab sync
 
 ## 📊 Bundle Size
 
 ### Production Bundles (gzipped)
 
-| Build | Total Size | JavaScript | WASM | Use Case |
-|-------|------------|------------|------|----------|
-| **Full SDK** | **59KB** | 10KB | 49KB | Complete with network sync |
-| **Lite SDK** | **45KB** | 1.5KB | 44KB | Offline-only, no network |
+| Build | Total Size | What's Included | Use Case |
+|-------|------------|-----------------|----------|
+| **Full SDK** | **154KB** | Text CRDTs, rich text, undo/redo, cursors, framework adapters, network sync | Complete collaboration platform |
+| **Lite SDK** | **46KB** | Document sync only, no CRDTs or network | Size-critical apps, local-only |
 
-**Network overhead:** Only 14KB gzipped for complete WebSocket + sync implementation.
-
-### Uncompressed Sizes
-
-| Build | Total | JavaScript | WASM |
-|-------|-------|------------|------|
-| Full (ESM) | 138KB | 45KB | 93KB |
-| Full (CJS) | 156KB | 63KB | 93KB |
-| Lite (ESM) | 85KB | 5.1KB | 80KB |
-| Lite (CJS) | 102KB | 22KB | 80KB |
+**Size justification:** Every byte is intentional. We chose completeness over minimal size—rich text, undo/redo, cursors, and framework adapters all work together out of the box.
 
 ### Comparison
 
-| Library | Size (gzipped) | Offline-First | Real-time Sync |
-|---------|----------------|---------------|----------------|
-| **SyncKit Full** | 59KB | ✅ Native | ✅ Built-in |
-| **SyncKit Lite** | 45KB | ✅ Native | ❌ No |
-| Yjs | ~19KB | ⚠️ Limited | ✅ Yes |
-| Automerge | ~60-78KB | ✅ Native | ✅ Yes |
-| Supabase | ~45KB | ❌ Cache only | ✅ Yes |
-| Firebase | ~150KB | ⚠️ Cache only | ✅ Yes |
+| Library | Size (gzipped) | Text CRDT | Rich Text | Undo/Redo | Cursors | Framework Adapters |
+|---------|----------------|-----------|-----------|-----------|---------|-------------------|
+| **SyncKit Full** | 154KB | ✅ Fugue | ✅ Peritext | ✅ Cross-tab | ✅ Built-in | ✅ React/Vue/Svelte |
+| **SyncKit Lite** | 46KB | ❌ No | ❌ No | ❌ No | ❌ No | ❌ No |
+| Yjs | ~65KB | ✅ Y.Text | ⚠️ Limited | ⚠️ Basic | ⚠️ Extension | ⚠️ Community |
+| Automerge | ~300KB+ | ✅ Yes | ✅ Yes | ✅ Yes | ❌ No | ❌ No |
+| Supabase | ~45KB | ❌ No | ❌ No | ❌ No | ❌ No | ❌ No |
+| Firebase | ~150KB | ❌ No | ❌ No | ❌ No | ❌ No | ❌ No |
 
-**Competitive and feature-complete** - Best balance of size and functionality.
+**Why SyncKit Full?** You get rich text, undo/redo, cursors, and framework adapters included—no need to piece together separate libraries.
+
+**Why SyncKit Lite?** For size-critical apps that only need basic document sync without collaboration features.
 
 ## 🔧 Storage Adapters
 
@@ -520,41 +672,55 @@ console.log(state.pendingOps)    // Operations waiting to sync
 
 ## 🧪 Development Status
 
-### v0.1.0 - Current Release ✅
+### v0.2.3 - Current Release ✅
 
 **Core Infrastructure:**
 - ✅ Document API with TypeScript generics
 - ✅ Storage adapters (IndexedDB, Memory)
-- ✅ React hooks integration
 - ✅ LWW conflict resolution with vector clocks
-
-**Network Layer (NEW in v0.1.0):**
 - ✅ WebSocket client with auto-reconnection
 - ✅ Binary message protocol
 - ✅ Offline queue with persistent storage
-- ✅ Sync manager with conflict resolution
-- ✅ Network state tracking
-- ✅ React network hooks
+
+**Collaborative Text Editing (v0.2.0):**
+- ✅ Text CRDTs (Fugue) - Collaborative text editing
+- ✅ Rich Text (Peritext) - Bold, italic, links with conflict resolution
+- ✅ Quill editor integration (QuillBinding)
+- ✅ Delta utilities for Quill interoperability
+
+**Additional CRDTs (v0.2.0):**
+- ✅ Counters (PN-Counter) - Distributed counting
+- ✅ Sets (OR-Set) - Conflict-free unique collections
+
+**Undo/Redo (v0.2.0):**
+- ✅ Cross-tab undo/redo with BroadcastChannel
+- ✅ Persistent history via IndexedDB
+- ✅ Intelligent operation merging
+- ✅ Works with all CRDT types
+
+**Presence & Awareness (v0.2.0):**
+- ✅ Real-time user presence tracking
+- ✅ Cursor and selection sharing
+- ✅ XPath-based cursor serialization
+
+**Framework Adapters (v0.2.0):**
+- ✅ React hooks (useSyncDocument, useSyncText, useRichText, useUndo, usePresence, etc.)
+- ✅ Vue 3 composables (Composition API)
+- ✅ Svelte 5 stores with runes support
 
 **Test Coverage:**
-- ✅ 100% test pass rate (100/100 tests)
-- ✅ Unit tests: 100% passing
-- ✅ Integration tests: 100% passing
-- ✅ Performance benchmarks included
+- ✅ 1,081+ comprehensive tests
+- ✅ 87% code coverage
+- ✅ Unit, integration, chaos, and load tests
 
-### v0.2.0 - Planned
+### v0.3.0 - Planned
 
-**Advanced CRDTs:**
-- 🚧 Text CRDTs for character-level editing
-- 🚧 Counters for distributed counting
-- 🚧 Sets for unique collections
-- 🚧 Maps for nested structures
-
-**Enhanced Network:**
+**Enhanced Features:**
+- 🚧 Multi-language server implementations (Python, Go, Rust)
+- 🚧 Advanced storage adapters (OPFS, SQLite)
 - 🚧 End-to-end encryption
 - 🚧 Compression for large payloads
-- 🚧 Presence indicators (who's online)
-- 🚧 Advanced conflict resolution strategies
+- 🚧 Conflict UI for visual conflict resolution
 
 ## 📝 Examples
 

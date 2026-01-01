@@ -948,7 +948,7 @@ tests/chaos/chaos-helpers.ts                # Chaos test utilities
 ### Performance Targets ✅ ALL EXCEEDED
 - ✅ Local operation latency: **<0.1ms** (target: <1ms) - **10x better**
 - ✅ Remote sync latency: **~10ms p95** (target: <100ms p95) - **10x better**
-- ✅ Bundle size: **59KB gzipped** (default), **45KB gzipped** (lite) - **Met target**
+- ✅ Bundle size: 59KB gzipped (default), 45KB gzipped (lite) - **Met target**
 - ✅ Memory usage: **~3MB for 10K documents** (target: <10MB) - **3x better**
 - ✅ Concurrent connections: **1000+ per server** - **Met target**
 
