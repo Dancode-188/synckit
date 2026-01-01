@@ -450,7 +450,7 @@ async function increment(amount = 1) {
 
 function handleUndo() {
   const operation = undo()
-  if (!operation && operation.type === 'counter-change') {
+  if (operation && operation.type === 'counter-change') {
     // Apply inverse (decrement)
     counterActions.increment(operation.data.amount)
   }
