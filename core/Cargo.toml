@@ -49,7 +49,7 @@ protoc-bin-vendored = { version = "3.0", optional = true }
 
 [dev-dependencies]
 # Testing
-criterion = "0.8"        # Benchmarking (compatible with Rust 1.83)
+criterion = "0.8"        # Benchmarking (requires Rust 1.86+)
 proptest = "1.0"         # Property-based testing
 
 [features]
