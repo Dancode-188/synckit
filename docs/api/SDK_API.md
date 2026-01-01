@@ -674,14 +674,14 @@ function useSyncText(id: string): [
 ]
 ```
 
-### useSyncRichText ✅ v0.2.0
+### useRichText ✅ v0.2.0
 
 ```typescript
-import { useSyncRichText } from '@synckit-js/sdk/react'
+import { useRichText } from '@synckit-js/sdk/react'
 import { QuillBinding } from '@synckit-js/sdk'
 
 function RichEditor({ id }: { id: string }) {
-  const [richText] = useSyncRichText(id)
+  const [richText] = useRichText(id)
   const quillRef = useRef()
 
   useEffect(() => {
@@ -1118,7 +1118,7 @@ export {
   useSyncDocument,
   useSyncField,
   useSyncText,
-  useSyncRichText,
+  useRichText,
   useSyncCounter,
   useSyncSet,
   useUndo,
