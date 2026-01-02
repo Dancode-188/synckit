@@ -417,11 +417,11 @@ public class DeltaMessageHandlerTests
             .Returns((SyncKit.Server.Storage.DeltaEntry d, CancellationToken _) => Task.FromResult(d));
         // LWW uses authoritative state - so we return the expected field values
         _mockStorage.Setup(s => s.GetDocumentStateAsync(documentId, It.IsAny<CancellationToken>()))
-            .ReturnsAsync(new Dictionary<string, object?> 
-            { 
-                { "operation", "set" }, 
-                { "path", "title" }, 
-                { "value", "Hello" } 
+            .ReturnsAsync(new Dictionary<string, object?>
+            {
+                { "operation", "set" },
+                { "path", "title" },
+                { "value", "Hello" }
             });
 
         DeltaMessage? broadcastMessage = null;
