@@ -79,7 +79,7 @@ export class RedisPubSub {
         this.subscriber.connect(),
       ]);
       this.connected = true;
-      console.log('✅ Redis pub/sub connected');
+      // console.log('✅ Redis pub/sub connected');
     } catch (error) {
       this.connected = false;
       throw new Error(`Failed to connect to Redis: ${error}`);
@@ -96,7 +96,7 @@ export class RedisPubSub {
         this.subscriber.quit(),
       ]);
       this.connected = false;
-      console.log('Redis pub/sub disconnected');
+      // console.log('Redis pub/sub disconnected');
     }
   }
 

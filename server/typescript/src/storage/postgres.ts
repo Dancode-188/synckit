@@ -49,7 +49,7 @@ export class PostgresAdapter implements StorageAdapter {
       const client = await this.pool.connect();
       client.release();
       this.connected = true;
-      console.log('✅ PostgreSQL connected');
+      // console.log('✅ PostgreSQL connected');
     } catch (error) {
       this.connected = false;
       throw new ConnectionError('Failed to connect to PostgreSQL', error as Error);
@@ -63,7 +63,7 @@ export class PostgresAdapter implements StorageAdapter {
     if (this.pool) {
       await this.pool.end();
       this.connected = false;
-      console.log('PostgreSQL disconnected');
+      // console.log('PostgreSQL disconnected');
     }
   }
 

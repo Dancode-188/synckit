@@ -184,11 +184,11 @@ export function Cursors({
   // Debug: Log cursor data received from awareness
   useEffect(() => {
     if (otherCursors.length > 0) {
-      console.log('[Cursors] Rendering cursors:', otherCursors.map(u => ({
-        id: u.id,
-        name: u.name,
-        cursor: u.cursor
-      })))
+      // console.log('[Cursors] Rendering cursors:', otherCursors.map(u => ({
+      //   id: u.id,
+      //   name: u.name,
+      //   cursor: u.cursor
+      // })))
     }
   }, [otherCursors])
 

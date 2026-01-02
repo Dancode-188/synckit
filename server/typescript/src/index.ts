@@ -82,18 +82,18 @@ if (config.databaseUrl && !config.databaseUrl.includes('localhost')) {
   });
   
   try {
-    console.log('🔌 Connecting to PostgreSQL...');
+    // console.log('🔌 Connecting to PostgreSQL...');
     await storage.connect();
     storageConnected = true;
-    console.log('✅ PostgreSQL connected');
+    // console.log('✅ PostgreSQL connected');
   } catch (error) {
     console.warn('⚠️  PostgreSQL connection failed');
     console.warn(`   Reason: ${error instanceof Error ? error.message : String(error)}`);
     storage = undefined;
   }
 } else {
-  console.log('ℹ️  Running in memory-only mode (PostgreSQL not configured)');
-  console.log('   All sync features work, data persists until restart');
+  // console.log('ℹ️  Running in memory-only mode (PostgreSQL not configured)');
+  // console.log('   All sync features work, data persists until restart');
 }
 
 // Only initialize Redis if not using default localhost URL
@@ -104,18 +104,18 @@ if (config.redisUrl && !config.redisUrl.includes('localhost')) {
   );
   
   try {
-    console.log('🔌 Connecting to Redis...');
+    // console.log('🔌 Connecting to Redis...');
     await pubsub.connect();
     redisConnected = true;
-    console.log('✅ Redis connected');
+    // console.log('✅ Redis connected');
   } catch (error) {
     console.warn('⚠️  Redis connection failed');
     console.warn(`   Reason: ${error instanceof Error ? error.message : String(error)}`);
     pubsub = undefined;
   }
 } else {
-  console.log('ℹ️  Running in single-instance mode (Redis not configured)');
-  console.log('   Multi-server coordination disabled');
+  // console.log('ℹ️  Running in single-instance mode (Redis not configured)');
+  // console.log('   Multi-server coordination disabled');
 }
 
 // =============================================================================
@@ -139,30 +139,30 @@ const wsServer = new SyncWebSocketServer(
   }
 );
 
-console.log(`🚀 SyncKit Server running on ${config.host}:${config.port}`);
-console.log(`📊 Health check: http://${config.host}:${config.port}/health`);
-console.log(`🔌 WebSocket: ws://${config.host}:${config.port}/ws`);
-console.log(`🔐 Auth: http://${config.host}:${config.port}/auth`);
-console.log(`🔒 Environment: ${config.nodeEnv}`);
+// console.log(`🚀 SyncKit Server running on ${config.host}:${config.port}`);
+// console.log(`📊 Health check: http://${config.host}:${config.port}/health`);
+// console.log(`🔌 WebSocket: ws://${config.host}:${config.port}/ws`);
+// console.log(`🔐 Auth: http://${config.host}:${config.port}/auth`);
+// console.log(`🔒 Environment: ${config.nodeEnv}`);
 
 // Log server mode
-const mode = storageConnected && redisConnected ? 'Full (Persistent + Multi-Server)' 
-  : storageConnected ? 'Persistent (Single Server)'
-  : 'Memory-Only (Development)';
-console.log(`📦 Mode: ${mode}`);
+// const mode = storageConnected && redisConnected ? 'Full (Persistent + Multi-Server)'
+//   : storageConnected ? 'Persistent (Single Server)'
+//   : 'Memory-Only (Development)';
+// console.log(`📦 Mode: ${mode}`);
 
 if (!storageConnected || !redisConnected) {
-  console.log(`💡 Tip: Server is fully functional in memory-only mode!`);
+  // console.log(`💡 Tip: Server is fully functional in memory-only mode!`);
 }
 
 // Graceful shutdown
 const shutdown = async () => {
-  console.log('📛 Shutdown signal received, shutting down gracefully...');
+  // console.log('📛 Shutdown signal received, shutting down gracefully...');
   
   await wsServer.close();
   
   server.close(() => {
-    console.log('✅ Server closed');
+    // console.log('✅ Server closed');
     process.exit(0);
   });
   

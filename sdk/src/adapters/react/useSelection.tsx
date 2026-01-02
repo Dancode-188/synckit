@@ -140,7 +140,7 @@ export function useSelection(options: UseSelectionOptions): UseSelectionReturn {
           ...currentState,  // Preserve cursor, name, color
           selection: sel
         }
-        console.log('[useSelection] 📡 Sending semantic selection:', newState)
+        // console.log('[useSelection] 📡 Sending semantic selection:', newState)
         setPresence(newState)
 
         throttleTimeoutRef.current = null

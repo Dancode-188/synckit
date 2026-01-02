@@ -952,11 +952,11 @@ export function useCursor(
     (position: CursorPosition) => {
       if (!updatePresence) return
 
-      console.log('[useCursor] Broadcasting cursor position', {
-        documentId,
-        position,
-        metadata
-      })
+      // console.log('[useCursor] Broadcasting cursor position', {
+      //   documentId,
+      //   position,
+      //   metadata
+      // })
 
       // Broadcast cursor position along with metadata
       updatePresence({

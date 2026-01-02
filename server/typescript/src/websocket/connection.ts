@@ -165,7 +165,7 @@ export class Connection {
   startHeartbeat(intervalMs: number = 30000) {
     this.heartbeatInterval = setInterval(() => {
       if (!this.isAlive) {
-        console.log(`Connection ${this.id} heartbeat timeout - terminating`);
+        // console.log(`Connection ${this.id} heartbeat timeout - terminating`);
         return this.terminate();
       }
 

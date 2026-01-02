@@ -193,9 +193,9 @@ export class SyncText implements SyncableDocument {
       })
 
       // Enable cross-tab sync (starts BroadcastChannel listeners)
-      console.log('[SyncText] Enabling cross-tab sync for document:', this.id)
+      // console.log('[SyncText] Enabling cross-tab sync for document:', this.id)
       this.crossTabSync.enable()
-      console.log('[SyncText] Cross-tab sync enabled for document:', this.id)
+      // console.log('[SyncText] Cross-tab sync enabled for document:', this.id)
     }
   }
 
@@ -260,7 +260,7 @@ export class SyncText implements SyncableDocument {
 
     // Broadcast to other tabs (if not applying a remote operation)
     if (this.crossTabSync && !this.isApplyingRemote) {
-      console.log('[SyncText] Broadcasting text-insert to other tabs:', { documentId: this.id, position, text })
+      // console.log('[SyncText] Broadcasting text-insert to other tabs:', { documentId: this.id, position, text })
       this.crossTabSync.broadcast({
         type: 'text-insert',
         documentId: this.id,

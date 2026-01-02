@@ -253,7 +253,7 @@ export class SyncKit {
 
     // Create CrossTabSync instance for this document (enables same-browser tab-to-tab sync)
     const crossTabSync = new CrossTabSync(id, { enabled: true })
-    console.log('[SyncKit] Created CrossTabSync for text document:', id)
+    // console.log('[SyncKit] Created CrossTabSync for text document:', id)
 
     // Create new text with cross-tab sync support
     const text = new SyncText(id, this.clientId, this.storage, this.syncManager, crossTabSync)
@@ -286,7 +286,7 @@ export class SyncKit {
 
     // Create CrossTabSync instance for this document (enables same-browser tab-to-tab sync)
     const crossTabSync = new CrossTabSync(id, { enabled: true })
-    console.log('[SyncKit] Created CrossTabSync for document:', id)
+    // console.log('[SyncKit] Created CrossTabSync for document:', id)
 
     // Create new rich text with cross-tab sync support
     const richText = new RichText(id, this.clientId, this.storage, this.syncManager, crossTabSync)

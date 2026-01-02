@@ -426,7 +426,7 @@ export class SyncCoordinator {
       }
     }
 
-    console.log(`Deleted field ${path} in ${documentId} by ${clientId}, result: ${JSON.stringify(result)}`);
+    // console.log(`Deleted field ${path} in ${documentId} by ${clientId}, result: ${JSON.stringify(result)}`);
     return result;
   }
 
@@ -495,7 +495,7 @@ export class SyncCoordinator {
     const state = this.documents.get(documentId);
     if (state) {
       state.subscribers.delete(connectionId);
-      console.log(`Connection ${connectionId} unsubscribed from ${documentId}`);
+      // console.log(`Connection ${connectionId} unsubscribed from ${documentId}`);
     }
   }
 

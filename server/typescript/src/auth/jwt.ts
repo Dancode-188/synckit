@@ -48,9 +48,9 @@ export function verifyToken(token: string): TokenPayload | null {
     return decoded;
   } catch (error) {
     if (error instanceof jwt.TokenExpiredError) {
-      console.log('Token expired');
+      // console.log('Token expired');
     } else if (error instanceof jwt.JsonWebTokenError) {
-      console.log('Invalid token');
+      // console.log('Invalid token');
     }
     return null;
   }

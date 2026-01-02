@@ -87,8 +87,8 @@ export class SyncWebSocketServer {
     });
 
     // Log authentication mode
-    const authRequired = process.env.SYNCKIT_AUTH_REQUIRED !== 'false';
-    console.log(`🔐 Authentication: ${authRequired ? 'Required' : 'Disabled (Dev Mode)'}`);
+    // const authRequired = process.env.SYNCKIT_AUTH_REQUIRED !== 'false';
+    // console.log(`🔐 Authentication: ${authRequired ? 'Required' : 'Disabled (Dev Mode)'}`);
 
     this.setupHandlers();
     this.startAwarenessCleanup();
@@ -121,7 +121,7 @@ export class SyncWebSocketServer {
     
     // Add to registry
     this.registry.add(connection);
-    console.log(`New connection: ${connectionId} (total: ${this.registry.count()})`);
+    // console.log(`New connection: ${connectionId} (total: ${this.registry.count()})`);
 
     // Start heartbeat
     connection.startHeartbeat(config.wsHeartbeatInterval);
@@ -142,7 +142,7 @@ export class SyncWebSocketServer {
         },
       };
       this.registry.linkUser(connection.id, 'anonymous');
-      console.log(`Connection ${connection.id} auto-authenticated (auth disabled)`);
+      // console.log(`Connection ${connection.id} auto-authenticated (auth disabled)`);
     }
 
     // Setup message handlers
@@ -265,7 +265,7 @@ export class SyncWebSocketServer {
       };
       connection.send(response);
 
-      console.log(`Connection ${connection.id} authenticated as ${userId}`);
+      // console.log(`Connection ${connection.id} authenticated as ${userId}`);
     } catch (error) {
       console.error('Authentication failed:', error);
       
@@ -288,7 +288,7 @@ export class SyncWebSocketServer {
   private async handleSubscribe(connection: Connection, message: SubscribeMessage) {
     const { documentId } = message;
 
-    console.log(`[handleSubscribe] ${connection.id} subscribing to ${documentId}`);
+    // console.log(`[handleSubscribe] ${connection.id} subscribing to ${documentId}`);
 
     // Check authentication
     if (connection.state !== ConnectionState.AUTHENTICATED || !connection.tokenPayload) {
@@ -330,7 +330,7 @@ export class SyncWebSocketServer {
 
       connection.send(response);
 
-      console.log(`[handleSubscribe] ${connection.id} subscribed to ${documentId}`);
+      // console.log(`[handleSubscribe] ${connection.id} subscribed to ${documentId}`);
     } catch (error) {
       console.error('[handleSubscribe] Error:', error);
       connection.sendError('Subscribe failed', { documentId });
@@ -343,13 +343,13 @@ export class SyncWebSocketServer {
   private async handleUnsubscribe(connection: Connection, message: UnsubscribeMessage) {
     const { documentId } = message;
 
-    console.log(`[handleUnsubscribe] ${connection.id} unsubscribing from ${documentId}`);
+    // console.log(`[handleUnsubscribe] ${connection.id} unsubscribing from ${documentId}`);
 
     try {
       // Remove subscription
       this.coordinator.unsubscribe(documentId, connection.id);
 
-      console.log(`[handleUnsubscribe] ${connection.id} unsubscribed from ${documentId}`);
+      // console.log(`[handleUnsubscribe] ${connection.id} unsubscribed from ${documentId}`);
     } catch (error) {
       console.error('[handleUnsubscribe] Error:', error);
       connection.sendError('Unsubscribe failed', { documentId });
@@ -626,7 +626,7 @@ export class SyncWebSocketServer {
       this.cleanupStaleAwarenessClients();
     }, this.AWARENESS_CLEANUP_INTERVAL);
 
-    console.log(`🧹 Awareness cleanup started (interval: ${this.AWARENESS_CLEANUP_INTERVAL}ms, timeout: ${this.AWARENESS_TIMEOUT}ms)`);
+    // console.log(`🧹 Awareness cleanup started (interval: ${this.AWARENESS_CLEANUP_INTERVAL}ms, timeout: ${this.AWARENESS_TIMEOUT}ms)`);
   }
 
   /**
@@ -641,7 +641,7 @@ export class SyncWebSocketServer {
       const removedClients = this.coordinator.removeStaleAwarenessClients(documentId, this.AWARENESS_TIMEOUT);
 
       if (removedClients.length > 0) {
-        console.log(`[AwarenessCleanup] Removed ${removedClients.length} stale clients from ${documentId}`);
+        // console.log(`[AwarenessCleanup] Removed ${removedClients.length} stale clients from ${documentId}`);
 
         // Broadcast removal to subscribers
         const subscribers = this.coordinator.getAwarenessSubscribers(documentId);
@@ -670,7 +670,7 @@ export class SyncWebSocketServer {
     }
 
     if (totalRemoved > 0) {
-      console.log(`[AwarenessCleanup] Total removed: ${totalRemoved} stale clients`);
+      // console.log(`[AwarenessCleanup] Total removed: ${totalRemoved} stale clients`);
     }
   }
 
@@ -683,7 +683,7 @@ export class SyncWebSocketServer {
   ) {
     const { documentId } = message;
 
-    console.log(`[AwarenessSubscribe] ${connection.id} subscribing to awareness for ${documentId}`);
+    // console.log(`[AwarenessSubscribe] ${connection.id} subscribing to awareness for ${documentId}`);
 
     try {
       // Subscribe to awareness updates
@@ -706,7 +706,7 @@ export class SyncWebSocketServer {
 
       connection.send(stateMessage);
 
-      console.log(`[AwarenessSubscribe] Sent ${awarenessStates.length} awareness states to ${connection.id}`);
+      // console.log(`[AwarenessSubscribe] Sent ${awarenessStates.length} awareness states to ${connection.id}`);
     } catch (error) {
       console.error('[AwarenessSubscribe] Error:', error);
       connection.sendError('Failed to subscribe to awareness');
@@ -722,7 +722,7 @@ export class SyncWebSocketServer {
   ) {
     const { documentId, clientId, state, clock } = message;
 
-    console.log(`[AwarenessUpdate] ${connection.id} updating awareness for client ${clientId} in ${documentId}`);
+    // console.log(`[AwarenessUpdate] ${connection.id} updating awareness for client ${clientId} in ${documentId}`);
 
     try {
       // Update awareness state in coordinator
@@ -750,7 +750,7 @@ export class SyncWebSocketServer {
         }
       }
 
-      console.log(`[AwarenessUpdate] Broadcasted to ${broadcastCount} subscribers`);
+      // console.log(`[AwarenessUpdate] Broadcasted to ${broadcastCount} subscribers`);
     } catch (error) {
       console.error('[AwarenessUpdate] Error:', error);
       connection.sendError('Failed to update awareness');
@@ -761,7 +761,7 @@ export class SyncWebSocketServer {
    * Handle connection disconnect
    */
   private handleDisconnect(connection: Connection) {
-    console.log(`Connection ${connection.id} disconnected`);
+    // console.log(`Connection ${connection.id} disconnected`);
 
     // Clean up all document subscriptions for this connection
     const subscriptions = connection.getSubscriptions();
@@ -815,7 +815,7 @@ export class SyncWebSocketServer {
   }
 
   async close() {
-    console.log('Closing WebSocket server...');
+    // console.log('Closing WebSocket server...');
 
     // Stop awareness cleanup timer
     if (this.awarenessCleanupTimer) {
@@ -832,7 +832,7 @@ export class SyncWebSocketServer {
     // Close WebSocket server
     return new Promise<void>((resolve) => {
       this.wss.close(() => {
-        console.log('WebSocket server closed');
+        // console.log('WebSocket server closed');
         resolve();
       });
     });

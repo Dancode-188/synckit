@@ -449,15 +449,15 @@ export class WebSocketClient {
     const jitter = delay * 0.1 * Math.random()
     const totalDelay = delay + jitter
 
-    console.log(
-      `Reconnecting in ${Math.round(totalDelay)}ms (attempt ${this.reconnectAttempts}/${maxAttempts})`
-    )
+    // console.log(
+    //   `Reconnecting in ${Math.round(totalDelay)}ms (attempt ${this.reconnectAttempts}/${maxAttempts})`
+    // )
 
     this.reconnectTimer = setTimeout(async () => {
       try {
         await this.establishConnection()
         this.reconnectAttempts = 0
-        console.log('Reconnected successfully')
+        // console.log('Reconnected successfully')
       } catch (error) {
         console.error('Reconnection failed:', error)
         await this.reconnect()
@@ -468,8 +468,8 @@ export class WebSocketClient {
   /**
    * Handle connection close
    */
-  private handleClose(event: CloseEvent): void {
-    console.log(`WebSocket closed: ${event.code} ${event.reason}`)
+  private handleClose(_event: CloseEvent): void {
+    // console.log(`WebSocket closed: ${_event.code} ${_event.reason}`)
 
     this.stopHeartbeat()
 
@@ -575,7 +575,7 @@ export class WebSocketClient {
    * Handle connection lost
    */
   private handleConnectionLost(): void {
-    console.log('Connection lost, reconnecting...')
+    // console.log('Connection lost, reconnecting...')
 
     this.stopHeartbeat()
 
@@ -612,7 +612,7 @@ export class WebSocketClient {
       return
     }
 
-    console.log(`Flushing ${this.messageQueue.length} queued messages`)
+    // console.log(`Flushing ${this.messageQueue.length} queued messages`)
 
     while (this.messageQueue.length > 0 && this.isConnected()) {
       const message = this.messageQueue.shift()!

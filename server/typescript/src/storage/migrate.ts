@@ -11,8 +11,8 @@ import { Pool } from 'pg';
 import { config } from '../config';
 
 async function migrate() {
-  console.log('🔄 Starting database migration...');
-  console.log(`📍 Database: ${config.databaseUrl}`);
+  // console.log('🔄 Starting database migration...');
+  // console.log(`📍 Database: ${config.databaseUrl}`);
 
   const pool = new Pool({
     connectionString: config.databaseUrl,
@@ -20,23 +20,23 @@ async function migrate() {
 
   try {
     // Test connection
-    console.log('🔌 Testing database connection...');
+    // console.log('🔌 Testing database connection...');
     await pool.query('SELECT NOW()');
-    console.log('✅ Database connection successful');
+    // console.log('✅ Database connection successful');
 
     // Read schema file
-    console.log('📖 Reading schema file...');
+    // console.log('📖 Reading schema file...');
     const schemaPath = join(__dirname, 'schema.sql');
     const schema = readFileSync(schemaPath, 'utf-8');
-    console.log('✅ Schema file loaded');
+    // console.log('✅ Schema file loaded');
 
     // Execute schema
-    console.log('⚙️  Executing schema...');
+    // console.log('⚙️  Executing schema...');
     await pool.query(schema);
-    console.log('✅ Schema executed successfully');
+    // console.log('✅ Schema executed successfully');
 
     // Verify tables
-    console.log('🔍 Verifying tables...');
+    // console.log('🔍 Verifying tables...');
     const result = await pool.query(`
       SELECT table_name 
       FROM information_schema.tables 
@@ -45,9 +45,9 @@ async function migrate() {
       ORDER BY table_name
     `);
 
-    console.log('✅ Tables created:');
-    result.rows.forEach(row => {
-      console.log(`   - ${row.table_name}`);
+    // console.log('✅ Tables created:');
+    result.rows.forEach(_row => {
+      // console.log(`   - ${_row.table_name}`);
     });
 
     // Verify views
@@ -59,13 +59,13 @@ async function migrate() {
     `);
 
     if (viewsResult.rows.length > 0) {
-      console.log('✅ Views created:');
-      viewsResult.rows.forEach(row => {
-        console.log(`   - ${row.table_name}`);
+      // console.log('✅ Views created:');
+      viewsResult.rows.forEach(_row => {
+        // console.log(`   - ${_row.table_name}`);
       });
     }
 
-    console.log('\n🎉 Migration completed successfully!');
+    // console.log('\n🎉 Migration completed successfully!');
   } catch (error) {
     console.error('❌ Migration failed:', error);
     process.exit(1);

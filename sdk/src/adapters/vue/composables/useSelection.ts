@@ -101,7 +101,7 @@ export function useSelection(options: UseSelectionOptions): UseSelectionReturn {
         ...currentState,
         selection: sel
       }
-      console.log('[useSelection] 📡 Sending semantic selection:', newState)
+      // console.log('[useSelection] 📡 Sending semantic selection:', newState)
       await updatePresence(newState)
 
       throttleTimeout = null

@@ -109,7 +109,7 @@ export function selectionStore(options: SelectionStoreOptions): SelectionStoreRe
         ...currentState,
         selection: sel
       }
-      console.log('[selectionStore] 📡 Sending semantic selection:', newState)
+      // console.log('[selectionStore] 📡 Sending semantic selection:', newState)
       presenceStore.updatePresence(newState)
 
       throttleTimeout = null
