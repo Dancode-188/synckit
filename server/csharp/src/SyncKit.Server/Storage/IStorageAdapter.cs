@@ -20,6 +20,12 @@ public interface IStorageAdapter
     Task<bool> DeleteDocumentAsync(string id, CancellationToken ct = default);
     Task<IReadOnlyList<DocumentState>> ListDocumentsAsync(int limit = 100, int offset = 0, CancellationToken ct = default);
 
+    /// <summary>
+    /// Get the full document state by applying all deltas.
+    /// Returns a dictionary of field name to value mappings.
+    /// </summary>
+    Task<Dictionary<string, object?>> GetDocumentStateAsync(string documentId, CancellationToken ct = default);
+
     // === Vector Clock Operations (matches TS) ===
     Task<Dictionary<string, long>> GetVectorClockAsync(string documentId, CancellationToken ct = default);
     Task UpdateVectorClockAsync(string documentId, string clientId, long clockValue, CancellationToken ct = default);

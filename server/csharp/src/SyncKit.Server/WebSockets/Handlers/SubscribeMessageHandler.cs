@@ -104,7 +104,7 @@ public class SubscribeMessageHandler : IMessageHandler
             Timestamp = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds(),
             RequestId = subscribe.Id,
             DocumentId = subscribe.DocumentId,
-            State = await _storage.GetVectorClockAsync(subscribe.DocumentId),
+            State = await _storage.GetDocumentStateAsync(subscribe.DocumentId),
             Deltas = deltaPayloads
         };
 

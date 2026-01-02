@@ -194,6 +194,9 @@ public class ConnectionManager : IConnectionManager
             if (excludeConnectionId != null && connection.Id == excludeConnectionId)
                 continue;
 
+            _logger.LogDebug("Attempting to send to connection {ConnectionId} (State: {State})",
+                connection.Id, connection.State);
+
             if (connection.Send(message))
             {
                 sendCount++;
@@ -201,6 +204,8 @@ public class ConnectionManager : IConnectionManager
             else
             {
                 failCount++;
+                _logger.LogWarning("Failed to send to connection {ConnectionId} (State: {State})",
+                    connection.Id, connection.State);
             }
         }
 

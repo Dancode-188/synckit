@@ -183,6 +183,48 @@ RETURNING version, created_at, updated_at";
         return list.AsReadOnly();
     }
 
+    public async Task<Dictionary<string, object?>> GetDocumentStateAsync(string documentId, CancellationToken ct = default)
+    {
+        // Build document state from deltas - apply each delta to reconstruct current state
+        var deltas = await GetDeltasAsync(documentId, limit: 10000, ct);
+        var state = new Dictionary<string, object?>();
+
+        foreach (var delta in deltas)
+        {
+            // Each delta has a field_path and value
+            // For "set" operations, set the field to the value
+            if (delta.OperationType == "set" && delta.Value.HasValue)
+            {
+                state[delta.FieldPath] = ConvertJsonElement(delta.Value.Value);
+            }
+            else if (delta.OperationType == "delete")
+            {
+                state.Remove(delta.FieldPath);
+            }
+        }
+
+        return state;
+    }
+
+    private static object? ConvertJsonElement(JsonElement element)
+    {
+        return element.ValueKind switch
+        {
+            JsonValueKind.Null => null,
+            JsonValueKind.True => true,
+            JsonValueKind.False => false,
+            JsonValueKind.Number when element.TryGetInt64(out var l) => l,
+            JsonValueKind.Number => element.GetDouble(),
+            JsonValueKind.String => element.GetString(),
+            JsonValueKind.Array => element.EnumerateArray()
+                .Select(ConvertJsonElement)
+                .ToList(),
+            JsonValueKind.Object => element.EnumerateObject()
+                .ToDictionary(p => p.Name, p => ConvertJsonElement(p.Value)),
+            _ => element.ToString()
+        };
+    }
+
     // === Vector clocks ===
     public async Task<Dictionary<string, long>> GetVectorClockAsync(string documentId, CancellationToken ct = default)
     {

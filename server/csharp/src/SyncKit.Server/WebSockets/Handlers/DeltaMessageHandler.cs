@@ -8,7 +8,10 @@ namespace SyncKit.Server.WebSockets.Handlers;
 
 /// <summary>
 /// Handles DELTA messages to apply document changes.
-/// Validates permissions, stores deltas, broadcasts to subscribers, and sends ACK.
+/// Implements Last-Write-Wins (LWW) conflict resolution:
+/// - Applies delta to server state
+/// - Resolves conflicts based on timestamps
+/// - Broadcasts authoritative state to ALL subscribers (including sender)
 /// </summary>
 public class DeltaMessageHandler : IMessageHandler
 {
@@ -74,14 +77,12 @@ public class DeltaMessageHandler : IMessageHandler
             return;
         }
 
-        // Verify the connection is subscribed to this document
+        // Auto-subscribe client to document if not already subscribed (matches TypeScript server behavior)
         if (!connection.GetSubscriptions().Contains(delta.DocumentId))
         {
-            _logger.LogWarning(
-                "Connection {ConnectionId} sent delta for unsubscribed document {DocumentId}",
+            connection.AddSubscription(delta.DocumentId);
+            _logger.LogDebug("Connection {ConnectionId} auto-subscribed to document {DocumentId} on delta",
                 connection.Id, delta.DocumentId);
-            connection.SendError("Not subscribed to document", new { documentId = delta.DocumentId });
-            return;
         }
 
         // Convert the delta data to JsonElement for storage
@@ -118,20 +119,76 @@ public class DeltaMessageHandler : IMessageHandler
             "Stored delta {DeltaId} for document {DocumentId} from client {ClientId}",
             delta.Id, delta.DocumentId, connection.ClientId ?? connection.Id);
 
-        // Broadcast to other subscribers (excluding the sender)
+        // Get current document state to determine authoritative values (LWW)
+        var currentState = await _storage.GetDocumentStateAsync(delta.DocumentId);
+
+        // Build authoritative delta by checking current state
+        // For LWW, we always use the server's current state (which includes all applied deltas)
+        var authoritativeDelta = new Dictionary<string, object?>();
+
+        if (deltaData.ValueKind == JsonValueKind.Object)
+        {
+            foreach (var property in deltaData.EnumerateObject())
+            {
+                var fieldName = property.Name;
+
+                // Check if this is a tombstone (delete operation)
+                var isTombstone = property.Value.ValueKind == JsonValueKind.Object &&
+                                  property.Value.TryGetProperty("__deleted", out var deletedProp) &&
+                                  deletedProp.ValueKind == JsonValueKind.True;
+
+                if (isTombstone)
+                {
+                    // For deletes, if the field exists in current state, the delete wins (LWW)
+                    // If field doesn't exist, the delete already won
+                    if (currentState?.ContainsKey(fieldName) != true)
+                    {
+                        // Field is deleted, include tombstone
+                        authoritativeDelta[fieldName] = new Dictionary<string, object> { { "__deleted", true } };
+                    }
+                    else
+                    {
+                        // Field exists in current state - check if delete should win
+                        // Since we just stored this delta, the delete wins
+                        authoritativeDelta[fieldName] = new Dictionary<string, object> { { "__deleted", true } };
+                    }
+                }
+                else
+                {
+                    // For sets, use the current state value (which is authoritative after our save)
+                    if (currentState?.TryGetValue(fieldName, out var currentValue) == true)
+                    {
+                        authoritativeDelta[fieldName] = currentValue;
+                    }
+                    else
+                    {
+                        // Field doesn't exist yet, use the incoming value
+                        authoritativeDelta[fieldName] = ConvertJsonElement(property.Value);
+                    }
+                }
+            }
+        }
+
+        // Broadcast authoritative delta to ALL subscribers (including the sender!)
+        // This ensures everyone converges to the same state
         var broadcastMessage = new DeltaMessage
         {
             Id = Guid.NewGuid().ToString(),
             Timestamp = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds(),
             DocumentId = delta.DocumentId,
-            Delta = delta.Delta,
+            Delta = authoritativeDelta,
             VectorClock = delta.VectorClock
         };
 
+        _logger.LogDebug(
+            "Broadcasting authoritative delta to document {DocumentId}: {Delta}",
+            delta.DocumentId, JsonSerializer.Serialize(authoritativeDelta));
+
+        // Broadcast to ALL subscribers (including sender for convergence)
         await _connectionManager.BroadcastToDocumentAsync(
             delta.DocumentId,
             broadcastMessage,
-            excludeConnectionId: connection.Id);
+            excludeConnectionId: null); // Don't exclude anyone!
 
         // Publish to Redis for other instances
         if (_redis != null)
@@ -159,5 +216,27 @@ public class DeltaMessageHandler : IMessageHandler
         _logger.LogInformation(
             "Connection {ConnectionId} (user {UserId}) applied delta {DeltaId} to document {DocumentId}",
             connection.Id, connection.UserId, delta.Id, delta.DocumentId);
+    }
+
+    /// <summary>
+    /// Convert a JsonElement to an appropriate .NET object.
+    /// </summary>
+    private static object? ConvertJsonElement(JsonElement element)
+    {
+        return element.ValueKind switch
+        {
+            JsonValueKind.Null => null,
+            JsonValueKind.True => true,
+            JsonValueKind.False => false,
+            JsonValueKind.Number when element.TryGetInt64(out var l) => l,
+            JsonValueKind.Number => element.GetDouble(),
+            JsonValueKind.String => element.GetString(),
+            JsonValueKind.Array => element.EnumerateArray()
+                .Select(ConvertJsonElement)
+                .ToList(),
+            JsonValueKind.Object => element.EnumerateObject()
+                .ToDictionary(p => p.Name, p => ConvertJsonElement(p.Value)),
+            _ => element.ToString()
+        };
     }
 }

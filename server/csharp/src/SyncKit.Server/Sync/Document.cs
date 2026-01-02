@@ -174,6 +174,84 @@ public class Document
             }
         }
     }
+
+    /// <summary>
+    /// Build the current document state by applying all deltas.
+    /// Returns a dictionary representing field name to value mappings.
+    /// </summary>
+    /// <returns>Document state as a dictionary</returns>
+    public Dictionary<string, object?> BuildState()
+    {
+        lock (_lock)
+        {
+            var state = new Dictionary<string, object?>();
+
+            foreach (var delta in _deltas)
+            {
+                // Each delta's Data should be an object with field/value pairs
+                // e.g., { "counter": 42 } or { "name": "test" }
+                if (delta.Data.ValueKind == JsonValueKind.Object)
+                {
+                    foreach (var property in delta.Data.EnumerateObject())
+                    {
+                        // Check for tombstone marker (delete operation)
+                        // { fieldName: { __deleted: true } }
+                        if (IsTombstone(property.Value))
+                        {
+                            // Remove the field from state
+                            state.Remove(property.Name);
+                        }
+                        else
+                        {
+                            // Convert JsonElement to appropriate .NET type for JSON serialization
+                            state[property.Name] = ConvertJsonElement(property.Value);
+                        }
+                    }
+                }
+            }
+
+            return state;
+        }
+    }
+
+    /// <summary>
+    /// Check if a value is a tombstone marker (delete operation).
+    /// Tombstones are objects with { __deleted: true }
+    /// </summary>
+    private static bool IsTombstone(JsonElement element)
+    {
+        if (element.ValueKind != JsonValueKind.Object)
+            return false;
+
+        if (element.TryGetProperty("__deleted", out var deletedProp))
+        {
+            return deletedProp.ValueKind == JsonValueKind.True;
+        }
+
+        return false;
+    }
+
+    /// <summary>
+    /// Convert a JsonElement to an appropriate .NET object.
+    /// </summary>
+    private static object? ConvertJsonElement(JsonElement element)
+    {
+        return element.ValueKind switch
+        {
+            JsonValueKind.Null => null,
+            JsonValueKind.True => true,
+            JsonValueKind.False => false,
+            JsonValueKind.Number when element.TryGetInt64(out var l) => l,
+            JsonValueKind.Number => element.GetDouble(),
+            JsonValueKind.String => element.GetString(),
+            JsonValueKind.Array => element.EnumerateArray()
+                .Select(ConvertJsonElement)
+                .ToList(),
+            JsonValueKind.Object => element.EnumerateObject()
+                .ToDictionary(p => p.Name, p => ConvertJsonElement(p.Value)),
+            _ => element.ToString()
+        };
+    }
 }
 
 /// <summary>

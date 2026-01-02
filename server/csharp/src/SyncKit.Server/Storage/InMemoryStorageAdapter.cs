@@ -69,6 +69,20 @@ public class InMemoryStorageAdapter : IStorageAdapter
         return Task.FromResult<IReadOnlyList<DocumentState>>(items);
     }
 
+    public Task<Dictionary<string, object?>> GetDocumentStateAsync(string documentId, CancellationToken ct = default)
+    {
+        _documents.TryGetValue(documentId, out var doc);
+        if (doc == null)
+        {
+            _logger.LogDebug("GetDocumentStateAsync: Document {DocumentId} not found, returning empty state", documentId);
+            return Task.FromResult(new Dictionary<string, object?>());
+        }
+        var state = doc.BuildState();
+        _logger.LogDebug("GetDocumentStateAsync: Document {DocumentId} has {DeltaCount} deltas, built state with {FieldCount} fields: {State}",
+            documentId, doc.DeltaCount, state.Count, System.Text.Json.JsonSerializer.Serialize(state));
+        return Task.FromResult(state);
+    }
+
     // === Vector clock operations ===
     public Task<Dictionary<string, long>> GetVectorClockAsync(string documentId, CancellationToken ct = default)
     {

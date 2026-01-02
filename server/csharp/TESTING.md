@@ -36,6 +36,26 @@ JWT_SECRET="test-secret-key-for-development-32-chars" dotnet run
 node test-heartbeat.js
 ```
 
+### 3. Separate Terminal Testing (Recommended for Development)
+
+When developing and debugging the server, run test commands in a **separate terminal** from your server process. This ensures:
+
+- Your debug session continues uninterrupted
+- Server logs remain visible and uncluttered
+- You can quickly iterate on test commands
+
+**Quick Health Check:**
+```bash
+# In a separate terminal while server is running
+curl -s -w '\nHTTP Status: %{http_code}\n' http://localhost:8090/health
+```
+
+| Endpoint | Purpose |
+|----------|---------|
+| `GET /health` | Basic health check with HTTP status code |
+
+> **💡 VS Code Users:** The repository includes pre-configured tasks in `.vscode/tasks.json` (`Health Check`, `Health Check (Verbose)`) that run in a new terminal panel. Access via `Cmd+Shift+P` → "Tasks: Run Task".
+
 ## Why Not Use the TypeScript Integration Tests?
 
 The existing integration test suite in `tests/integration/` is designed to test the TypeScript server. We investigated using it for the .NET server but found challenges:
@@ -105,6 +125,7 @@ Each server type starts, then the same integration tests run against it.
 
 | File | Purpose |
 |------|---------|
+| `.vscode/tasks.json` | VS Code tasks for health checks (non-blocking) |
 | `src/SyncKit.Server.Tests/**/*.cs` | .NET unit tests |
 | `test-heartbeat.js` | Manual heartbeat verification |
 | `tests/integration/config.ts` | Test configuration (includes `useExternalServer` flag) |

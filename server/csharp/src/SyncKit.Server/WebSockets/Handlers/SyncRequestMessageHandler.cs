@@ -50,6 +50,11 @@ public class SyncRequestMessageHandler : IMessageHandler
             return;
         }
 
+        // Subscribe connection to document updates (matches TypeScript server behavior)
+        // This allows the client to receive delta broadcasts for this document
+        connection.AddSubscription(request.DocumentId);
+        _logger.LogDebug("Connection {ConnectionId} subscribed to document {DocumentId}",
+            connection.Id, request.DocumentId);
 
         // Determine whether the document exists. Prefer adapter-check; fall back to legacy store when present.
         var docState = await _storage.GetDocumentAsync(request.DocumentId);
@@ -97,6 +102,11 @@ public class SyncRequestMessageHandler : IMessageHandler
             VectorClock = d.VectorClock?.ToDict() ?? new Dictionary<string, long>()
         }).ToList();
 
+        // Get document state from storage (reconstructed from deltas)
+        var documentState = await _storage.GetDocumentStateAsync(request.DocumentId);
+        _logger.LogInformation("DBG: Sync response for {DocumentId}: state has {FieldCount} fields",
+            request.DocumentId, documentState.Count);
+
         // Send SYNC_RESPONSE with current document state and missed deltas
         var response = new SyncResponseMessage
         {
@@ -104,7 +114,7 @@ public class SyncRequestMessageHandler : IMessageHandler
             Timestamp = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds(),
             RequestId = request.Id,
             DocumentId = request.DocumentId,
-            State = await _storage.GetVectorClockAsync(request.DocumentId),
+            State = documentState,
             Deltas = deltaPayloads
         };
 

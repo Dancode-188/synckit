@@ -64,9 +64,10 @@ public static class StorageRegistration
                 AddRedisAwarenessStorage(services, awarenessSection, configuration);
                 break;
             case "inmemory":
-            default:
                 services.AddSingleton<IAwarenessStore, SyncKit.Server.Awareness.InMemoryAwarenessStore>();
                 break;
+            default:
+                throw new InvalidOperationException($"Unsupported awareness provider: {awarenessProvider}");
         }
 
         // PubSub section (optional)

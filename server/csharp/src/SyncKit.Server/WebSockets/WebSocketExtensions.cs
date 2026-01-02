@@ -54,6 +54,7 @@ public static class WebSocketExtensions
         services.AddSingleton<Handlers.IMessageHandler, Handlers.UnsubscribeMessageHandler>();
         services.AddSingleton<Handlers.IMessageHandler, Handlers.DeltaMessageHandler>();
         services.AddSingleton<Handlers.IMessageHandler, Handlers.SyncRequestMessageHandler>();
+        services.AddSingleton<Handlers.IMessageHandler, Handlers.AckMessageHandler>();
 
         // Awareness handlers
         services.AddSingleton<Handlers.IMessageHandler, Handlers.AwarenessSubscribeMessageHandler>();

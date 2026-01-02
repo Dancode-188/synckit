@@ -236,8 +236,8 @@ public class Connection : IConnection
                 .GetAwaiter()
                 .GetResult();
 
-            _logger.LogTrace("Sent message {MessageId} to connection {ConnectionId} ({ByteCount} bytes)",
-                message.Id, Id, data.Length);
+            _logger.LogDebug("Sent message {MessageType} {MessageId} to connection {ConnectionId} ({ByteCount} bytes)",
+                message.Type, message.Id, Id, data.Length);
 
             return true;
         }
