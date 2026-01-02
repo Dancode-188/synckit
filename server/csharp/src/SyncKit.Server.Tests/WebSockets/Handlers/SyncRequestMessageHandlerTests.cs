@@ -72,6 +72,24 @@ public class SyncRequestMessageHandlerTests
                 );
             });
 
+        // GetDocumentStateAsync returns the merged vector clock as the document state
+        _mockStorage.Setup(s => s.GetDocumentStateAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync((string id, CancellationToken ct) =>
+            {
+                if (!_storageDeltas.TryGetValue(id, out var list)) return new Dictionary<string, object?>();
+                var merged = new Dictionary<string, object?>();
+                foreach (var e in list)
+                {
+                    if (e.VectorClock == null) continue;
+                    foreach (var kv in e.VectorClock)
+                    {
+                        if (!merged.ContainsKey(kv.Key) || (long)(merged[kv.Key] ?? 0) < kv.Value)
+                            merged[kv.Key] = kv.Value;
+                    }
+                }
+                return merged;
+            });
+
         _handler = new SyncRequestMessageHandler(
             _authGuard,
             _mockStorage.Object,
@@ -197,7 +215,7 @@ public class SyncRequestMessageHandlerTests
         // State should reflect merged vector clock
         Assert.NotNull(response.State);
         var stateDict = TestHelpers.AsDictionary(response.State)!;
-        Assert.Equal(2L, ((JsonElement)stateDict["client-1"]).GetInt64());
+        Assert.Equal(2L, Convert.ToInt64(stateDict["client-1"]));
     }
 
     [Fact]
@@ -272,7 +290,7 @@ public class SyncRequestMessageHandlerTests
         // State should be current server state
         Assert.NotNull(response.State);
         var stateDict = TestHelpers.AsDictionary(response.State)!;
-        Assert.Equal(3L, ((JsonElement)stateDict["client-1"]).GetInt64());
+        Assert.Equal(3L, Convert.ToInt64(stateDict["client-1"]));
     }
 
     [Fact]
@@ -395,7 +413,7 @@ public class SyncRequestMessageHandlerTests
 
         // Assert - Should query document store (admin has access)
         _mockStorage.Verify(s => s.GetDeltasAsync(documentId, It.IsAny<int>(), It.IsAny<CancellationToken>()), Times.Once);
-        _mockStorage.Verify(s => s.GetVectorClockAsync(documentId), Times.Once);
+        _mockStorage.Verify(s => s.GetDocumentStateAsync(documentId, It.IsAny<CancellationToken>()), Times.Once);
         _mockConnection.Verify(c => c.Send(It.IsAny<SyncResponseMessage>()), Times.Once);
     }
 
@@ -633,7 +651,7 @@ public class SyncRequestMessageHandlerTests
         // State should still be returned
         Assert.NotNull(response.State);
         var stateDict = TestHelpers.AsDictionary(response.State)!;
-        Assert.Equal(5L, ((JsonElement)stateDict["client-1"]).GetInt64());
+        Assert.Equal(5L, Convert.ToInt64(stateDict["client-1"]));
     }
 
     [Fact]

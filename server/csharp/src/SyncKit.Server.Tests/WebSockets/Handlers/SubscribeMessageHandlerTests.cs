@@ -87,10 +87,12 @@ public class SubscribeMessageHandlerTests
             .ReturnsAsync(new[] { delta1, delta2 });
         _mockStorage.Setup(s => s.GetVectorClockAsync(documentId, It.IsAny<CancellationToken>()))
             .ReturnsAsync(new Dictionary<string, long> { ["client-1"] = 2 });
+        _mockStorage.Setup(s => s.GetDocumentStateAsync(documentId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new Dictionary<string, object?> { { "client-1", 2L } });
 
-        // Ensure adapter returns null document state so extension creates a Document instance
+        // Return an existing document state so GetOrCreateDocumentAsync doesn't try to create one
         _mockStorage.Setup(s => s.GetDocumentAsync(documentId, It.IsAny<CancellationToken>()))
-            .ReturnsAsync((SyncKit.Server.Storage.DocumentState?)null);
+            .ReturnsAsync(new SyncKit.Server.Storage.DocumentState(documentId, JsonDocument.Parse("{}").RootElement, 1, DateTime.UtcNow, DateTime.UtcNow));
 
         var message = new SubscribeMessage
         {
@@ -131,10 +133,15 @@ public class SubscribeMessageHandlerTests
 
         SetupAuthenticatedConnectionWithReadAccess(connectionId, documentId);
 
+        // First call returns null (doesn't exist), triggering creation
         _mockStorage.Setup(s => s.GetDocumentAsync(documentId, It.IsAny<CancellationToken>()))
             .ReturnsAsync((SyncKit.Server.Storage.DocumentState?)null);
         _mockStorage.Setup(s => s.SaveDocumentAsync(documentId, It.IsAny<JsonElement>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(new SyncKit.Server.Storage.DocumentState(documentId, JsonDocument.Parse("{}").RootElement, 1, DateTime.UtcNow, DateTime.UtcNow));
+        _mockStorage.Setup(s => s.GetDeltasAsync(documentId, It.IsAny<int>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(Array.Empty<SyncKit.Server.Storage.DeltaEntry>().ToList().AsReadOnly());
+        _mockStorage.Setup(s => s.GetDocumentStateAsync(documentId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new Dictionary<string, object?>());
 
         var message = new SubscribeMessage
         {
@@ -143,16 +150,16 @@ public class SubscribeMessageHandlerTests
             DocumentId = documentId
         };
 
+        _mockConnection.Setup(c => c.Send(It.IsAny<SyncResponseMessage>())).Returns(true);
+
         // Use the new storage-based handler for this test
         var handler = new SubscribeMessageHandler(_authGuard, _mockStorage.Object, _mockLogger.Object);
 
         // Act
         await handler.HandleAsync(_mockConnection.Object, message);
 
-        // Assert - GetOrCreate called
-        // Assert - storage was queried for deltas/vector clock
-        _mockStorage.Verify(s => s.GetDeltasAsync(documentId, It.IsAny<int>(), It.IsAny<CancellationToken>()), Times.Once);
-        _mockStorage.Verify(s => s.GetVectorClockAsync(documentId, It.IsAny<CancellationToken>()), Times.Once);
+        // Assert - SaveDocumentAsync called to create the document
+        _mockStorage.Verify(s => s.SaveDocumentAsync(documentId, It.IsAny<JsonElement>(), It.IsAny<CancellationToken>()), Times.Once);
 
         // Assert - Subscription added
         _mockConnection.Verify(c => c.AddSubscription(documentId), Times.Once);
@@ -385,6 +392,10 @@ public class SubscribeMessageHandlerTests
         }
         _mockStorage.Setup(s => s.GetVectorClockAsync(documentId, It.IsAny<CancellationToken>()))
             .ReturnsAsync(mergedClock);
+        _mockStorage.Setup(s => s.GetDocumentAsync(documentId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new SyncKit.Server.Storage.DocumentState(documentId, JsonDocument.Parse("{}").RootElement, 1, DateTime.UtcNow, DateTime.UtcNow));
+        _mockStorage.Setup(s => s.GetDocumentStateAsync(documentId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new Dictionary<string, object?> { { "client-1", 5L }, { "client-2", 3L } });
 
         var message = new SubscribeMessage
         {
@@ -401,12 +412,12 @@ public class SubscribeMessageHandlerTests
         // Act
         await _handler.HandleAsync(_mockConnection.Object, message);
 
-        // Assert - Vector clock sent in state
+        // Assert - State sent contains expected field values
         Assert.NotNull(sentResponse);
         Assert.NotNull(sentResponse!.State);
         var stateDict = TestHelpers.AsDictionary(sentResponse.State)!;
-        Assert.Equal(5L, ((JsonElement)stateDict["client-1"]).GetInt64());
-        Assert.Equal(3L, ((JsonElement)stateDict["client-2"]).GetInt64());
+        Assert.Equal(5L, stateDict["client-1"]);
+        Assert.Equal(3L, stateDict["client-2"]);
     }
 
     [Fact]
@@ -436,6 +447,10 @@ public class SubscribeMessageHandlerTests
             .ReturnsAsync(entries);
         _mockStorage.Setup(s => s.GetVectorClockAsync(documentId, It.IsAny<CancellationToken>()))
             .ReturnsAsync(new Dictionary<string, long>());
+        _mockStorage.Setup(s => s.GetDocumentAsync(documentId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new SyncKit.Server.Storage.DocumentState(documentId, JsonDocument.Parse("{}").RootElement, 1, DateTime.UtcNow, DateTime.UtcNow));
+        _mockStorage.Setup(s => s.GetDocumentStateAsync(documentId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new Dictionary<string, object?>());
 
         var message = new SubscribeMessage
         {
