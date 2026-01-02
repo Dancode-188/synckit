@@ -123,6 +123,9 @@ class MockWebSocket {
       ack: 0x21,
       ping: 0x30,
       pong: 0x31,
+      awareness_update: 0x40,
+      awareness_subscribe: 0x41,
+      awareness_state: 0x42,
       error: 0xff,
     }
     return map[type] || 0xff
@@ -141,6 +144,9 @@ class MockWebSocket {
       0x21: 'ack',
       0x30: 'ping',
       0x31: 'pong',
+      0x40: 'awareness_update',
+      0x41: 'awareness_subscribe',
+      0x42: 'awareness_state',
       0xff: 'error',
     }
     return (map[code] as MessageType) || 'error'

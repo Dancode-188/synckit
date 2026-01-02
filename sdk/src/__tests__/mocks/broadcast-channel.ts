@@ -38,7 +38,7 @@ export class MockBroadcastChannel implements BroadcastChannel {
             data: message,
             type: 'message',
             target: channel,
-          } as MessageEvent;
+          } as unknown as MessageEvent;
 
           // Deliver synchronously
           channel.onmessage(event);

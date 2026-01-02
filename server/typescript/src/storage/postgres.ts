@@ -6,6 +6,8 @@ import type {
   VectorClockEntry,
   DeltaEntry,
   SessionEntry,
+} from './interface';
+import {
   ConnectionError,
   QueryError,
   NotFoundError,
@@ -23,7 +25,7 @@ export class PostgresAdapter implements StorageAdapter {
   private pool: pg.Pool;
   private connected: boolean = false;
 
-  constructor(private config: StorageConfig) {
+  constructor(config: StorageConfig) {
     this.pool = new Pool({
       connectionString: config.connectionString,
       min: config.poolMin || 2,

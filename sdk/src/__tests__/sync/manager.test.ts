@@ -142,7 +142,6 @@ describe('SyncManager', () => {
       websocket: websocket as any,
       storage,
       offlineQueue: queue as any,
-      clientId: 'test-client',
     })
   })
 
