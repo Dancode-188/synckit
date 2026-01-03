@@ -1012,62 +1012,60 @@ Each phase is complete when:
 
 ---
 
-## 🚀 Future Roadmap
+## 🚀 Roadmap
 
-
-### v0.3.0 - Multi-Language Servers
-**Focus:** Server implementations in different languages
-
-**Features:**
-- 🐍 **Python Server** - `synckit-server` on PyPI (FastAPI/Django)
-- 🐹 **Go Server** - `github.com/synckit/server` (high-performance binary)
-- 🦀 **Rust Server** - `synckit-server` on crates.io (embedded systems)
-- 🔄 **Server Interoperability** - Protocol compliance test suite
-- 📊 **Server Benchmarks** - Cross-language performance comparison
-
-### v0.4.0 - Advanced Storage
-**Focus:** Platform-specific storage optimizations
+### v0.3.0 - Production-Ready Multi-Language 🚧 IN PROGRESS
+**Status:** Development started January 2026
 
 **Features:**
-- 💾 **OPFS Adapter** - Origin Private File System for browsers
-- 🗄️ **SQLite Adapter** - For Node.js, Bun, Electron apps
-- 📱 **AsyncStorage Adapter** - React Native support
+- 🐍 **Python Server** - FastAPI-based server implementation
+- 🐹 **Go Server** - High-performance WebSocket server
+- 💾 **OPFS Storage** - Faster browser storage (Origin Private File System)
+- 📱 **React Native SDK** - Mobile support with AsyncStorage adapter
+- 📊 **Benchmark Suite** - Performance testing framework
+- 🔄 **Production Testing** - Extended reliability validation
+
+### v0.4.0 - SQL Sync
+**Features:**
+- 🗄️ **SQL Sync Engine** - Multi-table relational sync
+- 🔗 **Query Subscriptions** - Subscribe to SQL queries
+- 🔐 **Row-Level Security** - Fine-grained access control
+
+### v0.5.0 - Advanced Storage
+**Features:**
+- 🗄️ **SQLite Adapter** - For Node.js, Bun, Electron
 - 🔐 **Encrypted Storage** - Optional encryption at rest
-- 📦 **Storage Compression** - Compress documents in storage
+- 📱 **Native Mobile SDKs** - Swift (iOS) and Kotlin (Android)
 
-### v0.5.0 - Developer Experience
-**Focus:** Tooling and developer productivity
-
+### v0.6.0 - Developer Experience
 **Features:**
-- 🛠️ **DevTools Extension** - Browser extension for debugging sync state
-- 🧪 **Testing Utilities** - `@synckit/testing` package with mocks and helpers
-- 📝 **TypeScript Strict** - Full strict mode compliance
-- 🎓 **Interactive Tutorials** - In-browser learning platform
-- 📊 **Performance Profiler** - Built-in performance monitoring
+- 🛠️ **DevTools Extension** - Debugging tools
+- 🧪 **Testing Utilities** - Test helpers and mocks
+- 📊 **Performance Profiler** - Monitoring tools
 
-### v0.6.0 - Enterprise Features
-**Focus:** Production hardening and enterprise needs
-
+### v0.7.0 - Enterprise Features
 **Features:**
-- 🔒 **End-to-End Encryption** - Zero-knowledge E2E encryption
-- 👥 **Advanced RBAC** - Fine-grained permissions and roles
-- 🎨 **Conflict Resolution UI** - Visual merge conflict resolution
-- 📈 **Observability** - Metrics, tracing, logging infrastructure
-- 🔄 **Schema Migrations** - Client-side data migration support
+- 🔒 **End-to-End Encryption** - Zero-knowledge encryption
+- 👥 **Advanced RBAC** - Fine-grained permissions
+- 📈 **Observability** - Metrics and tracing
 
 ### v1.0.0 - Production Release
-**Focus:** Stability, guarantees, managed service
-
 **Features:**
-- ✅ **API Stability** - No more breaking changes (SemVer compliance)
-- 🎯 **Performance Guarantees** - SLA-backed performance targets
-- 🏢 **Managed Service** - Optional cloud hosting (SyncKit Cloud)
-- 📚 **Complete Documentation** - Video courses, books, advanced guides
-- 🌍 **Community Growth** - Official community Discord/Slack (when user base justifies it)
+- ✅ **API Stability** - SemVer compliance
+- 🏢 **Managed Service** - Optional cloud hosting
+- 📚 **Complete Documentation** - Comprehensive guides
 
 ---
 
-**SyncKit Development Roadmap**
+## 📈 Version History
 
-*v0.1.0 completed in 16 days (Nov 11-26, 2025) - 2.3x faster than planned*
-*v0.2.0 completed in 12 days (Dec 6-18, 2025) - Production-ready collaborative editing*
+| Version | Released | Status | Key Features |
+|---------|----------|--------|--------------|
+| v0.1.0 | Nov 2025 | ✅ Complete | Foundation, LWW Sync, TypeScript SDK |
+| v0.2.0 | Dec 2025 | ✅ Complete | Collaborative Editing, Rich Text |
+| v0.3.0 | Jan 2026 | 🚧 In Progress | Multi-Language, OPFS, Mobile |
+| v0.4.0+ | 2026 | 📋 Planned | SQL Sync, Advanced Features |
+
+---
+
+*Last Updated: January 2026*
