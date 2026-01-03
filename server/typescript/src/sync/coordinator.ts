@@ -51,6 +51,10 @@ export class SyncCoordinator {
   private pubsub?: RedisPubSub;
   private serverId: string;
 
+  // LRU cache tracking to prevent unbounded memory growth
+  private documentAccessOrder: string[] = [];
+  private readonly MAX_CACHED_DOCUMENTS = 1000; // Keep last 1000 documents in memory
+
   constructor(options?: {
     storage?: StorageAdapter;
     pubsub?: RedisPubSub;
@@ -96,6 +100,9 @@ export class SyncCoordinator {
    */
   async getDocument(documentId: string): Promise<DocumentState> {
     let state = this.documents.get(documentId);
+
+    // Track access for LRU
+    this.trackDocumentAccess(documentId);
 
     if (!state) {
       // Try to load from storage first
@@ -205,10 +212,53 @@ export class SyncCoordinator {
   }
 
   /**
+   * Track document access for LRU eviction
+   */
+  private trackDocumentAccess(documentId: string) {
+    // Remove from current position if exists
+    const index = this.documentAccessOrder.indexOf(documentId);
+    if (index > -1) {
+      this.documentAccessOrder.splice(index, 1);
+    }
+
+    // Add to end (most recently used)
+    this.documentAccessOrder.push(documentId);
+
+    // Evict LRU documents if cache is too large
+    this.evictLRUDocuments();
+  }
+
+  /**
+   * Evict least recently used documents to keep cache size bounded
+   */
+  private evictLRUDocuments() {
+    while (this.documents.size > this.MAX_CACHED_DOCUMENTS) {
+      const lruDocId = this.documentAccessOrder.shift();
+      if (!lruDocId) break;
+
+      const state = this.documents.get(lruDocId);
+      if (state && state.subscribers.size === 0) {
+        // Safe to evict - no active subscribers
+        state.wasmDoc.free();
+        state.vectorClock.free();
+        this.documents.delete(lruDocId);
+        // console.log(`Evicted LRU document: ${lruDocId}`);
+      } else {
+        // Document has subscribers, keep it and re-add to end
+        this.documentAccessOrder.push(lruDocId);
+        break; // Stop evicting if we hit an active document
+      }
+    }
+  }
+
+  /**
    * Get or create document state (sync version for backward compatibility)
    */
   getDocumentSync(documentId: string): DocumentState {
     let state = this.documents.get(documentId);
+
+    // Track access for LRU
+    this.trackDocumentAccess(documentId);
 
     if (!state) {
       // For tests, use plain JS objects instead of WASM
@@ -666,6 +716,11 @@ export class SyncCoordinator {
     const awarenessState = this.awarenessStates.get(documentId);
     if (awarenessState) {
       awarenessState.subscribers.delete(connectionId);
+
+      // FIX: Remove awareness state if no subscribers and no clients (prevents memory leak)
+      if (awarenessState.subscribers.size === 0 && awarenessState.clients.size === 0) {
+        this.awarenessStates.delete(documentId);
+      }
     }
   }
 

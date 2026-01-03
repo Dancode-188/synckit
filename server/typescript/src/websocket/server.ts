@@ -791,6 +791,20 @@ export class SyncWebSocketServer {
       this.pendingAcks.delete(key);
     }
 
+    // FIX: Clear pending batch timers to prevent memory leak
+    // When connection disconnects, any pending batch timers for documents
+    // this connection was subscribed to should be cleared
+    for (const documentId of subscriptions) {
+      const batch = this.pendingBatches.get(documentId);
+      if (batch) {
+        clearTimeout(batch.timer);
+        this.pendingBatches.delete(documentId);
+      }
+    }
+
+    // FIX: Clean up connection resources (event handlers, subscriptions)
+    connection.cleanup();
+
     // Connection will be automatically removed from registry via the close event
   }
 
