@@ -215,6 +215,15 @@ export class Connection {
     return Array.from(this.subscribedDocuments);
   }
 
+  /**
+   * Cleanup connection resources (fix memory leak)
+   */
+  cleanup() {
+    this.stopHeartbeat();
+    this.handlers.clear();
+    this.subscribedDocuments.clear();
+  }
+
   // Simple event emitter for connection events
   private handlers: Map<string, Function[]> = new Map();
 
