@@ -2,9 +2,9 @@ name: CI
 
 on:
   push:
-    branches: [ main, develop, v0.2.0-dev ]
+    branches: [ main, develop, v0.2.0-dev, v0.3.0-dev ]
   pull_request:
-    branches: [ main, develop, v0.2.0-dev ]
+    branches: [ main, develop, v0.2.0-dev, v0.3.0-dev ]
 
 env:
   CARGO_TERM_COLOR: always
@@ -117,7 +117,7 @@ jobs:
   security-audit:
     name: Security Audit
     runs-on: ubuntu-latest
-    
+
     steps:
       - name: Checkout code
         uses: actions/checkout@v6
@@ -130,6 +130,58 @@ jobs:
 
       - name: Run security audit
         run: cd core && cargo audit
+
+  sdk-tests:
+    name: SDK Tests
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+        node: [18, 20]
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v6
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node }}
+          cache: 'npm'
+          cache-dependency-path: sdk/package-lock.json
+
+      - name: Install SDK dependencies
+        run: cd sdk && npm ci
+
+      - name: TypeScript type check
+        run: cd sdk && npm run lint
+
+      - name: Build SDK
+        run: cd sdk && npm run build
+
+      - name: Run SDK tests
+        run: cd sdk && npm test
+
+  demo-tests:
+    name: Demo App Tests
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v6
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'npm'
+          cache-dependency-path: demo/package-lock.json
+
+      - name: Install demo dependencies
+        run: cd demo && npm ci
+
+      - name: Build demo
+        run: cd demo && npm run build
 
   # TODO: Re-enable TLA+ verification after fixing deadlock issues
   # The TLA+ specifications reach valid terminal states but TLC treats them as deadlock errors.
