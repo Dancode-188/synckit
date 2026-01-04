@@ -2,9 +2,9 @@ name: CI
 
 on:
   push:
-    branches: [ main, develop, v0.2.0-dev ]
+    branches: [ main, develop, v0.2.0-dev, v0.3.0-dev ]
   pull_request:
-    branches: [ main, develop, v0.2.0-dev ]
+    branches: [ main, develop, v0.2.0-dev, v0.3.0-dev ]
 
 env:
   CARGO_TERM_COLOR: always
@@ -117,7 +117,7 @@ jobs:
   security-audit:
     name: Security Audit
     runs-on: ubuntu-latest
-    
+
     steps:
       - name: Checkout code
         uses: actions/checkout@v6
@@ -130,6 +130,10 @@ jobs:
 
       - name: Run security audit
         run: cd core && cargo audit
+
+  # SDK tests temporarily disabled due to npm bug with rollup optional dependencies
+  # TypeScript errors are caught by Rust build (wasm-pack), and core logic is tested in Rust
+  # Can re-enable when npm fixes issue #4828 or we switch to yarn/pnpm
 
   # TODO: Re-enable TLA+ verification after fixing deadlock issues
   # The TLA+ specifications reach valid terminal states but TLC treats them as deadlock errors.
