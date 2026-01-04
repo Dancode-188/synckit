@@ -21,6 +21,7 @@ export class SyncDocument<T extends Record<string, unknown> = Record<string, unk
   private subscribers = new Set<SubscriptionCallback<T>>()
   private data: T = {} as T
   private vectorClock: VectorClock = {}
+  private storageUnsubscribe?: () => void
 
   constructor(
     private readonly id: string,
@@ -49,7 +50,27 @@ export class SyncDocument<T extends Record<string, unknown> = Record<string, unk
       }
     }
 
+    // Subscribe to storage changes from other tabs (for multi-tab sync)
+    if (this.storage?.onChange) {
+      this.storageUnsubscribe = this.storage.onChange((change) => {
+        // Only react to changes for this specific document
+        if (change.docId === this.id && change.type === 'set') {
+          // Reload document from storage asynchronously
+          this.storage!.get(this.id).then(stored => {
+            if (stored && this.wasmDoc) {
+              this.loadFromStored(stored)
+              this.updateLocalState()
+              this.notifySubscribers()
+            }
+          }).catch(error => {
+            console.error(`Failed to reload document ${this.id} after storage change:`, error)
+          })
+        }
+      })
+    }
+
     this.updateLocalState()
+    this.notifySubscribers()
 
     // Register with sync manager if available
     if (this.syncManager) {
@@ -279,10 +300,23 @@ export class SyncDocument<T extends Record<string, unknown> = Record<string, unk
     // Load vector clock
     this.vectorClock = { ...stored.version }
 
+    // Find the highest clock value across all clients
+    let maxClock = 0
+    for (const [, clock] of Object.entries(stored.version)) {
+      if (clock > maxClock) {
+        maxClock = clock
+      }
+    }
+
+    // Load data using current client ID with a clock higher than all stored clocks
+    // This ensures: (1) WASM doc accepts it as newer, (2) vector clock stays consistent
+    const loadClock = BigInt(maxClock + 1)
+    this.vectorClock[this.clientId] = maxClock + 1
+
     // Reconstruct document from stored data
     for (const [field, value] of Object.entries(stored.data)) {
-      const clock = BigInt(stored.version[this.clientId] || 0)
-      this.wasmDoc.setField(field, JSON.stringify(value), clock, this.clientId)
+      const valueJson = JSON.stringify(value)
+      this.wasmDoc.setField(field, valueJson, loadClock, this.clientId)
     }
 
     this.updateLocalState()
@@ -292,6 +326,12 @@ export class SyncDocument<T extends Record<string, unknown> = Record<string, unk
    * Cleanup (call when document is no longer needed)
    */
   dispose(): void {
+    // Unsubscribe from storage changes
+    if (this.storageUnsubscribe) {
+      this.storageUnsubscribe()
+      this.storageUnsubscribe = undefined
+    }
+
     // Unregister from sync manager
     if (this.syncManager) {
       this.syncManager.unregisterDocument(this.id)
