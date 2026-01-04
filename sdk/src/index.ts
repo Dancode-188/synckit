@@ -42,7 +42,7 @@ export { UndoManager } from './undo/undo-manager'
 export type { Operation, UndoManagerState } from './undo/undo-manager'
 
 // Storage adapters
-export { MemoryStorage, IndexedDBStorage, createStorage } from './storage'
+export { MemoryStorage, IndexedDBStorage, OPFSStorage, createStorage } from './storage'
 export type { StorageAdapter, StoredDocument } from './storage'
 
 // Types
