@@ -149,7 +149,7 @@ jobs:
           node-version: ${{ matrix.node }}
 
       - name: Install SDK dependencies
-        run: cd sdk && npm ci
+        run: cd sdk && npm install
 
       - name: TypeScript type check
         run: cd sdk && npm run lint
@@ -174,7 +174,7 @@ jobs:
           node-version: 20
 
       - name: Install demo dependencies
-        run: cd demo && npm ci
+        run: cd demo && npm install
 
       - name: Build demo
         run: cd demo && npm run build
