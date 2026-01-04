@@ -1,0 +1,404 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>SyncKit 48-Day Stress Test</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
+      background: #0d1117;
+      color: #c9d1d9;
+      padding: 20px;
+      line-height: 1.6;
+    }
+
+    .container {
+      max-width: 1200px;
+      margin: 0 auto;
+    }
+
+    header {
+      text-align: center;
+      margin-bottom: 30px;
+      padding: 20px;
+      background: #161b22;
+      border-radius: 8px;
+      border: 1px solid #30363d;
+    }
+
+    h1 {
+      color: #58a6ff;
+      font-size: 28px;
+      margin-bottom: 10px;
+    }
+
+    .subtitle {
+      color: #8b949e;
+      font-size: 14px;
+    }
+
+    .status {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+      gap: 15px;
+      margin-bottom: 20px;
+    }
+
+    .stat-card {
+      background: #161b22;
+      padding: 20px;
+      border-radius: 8px;
+      border: 1px solid #30363d;
+    }
+
+    .stat-label {
+      color: #8b949e;
+      font-size: 12px;
+      text-transform: uppercase;
+      margin-bottom: 8px;
+    }
+
+    .stat-value {
+      font-size: 24px;
+      font-weight: bold;
+      color: #58a6ff;
+    }
+
+    .stat-value.success {
+      color: #3fb950;
+    }
+
+    .stat-value.error {
+      color: #f85149;
+    }
+
+    .stat-value.warning {
+      color: #d29922;
+    }
+
+    .console {
+      background: #0d1117;
+      border: 1px solid #30363d;
+      border-radius: 8px;
+      padding: 20px;
+      height: 500px;
+      overflow-y: auto;
+      font-size: 13px;
+    }
+
+    .console-line {
+      margin-bottom: 4px;
+      white-space: pre-wrap;
+      word-wrap: break-word;
+    }
+
+    .progress-bar {
+      width: 100%;
+      height: 8px;
+      background: #21262d;
+      border-radius: 4px;
+      overflow: hidden;
+      margin: 20px 0;
+    }
+
+    .progress-fill {
+      height: 100%;
+      background: linear-gradient(90deg, #58a6ff, #3fb950);
+      width: 0%;
+      transition: width 0.3s ease;
+    }
+
+    .controls {
+      display: flex;
+      gap: 10px;
+      margin-bottom: 20px;
+    }
+
+    button {
+      padding: 10px 20px;
+      font-size: 14px;
+      font-weight: 600;
+      border: none;
+      border-radius: 6px;
+      cursor: pointer;
+      transition: all 0.2s;
+      font-family: inherit;
+    }
+
+    .btn-primary {
+      background: #238636;
+      color: white;
+    }
+
+    .btn-primary:hover {
+      background: #2ea043;
+    }
+
+    .btn-danger {
+      background: #da3633;
+      color: white;
+    }
+
+    .btn-danger:hover {
+      background: #f85149;
+    }
+
+    .btn-secondary {
+      background: #21262d;
+      color: #c9d1d9;
+    }
+
+    .btn-secondary:hover {
+      background: #30363d;
+    }
+
+    button:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+
+    .chart-container {
+      background: #161b22;
+      padding: 20px;
+      border-radius: 8px;
+      border: 1px solid #30363d;
+      margin-bottom: 20px;
+    }
+
+    .chart-title {
+      color: #8b949e;
+      font-size: 14px;
+      margin-bottom: 10px;
+    }
+
+    @keyframes pulse {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.5; }
+    }
+
+    .running-indicator {
+      display: inline-block;
+      width: 8px;
+      height: 8px;
+      background: #3fb950;
+      border-radius: 50%;
+      margin-right: 8px;
+      animation: pulse 2s infinite;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <header>
+      <h1>🚀 SyncKit 48-Day Production Stress Test</h1>
+      <p class="subtitle">
+        Testing OPFS storage + WebSocket sync under sustained load<br>
+        Target: 48 days continuous operation (Jan 4 - Feb 21, 2026)
+      </p>
+    </header>
+
+    <div class="controls">
+      <button id="startBtn" class="btn-primary" disabled>Starting...</button>
+      <button id="stopBtn" class="btn-danger" disabled>Stop Test</button>
+      <button id="clearBtn" class="btn-secondary">Clear Console</button>
+      <button id="exportBtn" class="btn-secondary">Export Metrics</button>
+    </div>
+
+    <div class="progress-bar">
+      <div id="progressFill" class="progress-fill"></div>
+    </div>
+
+    <div class="status">
+      <div class="stat-card">
+        <div class="stat-label">Status</div>
+        <div id="statusValue" class="stat-value">Initializing...</div>
+      </div>
+
+      <div class="stat-card">
+        <div class="stat-label">Uptime</div>
+        <div id="uptimeValue" class="stat-value">0h 0m</div>
+      </div>
+
+      <div class="stat-card">
+        <div class="stat-label">Operations</div>
+        <div id="operationsValue" class="stat-value">0</div>
+      </div>
+
+      <div class="stat-card">
+        <div class="stat-label">Success Rate</div>
+        <div id="successRateValue" class="stat-value success">100%</div>
+      </div>
+
+      <div class="stat-card">
+        <div class="stat-label">Failed Operations</div>
+        <div id="failedValue" class="stat-value error">0</div>
+      </div>
+
+      <div class="stat-card">
+        <div class="stat-label">Reconnects</div>
+        <div id="reconnectsValue" class="stat-value warning">0</div>
+      </div>
+
+      <div class="stat-card">
+        <div class="stat-label">Memory Usage</div>
+        <div id="memoryValue" class="stat-value">0 MB</div>
+      </div>
+
+      <div class="stat-card">
+        <div class="stat-label">Progress</div>
+        <div id="progressValue" class="stat-value">0.0%</div>
+      </div>
+    </div>
+
+    <div class="chart-container">
+      <div class="chart-title">📝 Console Output</div>
+      <div id="console" class="console"></div>
+    </div>
+  </div>
+
+  <script type="module" src="/stress-test.ts"></script>
+  <script type="module">
+    // Intercept console.log and display in UI
+    const consoleDiv = document.getElementById('console');
+    const originalLog = console.log;
+    const originalWarn = console.warn;
+    const originalError = console.error;
+
+    function addToConsole(message, type = 'log') {
+      const line = document.createElement('div');
+      line.className = 'console-line';
+      line.textContent = message;
+
+      if (type === 'warn') line.style.color = '#d29922';
+      if (type === 'error') line.style.color = '#f85149';
+
+      consoleDiv.appendChild(line);
+      consoleDiv.scrollTop = consoleDiv.scrollHeight;
+
+      // Keep only last 500 lines
+      while (consoleDiv.children.length > 500) {
+        consoleDiv.removeChild(consoleDiv.firstChild);
+      }
+    }
+
+    console.log = (...args) => {
+      originalLog(...args);
+      addToConsole(args.join(' '), 'log');
+      updateDashboard();
+    };
+
+    console.warn = (...args) => {
+      originalWarn(...args);
+      addToConsole(args.join(' '), 'warn');
+      updateDashboard();
+    };
+
+    console.error = (...args) => {
+      originalError(...args);
+      addToConsole(args.join(' '), 'error');
+      updateDashboard();
+    };
+
+    // Update dashboard from metrics
+    function updateDashboard() {
+      try {
+        const metricsStr = localStorage.getItem('synckit-stress-test-metrics');
+        if (!metricsStr) return;
+
+        const metrics = JSON.parse(metricsStr);
+        const uptime = Date.now() - metrics.startTime;
+        const uptimeHours = uptime / (1000 * 60 * 60);
+        const successRate = metrics.totalOperations > 0
+          ? (metrics.successfulOperations / metrics.totalOperations * 100).toFixed(1)
+          : '100.0';
+
+        // Target: 48 days = 1152 hours
+        const targetHours = 48 * 24;
+        const progress = (uptimeHours / targetHours * 100).toFixed(2);
+
+        document.getElementById('statusValue').innerHTML = '<span class="running-indicator"></span>Running';
+        document.getElementById('uptimeValue').textContent = formatUptime(uptime);
+        document.getElementById('operationsValue').textContent = metrics.totalOperations.toLocaleString();
+        document.getElementById('successRateValue').textContent = successRate + '%';
+        document.getElementById('failedValue').textContent = metrics.failedOperations.toLocaleString();
+        document.getElementById('reconnectsValue').textContent = metrics.reconnects.toLocaleString();
+        document.getElementById('progressValue').textContent = progress + '%';
+        document.getElementById('progressFill').style.width = Math.min(parseFloat(progress), 100) + '%';
+
+        // Memory
+        if (metrics.memoryUsage && metrics.memoryUsage.length > 0) {
+          const latest = metrics.memoryUsage[metrics.memoryUsage.length - 1];
+          const memMB = (latest.heapUsed / 1024 / 1024).toFixed(1);
+          document.getElementById('memoryValue').textContent = memMB + ' MB';
+        }
+
+        // Update success rate color
+        const successEl = document.getElementById('successRateValue');
+        if (parseFloat(successRate) >= 99) {
+          successEl.className = 'stat-value success';
+        } else if (parseFloat(successRate) >= 95) {
+          successEl.className = 'stat-value warning';
+        } else {
+          successEl.className = 'stat-value error';
+        }
+      } catch (error) {
+        console.error('Failed to update dashboard:', error);
+      }
+    }
+
+    function formatUptime(ms) {
+      const days = Math.floor(ms / (24 * 60 * 60 * 1000));
+      const hours = Math.floor((ms % (24 * 60 * 60 * 1000)) / (60 * 60 * 1000));
+      const minutes = Math.floor((ms % (60 * 60 * 1000)) / (60 * 1000));
+
+      if (days > 0) {
+        return `${days}d ${hours}h ${minutes}m`;
+      } else if (hours > 0) {
+        return `${hours}h ${minutes}m`;
+      } else {
+        return `${minutes}m`;
+      }
+    }
+
+    // Update dashboard every second
+    setInterval(updateDashboard, 1000);
+
+    // Button handlers
+    document.getElementById('clearBtn').addEventListener('click', () => {
+      consoleDiv.innerHTML = '';
+      console.log('Console cleared');
+    });
+
+    document.getElementById('exportBtn').addEventListener('click', () => {
+      const metricsStr = localStorage.getItem('synckit-stress-test-metrics');
+      if (!metricsStr) {
+        alert('No metrics to export');
+        return;
+      }
+
+      const blob = new Blob([metricsStr], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `synckit-stress-test-${Date.now()}.json`;
+      a.click();
+      URL.revokeObjectURL(url);
+      console.log('Metrics exported');
+    });
+
+    // Disable buttons initially
+    setTimeout(() => {
+      document.getElementById('startBtn').disabled = true;
+      document.getElementById('startBtn').textContent = 'Running';
+      document.getElementById('stopBtn').disabled = false;
+    }, 2000);
+  </script>
+</body>
+</html>
