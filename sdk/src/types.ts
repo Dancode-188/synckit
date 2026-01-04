@@ -9,7 +9,7 @@
 
 export interface SyncKitConfig {
   /** Storage adapter to use */
-  storage?: 'indexeddb' | 'memory' | StorageAdapter
+  storage?: 'indexeddb' | 'memory' | 'opfs' | StorageAdapter
 
   /** Application name (used for storage namespacing) */
   name?: string
@@ -90,6 +90,13 @@ export interface StorageAdapter {
    * Clear all documents
    */
   clear(): Promise<void>
+
+  /**
+   * Subscribe to storage changes from other sources (e.g., other tabs)
+   * Optional - only implemented by storage adapters that support cross-tab sync
+   * @returns Unsubscribe function
+   */
+  onChange?: (listener: (change: { type: 'set' | 'delete' | 'clear', docId?: string }) => void) => () => void
 }
 
 export interface StoredDocument {

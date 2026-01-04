@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { SyncKit } from '@synckit-js/sdk'
-import { SyncProvider, useRichText } from '@synckit-js/sdk/react'
+import { SyncProvider, useSyncDocument, useAwareness, useOthers } from '@synckit-js/sdk/react'
+import './App.css'
 
 // Generate or retrieve room ID from URL hash
 const getRoomId = () => {
@@ -22,12 +23,69 @@ const getClientId = () => {
   return clientId
 }
 
-function Editor() {
+// Get random color for user avatar
+const getUserColor = () => {
+  const colors = ['#3b82f6', '#ef4444', '#10b981', '#f59e0b', '#8b5cf6', '#ec4899', '#14b8a6']
+  return colors[Math.floor(Math.random() * colors.length)]
+}
+
+// Get username from localStorage or generate new one
+const getUsername = () => {
+  let username = localStorage.getItem('synckit-username')
+  if (!username) {
+    const adjectives = ['Quick', 'Happy', 'Clever', 'Brave', 'Swift', 'Cool']
+    const animals = ['Fox', 'Eagle', 'Panda', 'Tiger', 'Hawk', 'Wolf']
+    username = `${adjectives[Math.floor(Math.random() * adjectives.length)]} ${animals[Math.floor(Math.random() * animals.length)]}`
+    localStorage.setItem('synckit-username', username)
+  }
+  return username
+}
+
+function TodoApp() {
   const [roomId] = useState(getRoomId())
-  const { text, insert, delete: del } = useRichText(roomId)
+  const [username] = useState(getUsername())
+  const [userColor] = useState(getUserColor())
+  const [newTodo, setNewTodo] = useState('')
   const [copied, setCopied] = useState(false)
+  const [stats, setStats] = useState({ used: 0, quota: 0 })
+
+  const [data, { set: setField }, doc] = useSyncDocument(roomId)
+  const [awareness, { setLocalState }] = useAwareness(roomId)
+  const others = useOthers(roomId)
 
   const shareUrl = window.location.href
+
+  // Set user awareness (name and color) - only when awareness is initialized
+  useEffect(() => {
+    if (!awareness) return // Wait for awareness to initialize
+
+    setLocalState({
+      user: { name: username, color: userColor }
+    }).catch(err => {
+      console.error('Failed to set awareness state:', err)
+    })
+  }, [awareness, setLocalState, username, userColor])
+
+  // Update OPFS stats periodically (if using OPFS storage)
+  useEffect(() => {
+    const updateStats = async () => {
+      if (navigator.storage && navigator.storage.estimate) {
+        try {
+          const estimate = await navigator.storage.estimate()
+          setStats({
+            used: estimate.usage || 0,
+            quota: estimate.quota || 0
+          })
+        } catch (e) {
+          // OPFS not available
+        }
+      }
+    }
+
+    updateStats()
+    const interval = setInterval(updateStats, 5000)
+    return () => clearInterval(interval)
+  }, [])
 
   const copyUrl = () => {
     navigator.clipboard.writeText(shareUrl)
@@ -35,207 +93,262 @@ function Editor() {
     setTimeout(() => setCopied(false), 2000)
   }
 
-  const handleTextChange = (e) => {
-    const newValue = e.target.value
-    const oldValue = text
+  const addTodo = (e) => {
+    e.preventDefault()
+    if (!newTodo.trim()) return
 
-    // Calculate diff and apply changes
-    if (newValue.length > oldValue.length) {
-      // Text was added - insert at the end
-      insert(oldValue.length, newValue.slice(oldValue.length))
-    } else if (newValue.length < oldValue.length) {
-      // Text was deleted - delete from the end
-      del(newValue.length, oldValue.length - newValue.length)
+    const todos = data.todos || []
+    const newTodoItem = {
+      id: Date.now() + '-' + Math.random().toString(36).substring(2, 9),
+      text: newTodo.trim(),
+      completed: false,
+      createdBy: username,
+      createdAt: Date.now()
     }
-    // If lengths are equal, text might have been replaced in the middle
-    // For simplicity, we'll just handle the basic cases above
+
+    setField('todos', [...todos, newTodoItem])
+    setNewTodo('')
+  }
+
+  const toggleTodo = (todoId) => {
+    const todos = data.todos || []
+    const updated = todos.map(todo =>
+      todo.id === todoId ? { ...todo, completed: !todo.completed } : todo
+    )
+    setField('todos', updated)
+  }
+
+  const deleteTodo = (todoId) => {
+    const todos = data.todos || []
+    setField('todos', todos.filter(todo => todo.id !== todoId))
+  }
+
+  const todos = data.todos || []
+  const completedCount = todos.filter(t => t.completed).length
+  const totalCount = todos.length
+  const onlineUsers = others.filter(s => s?.state?.user)
+
+  const formatBytes = (bytes) => {
+    if (bytes === 0) return '0 B'
+    const k = 1024
+    const sizes = ['B', 'KB', 'MB', 'GB']
+    const i = Math.floor(Math.log(bytes) / Math.log(k))
+    return Math.round(bytes / Math.pow(k, i) * 100) / 100 + ' ' + sizes[i]
   }
 
   return (
-    <div style={{
-      fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
-      maxWidth: '800px',
-      margin: '0 auto',
-      padding: '20px'
-    }}>
+    <div className="app-container">
       {/* Header */}
-      <div style={{ marginBottom: '30px' }}>
-        <h1 style={{ margin: '0 0 10px 0' }}>
-          🚀 SyncKit Live Demo
-        </h1>
-        <p style={{ color: '#666', margin: 0 }}>
-          Local-first collaboration that actually works
-        </p>
-      </div>
-
-      {/* Room Info */}
-      <div style={{
-        background: '#f8f9fa',
-        border: '1px solid #dee2e6',
-        borderRadius: '8px',
-        padding: '20px',
-        marginBottom: '20px'
-      }}>
-        <div style={{ marginBottom: '15px' }}>
-          <strong style={{ display: 'block', marginBottom: '5px' }}>
-            Your Room ID:
-          </strong>
-          <code style={{
-            background: '#fff',
-            padding: '8px 12px',
-            borderRadius: '4px',
-            display: 'inline-block',
-            fontFamily: 'monospace',
-            fontSize: '14px'
-          }}>
-            {roomId}
-          </code>
-        </div>
-
-        <div>
-          <strong style={{ display: 'block', marginBottom: '8px' }}>
-            ✨ Try It Now:
-          </strong>
-          <ol style={{ margin: '0 0 15px 20px', paddingLeft: '0' }}>
-            <li>Copy the URL below</li>
-            <li>Open it in a new tab (Cross-tab Local Sync)</li>
-            <li>Watch real-time sync magic happen! 🎩</li>
-          </ol>
-
-          <div style={{ display: 'flex', gap: '10px' }}>
-            <input
-              type="text"
-              value={shareUrl}
-              readOnly
-              style={{
-                flex: 1,
-                padding: '10px',
-                border: '1px solid #dee2e6',
-                borderRadius: '4px',
-                fontFamily: 'monospace',
-                fontSize: '12px'
-              }}
-              onClick={(e) => e.target.select()}
-            />
-            <button
-              onClick={copyUrl}
-              style={{
-                padding: '10px 20px',
-                background: copied ? '#28a745' : '#007bff',
-                color: 'white',
-                border: 'none',
-                borderRadius: '4px',
-                cursor: 'pointer',
-                fontWeight: '600',
-                transition: 'background 0.2s'
-              }}
-            >
-              {copied ? '✓ Copied!' : 'Copy URL'}
-            </button>
+      <header className="header">
+        <div className="header-content">
+          <div className="header-left">
+            <h1>🚀 SyncKit Showcase</h1>
+            <p>Collaborative Todo List - Local-first, Real-time, Zero Config</p>
+          </div>
+          <div className="header-right">
+            <div className="stat-badge">
+              <span className="stat-label">Room:</span>
+              <code>{roomId}</code>
+            </div>
+            <div className="stat-badge online-badge">
+              <div className="online-indicator"></div>
+              <span>{onlineUsers.length} online</span>
+            </div>
           </div>
         </div>
+      </header>
+
+      {/* Main Content */}
+      <div className="main-content">
+        {/* Left Sidebar - Stats */}
+        <aside className="sidebar">
+          <div className="panel">
+            <h3>📊 Storage Stats</h3>
+            <div className="stats-grid">
+              <div className="stat">
+                <div className="stat-value">{formatBytes(stats.used)}</div>
+                <div className="stat-label">Used</div>
+              </div>
+              <div className="stat">
+                <div className="stat-value">{formatBytes(stats.quota)}</div>
+                <div className="stat-label">Quota</div>
+              </div>
+              <div className="stat">
+                <div className="stat-value">{totalCount}</div>
+                <div className="stat-label">Total Todos</div>
+              </div>
+              <div className="stat">
+                <div className="stat-value">{completedCount}</div>
+                <div className="stat-label">Completed</div>
+              </div>
+            </div>
+          </div>
+
+          <div className="panel">
+            <h3>👥 Online Users</h3>
+            <div className="users-list">
+              {onlineUsers.length === 0 ? (
+                <p className="empty-state">No other users online</p>
+              ) : (
+                onlineUsers.map((awarenessState, idx) => (
+                  <div key={idx} className="user-item">
+                    <div
+                      className="user-avatar"
+                      style={{ background: awarenessState.state.user.color }}
+                    >
+                      {awarenessState.state.user.name.charAt(0)}
+                    </div>
+                    <span className="user-name">{awarenessState.state.user.name}</span>
+                  </div>
+                ))
+              )}
+            </div>
+          </div>
+
+          <div className="panel">
+            <h3>🔗 Share Room</h3>
+            <p className="panel-description">Copy this URL to invite collaborators</p>
+            <div className="share-input-group">
+              <input
+                type="text"
+                value={shareUrl}
+                readOnly
+                onClick={(e) => e.target.select()}
+                className="share-input"
+              />
+              <button onClick={copyUrl} className={`copy-btn ${copied ? 'copied' : ''}`}>
+                {copied ? '✓' : 'Copy'}
+              </button>
+            </div>
+          </div>
+        </aside>
+
+        {/* Main Todo List */}
+        <main className="main">
+          <div className="panel todo-panel">
+            <div className="panel-header">
+              <h2>✨ Collaborative Todos</h2>
+              <p>Add, complete, or delete todos - watch them sync in real-time!</p>
+            </div>
+
+            {/* Add Todo Form */}
+            <form onSubmit={addTodo} className="add-todo-form">
+              <input
+                type="text"
+                value={newTodo}
+                onChange={(e) => setNewTodo(e.target.value)}
+                placeholder="What needs to be done?"
+                className="todo-input"
+                autoFocus
+              />
+              <button type="submit" className="add-btn">
+                Add Todo
+              </button>
+            </form>
+
+            {/* Todo List */}
+            <div className="todos-container">
+              {todos.length === 0 ? (
+                <div className="empty-todos">
+                  <p>No todos yet. Add one above!</p>
+                  <p className="empty-hint">
+                    💡 Open this page in another tab to see real-time collaboration
+                  </p>
+                </div>
+              ) : (
+                <ul className="todos-list">
+                  {todos.map((todo) => (
+                    <li key={todo.id} className={`todo-item ${todo.completed ? 'completed' : ''}`}>
+                      <div className="todo-content">
+                        <input
+                          type="checkbox"
+                          checked={todo.completed}
+                          onChange={() => toggleTodo(todo.id)}
+                          className="todo-checkbox"
+                        />
+                        <div className="todo-text-container">
+                          <span className="todo-text">{todo.text}</span>
+                          <span className="todo-meta">
+                            by {todo.createdBy} · {new Date(todo.createdAt).toLocaleTimeString()}
+                          </span>
+                        </div>
+                      </div>
+                      <button
+                        onClick={() => deleteTodo(todo.id)}
+                        className="delete-btn"
+                        title="Delete todo"
+                      >
+                        ×
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+          </div>
+
+          {/* Features Section */}
+          <div className="features-grid">
+            <div className="feature-card">
+              <div className="feature-icon">⚡</div>
+              <h4>Real-time Sync</h4>
+              <p>Changes appear instantly across all connected devices</p>
+            </div>
+            <div className="feature-card">
+              <div className="feature-icon">🔒</div>
+              <h4>Local-first</h4>
+              <p>Works offline, syncs when reconnected. Your data stays on your device</p>
+            </div>
+            <div className="feature-card">
+              <div className="feature-icon">🚫</div>
+              <h4>Conflict-free</h4>
+              <p>Multiple users can edit simultaneously without overwrites</p>
+            </div>
+            <div className="feature-card">
+              <div className="feature-icon">💾</div>
+              <h4>OPFS Storage</h4>
+              <p>2-4x faster than IndexedDB, immune to Safari's 7-day eviction</p>
+            </div>
+          </div>
+        </main>
       </div>
 
-      {/* Editor */}
-      <div style={{ marginBottom: '20px' }}>
-        <label style={{
-          display: 'block',
-          marginBottom: '8px',
-          fontWeight: '600'
-        }}>
-          Collaborative Editor:
-        </label>
-        <textarea
-          value={text}
-          onChange={handleTextChange}
-          placeholder="Start typing here... Open this page in another tab to see real-time sync!"
-          style={{
-            width: '100%',
-            minHeight: '300px',
-            padding: '15px',
-            fontSize: '16px',
-            fontFamily: 'monospace',
-            border: '2px solid #007bff',
-            borderRadius: '8px',
-            resize: 'vertical',
-            lineHeight: '1.6'
-          }}
-        />
-      </div>
-
-      {/* Features */}
-      <div style={{
-        background: '#e7f5ff',
-        border: '1px solid #339af0',
-        borderRadius: '8px',
-        padding: '20px'
-      }}>
-        <h3 style={{ margin: '0 0 15px 0', fontSize: '16px' }}>
-          What Makes This Special:
-        </h3>
-        <ul style={{ margin: 0, paddingLeft: '20px' }}>
-          <li style={{ marginBottom: '8px' }}>
-            <strong>Real-time sync:</strong> Changes appear instantly across all connected tabs
-          </li>
-          <li style={{ marginBottom: '8px' }}>
-            <strong>Conflict-free:</strong> Multiple people can edit simultaneously without overwrites
-          </li>
-          <li style={{ marginBottom: '8px' }}>
-            <strong>Offline-first:</strong> Works without internet, syncs when reconnected
-          </li>
-          <li style={{ marginBottom: '8px' }}>
-            <strong>No server required:</strong> Works 100% offline with local-first architecture
-          </li>
-        </ul>
-      </div>
-
-      {/* CTA */}
-      <div style={{
-        marginTop: '30px',
-        padding: '20px',
-        background: '#fff3cd',
-        border: '1px solid #ffc107',
-        borderRadius: '8px',
-        textAlign: 'center'
-      }}>
-        <p style={{ margin: '0 0 15px 0', fontSize: '16px' }}>
-          Ready to build your own collaborative app?
+      {/* Footer */}
+      <footer className="footer">
+        <p>
+          Built with ❤️ using SyncKit -
+          <a href="https://github.com/Dancode-188/synckit" target="_blank" rel="noopener noreferrer">
+            {' '}⭐ Star on GitHub
+          </a>
         </p>
-        <a
-          href="https://github.com/Dancode-188/synckit"
-          target="_blank"
-          rel="noopener noreferrer"
-          style={{
-            display: 'inline-block',
-            padding: '12px 24px',
-            background: '#28a745',
-            color: 'white',
-            textDecoration: 'none',
-            borderRadius: '6px',
-            fontWeight: '600',
-            fontSize: '16px'
-          }}
-        >
-          ⭐ Star on GitHub
-        </a>
-      </div>
+      </footer>
     </div>
   )
 }
 
-// Wrap Editor with SyncProvider
+// Wrap TodoApp with SyncProvider
 export default function App() {
   const [synckitInstance, setSynckitInstance] = useState(null)
+  const [error, setError] = useState(null)
 
   useEffect(() => {
     // Create and initialize SyncKit instance
     const clientId = getClientId()
-    const synckit = new SyncKit({ clientId })
+
+    // Try to use OPFS if available, fallback to IndexedDB
+    const storageType = (navigator.storage && navigator.storage.getDirectory) ? 'opfs' : 'indexeddb'
+
+    const synckit = new SyncKit({
+      clientId,
+      storage: storageType
+    })
 
     synckit.init().then(() => {
+      console.log(`✅ SyncKit initialized with ${storageType} storage`)
       setSynckitInstance(synckit)
-    }).catch((error) => {
-      console.error('Failed to initialize SyncKit:', error)
+    }).catch((err) => {
+      console.error('Failed to initialize SyncKit:', err)
+      setError(err.message)
     })
 
     return () => {
@@ -243,17 +356,27 @@ export default function App() {
     }
   }, [])
 
+  // Show error state
+  if (error) {
+    return (
+      <div className="loading-container">
+        <div className="loading-content">
+          <h2>❌ Initialization Error</h2>
+          <p>{error}</p>
+          <button onClick={() => window.location.reload()}>
+            Reload Page
+          </button>
+        </div>
+      </div>
+    )
+  }
+
   // Show loading state while initializing
   if (!synckitInstance) {
     return (
-      <div style={{
-        display: 'flex',
-        justifyContent: 'center',
-        alignItems: 'center',
-        height: '100vh',
-        fontFamily: 'sans-serif'
-      }}>
-        <div style={{ textAlign: 'center' }}>
+      <div className="loading-container">
+        <div className="loading-content">
+          <div className="loading-spinner"></div>
           <h2>Loading SyncKit...</h2>
           <p>Initializing WASM and storage...</p>
         </div>
@@ -263,7 +386,7 @@ export default function App() {
 
   return (
     <SyncProvider synckit={synckitInstance}>
-      <Editor />
+      <TodoApp />
     </SyncProvider>
   )
 }

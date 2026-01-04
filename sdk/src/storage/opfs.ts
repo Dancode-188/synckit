@@ -20,12 +20,33 @@ interface StorageMetadata {
   lastModified: number
 }
 
+/**
+ * Message format for BroadcastChannel communication
+ */
+interface StorageMessage {
+  type: 'set' | 'delete' | 'clear'
+  docId?: string
+  timestamp: number
+  source: string
+}
+
+/**
+ * Storage change listener callback
+ */
+type StorageChangeListener = (message: StorageMessage) => void
+
 export class OPFSStorage implements StorageAdapter {
   private root: FileSystemDirectoryHandle | null = null
   private docsDir: FileSystemDirectoryHandle | null = null
   private metadata: StorageMetadata | null = null
+  private channel: BroadcastChannel | null = null
+  private channelId: string
+  private changeListeners: Set<StorageChangeListener> = new Set()
 
-  constructor(private readonly dirName: string = DIRECTORY_NAME) {}
+  constructor(private readonly dirName: string = DIRECTORY_NAME) {
+    // Generate unique ID for this instance to identify messages from this tab
+    this.channelId = `opfs-${Math.random().toString(36).substring(2, 9)}`
+  }
 
   async init(): Promise<void> {
     // Check for OPFS support
@@ -42,6 +63,14 @@ export class OPFSStorage implements StorageAdapter {
 
       // Load or initialize metadata
       await this.loadMetadata()
+
+      // Set up BroadcastChannel for multi-tab synchronization
+      if (typeof BroadcastChannel !== 'undefined') {
+        this.channel = new BroadcastChannel(`synckit-opfs-${this.dirName}`)
+        this.channel.onmessage = (event) => {
+          this.handleStorageMessage(event.data)
+        }
+      }
     } catch (error) {
       throw new StorageError(`Failed to initialize OPFS: ${error}`)
     }
@@ -91,6 +120,66 @@ export class OPFSStorage implements StorageAdapter {
   }
 
   /**
+   * Handle incoming storage messages from other tabs
+   */
+  private async handleStorageMessage(message: StorageMessage): Promise<void> {
+    // Ignore messages from this tab
+    if (message.source === this.channelId) {
+      return
+    }
+
+    // Reload metadata when changes occur in other tabs
+    try {
+      await this.loadMetadata()
+    } catch (error) {
+      console.error('Failed to reload metadata after storage change:', error)
+    }
+
+    // Notify change listeners
+    this.changeListeners.forEach(listener => {
+      try {
+        listener(message)
+      } catch (error) {
+        console.error('Error in storage change listener:', error)
+      }
+    })
+  }
+
+  /**
+   * Broadcast a storage change to other tabs
+   */
+  private broadcast(type: 'set' | 'delete' | 'clear', docId?: string): void {
+    if (!this.channel) {
+      return
+    }
+
+    const message: StorageMessage = {
+      type,
+      docId,
+      timestamp: Date.now(),
+      source: this.channelId,
+    }
+
+    try {
+      this.channel.postMessage(message)
+    } catch (error) {
+      console.error('Failed to broadcast storage change:', error)
+    }
+  }
+
+  /**
+   * Subscribe to storage changes from other tabs
+   */
+  onChange(listener: StorageChangeListener): () => void {
+    this.changeListeners.add(listener)
+
+    // Return unsubscribe function
+    return () => {
+      this.changeListeners.delete(listener)
+    }
+  }
+
+  /**
    * Get filename for a document ID
    */
   private getFileName(docId: string): string {
@@ -135,6 +224,9 @@ export class OPFSStorage implements StorageAdapter {
         this.metadata.documentIds.push(docId)
         await this.saveMetadata()
       }
+
+      // Broadcast change to other tabs
+      this.broadcast('set', docId)
     } catch (error) {
       throw new StorageError(`Failed to save document: ${error}`)
     }
@@ -152,6 +244,9 @@ export class OPFSStorage implements StorageAdapter {
       // Update metadata
       this.metadata.documentIds = this.metadata.documentIds.filter(id => id !== docId)
       await this.saveMetadata()
+
+      // Broadcast change to other tabs
+      this.broadcast('delete', docId)
     } catch (error) {
       // Ignore if file doesn't exist
       if ((error as DOMException).name !== 'NotFoundError') {
@@ -190,6 +285,9 @@ export class OPFSStorage implements StorageAdapter {
       // Reset metadata
       this.metadata.documentIds = []
       await this.saveMetadata()
+
+      // Broadcast change to other tabs
+      this.broadcast('clear')
     } catch (error) {
       throw new StorageError(`Failed to clear storage: ${error}`)
     }
@@ -212,5 +310,16 @@ export class OPFSStorage implements StorageAdapter {
     } catch (error) {
       throw new StorageError(`Failed to get storage stats: ${error}`)
     }
+  }
+
+  /**
+   * Close the BroadcastChannel and cleanup listeners
+   */
+  close(): void {
+    if (this.channel) {
+      this.channel.close()
+      this.channel = null
+    }
+    this.changeListeners.clear()
   }
 }
