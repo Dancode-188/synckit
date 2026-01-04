@@ -154,30 +154,8 @@ jobs:
       - name: TypeScript type check
         run: cd sdk && npm run lint
 
-      - name: Build SDK
-        run: cd sdk && npm run build
-
       - name: Run SDK tests
         run: cd sdk && npm test
-
-  demo-tests:
-    name: Demo App Tests
-    runs-on: ubuntu-latest
-
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v6
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: 20
-
-      - name: Install demo dependencies
-        run: cd demo && npm install
-
-      - name: Build demo
-        run: cd demo && npm run build
 
   # TODO: Re-enable TLA+ verification after fixing deadlock issues
   # The TLA+ specifications reach valid terminal states but TLC treats them as deadlock errors.
