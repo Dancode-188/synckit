@@ -6,6 +6,7 @@ import type {
   VectorClockEntry,
   DeltaEntry,
   SessionEntry,
+  SnapshotEntry,
 } from './interface';
 import {
   ConnectionError,
@@ -382,18 +383,124 @@ export class PostgresAdapter implements StorageAdapter {
   }
 
   // ==========================================================================
+  // SNAPSHOT OPERATIONS
+  // ==========================================================================
+
+  /**
+   * Save a snapshot
+   */
+  async saveSnapshot(snapshot: Omit<SnapshotEntry, 'id' | 'createdAt'>): Promise<SnapshotEntry> {
+    try {
+      const result = await this.pool.query<SnapshotEntry>(
+        `INSERT INTO snapshots (document_id, state, version, size_bytes, compressed)
+         VALUES ($1, $2, $3, $4, $5)
+         RETURNING id, document_id as "documentId", state, version, size_bytes as "sizeBytes",
+                   created_at as "createdAt", compressed`,
+        [
+          snapshot.documentId,
+          JSON.stringify(snapshot.state),
+          JSON.stringify(snapshot.version),
+          snapshot.sizeBytes,
+          snapshot.compressed || false
+        ]
+      );
+
+      return result.rows[0];
+    } catch (error) {
+      throw new QueryError(`Failed to save snapshot for ${snapshot.documentId}`, error as Error);
+    }
+  }
+
+  /**
+   * Get a specific snapshot by ID
+   */
+  async getSnapshot(snapshotId: string): Promise<SnapshotEntry | null> {
+    try {
+      const result = await this.pool.query<SnapshotEntry>(
+        `SELECT id, document_id as "documentId", state, version, size_bytes as "sizeBytes",
+                created_at as "createdAt", compressed
+         FROM snapshots
+         WHERE id = $1`,
+        [snapshotId]
+      );
+
+      return result.rows[0] || null;
+    } catch (error) {
+      throw new QueryError(`Failed to get snapshot ${snapshotId}`, error as Error);
+    }
+  }
+
+  /**
+   * Get the latest snapshot for a document
+   */
+  async getLatestSnapshot(documentId: string): Promise<SnapshotEntry | null> {
+    try {
+      const result = await this.pool.query<SnapshotEntry>(
+        `SELECT id, document_id as "documentId", state, version, size_bytes as "sizeBytes",
+                created_at as "createdAt", compressed
+         FROM snapshots
+         WHERE document_id = $1
+         ORDER BY created_at DESC
+         LIMIT 1`,
+        [documentId]
+      );
+
+      return result.rows[0] || null;
+    } catch (error) {
+      throw new QueryError(`Failed to get latest snapshot for ${documentId}`, error as Error);
+    }
+  }
+
+  /**
+   * List snapshots for a document
+   */
+  async listSnapshots(documentId: string, limit: number = 10): Promise<SnapshotEntry[]> {
+    try {
+      const result = await this.pool.query<SnapshotEntry>(
+        `SELECT id, document_id as "documentId", state, version, size_bytes as "sizeBytes",
+                created_at as "createdAt", compressed
+         FROM snapshots
+         WHERE document_id = $1
+         ORDER BY created_at DESC
+         LIMIT $2`,
+        [documentId, limit]
+      );
+
+      return result.rows;
+    } catch (error) {
+      throw new QueryError(`Failed to list snapshots for ${documentId}`, error as Error);
+    }
+  }
+
+  /**
+   * Delete a snapshot
+   */
+  async deleteSnapshot(snapshotId: string): Promise<boolean> {
+    try {
+      const result = await this.pool.query('DELETE FROM snapshots WHERE id = $1', [snapshotId]);
+      return (result.rowCount || 0) > 0;
+    } catch (error) {
+      throw new QueryError(`Failed to delete snapshot ${snapshotId}`, error as Error);
+    }
+  }
+
+  // ==========================================================================
   // MAINTENANCE
   // ==========================================================================
 
   /**
    * Cleanup old data
    */
-  async cleanup(options?: { 
-    oldSessionsHours?: number; 
-    oldDeltasDays?: number; 
-  }): Promise<{ sessionsDeleted: number; deltasDeleted: number }> {
+  async cleanup(options?: {
+    oldSessionsHours?: number;
+    oldDeltasDays?: number;
+    oldSnapshotsDays?: number;
+    maxSnapshotsPerDocument?: number;
+  }): Promise<{ sessionsDeleted: number; deltasDeleted: number; snapshotsDeleted: number }> {
     const sessionsHours = options?.oldSessionsHours || 24;
     const deltasDays = options?.oldDeltasDays || 30;
+    const snapshotsDays = options?.oldSnapshotsDays || 7;
+    const maxSnapshotsPerDoc = options?.maxSnapshotsPerDocument || 10;
 
     try {
       // Clean sessions
@@ -406,9 +513,22 @@ export class PostgresAdapter implements StorageAdapter {
         `DELETE FROM deltas WHERE timestamp < NOW() - INTERVAL '${deltasDays} days'`
       );
 
+      // Clean old snapshots (keep only maxSnapshotsPerDocument recent snapshots per document)
+      const snapshotsResult = await this.pool.query(`
+        DELETE FROM snapshots
+        WHERE id IN (
+          SELECT id FROM (
+            SELECT id, ROW_NUMBER() OVER (PARTITION BY document_id ORDER BY created_at DESC) as rn
+            FROM snapshots
+          ) ranked
+          WHERE rn > $1 OR created_at < NOW() - INTERVAL '${snapshotsDays} days'
+        )
+      `, [maxSnapshotsPerDoc]);
+
       return {
         sessionsDeleted: sessionsResult.rowCount || 0,
         deltasDeleted: deltasResult.rowCount || 0,
+        snapshotsDeleted: snapshotsResult.rowCount || 0,
       };
     } catch (error) {
       throw new QueryError('Failed to cleanup old data', error as Error);

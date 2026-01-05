@@ -1,14 +1,11 @@
 # SyncKit Server - Fly.io Configuration
 # Deploy with: fly deploy
 
-app = "synckit-server"
+app = "synckit-stress-test"
 primary_region = "sjc"  # San Jose, CA (change to your preferred region)
 
 # Build configuration
 [build]
-
-# Use Dockerfile for build
-[build.dockerfile]
   dockerfile = "Dockerfile"
 
 # Environment variables (set via fly secrets)
@@ -54,7 +51,9 @@ primary_region = "sjc"  # San Jose, CA (change to your preferred region)
     port = 443
     
     [services.ports.http_options]
-      idle_timeout = "60s"
+      # Increased from 60s to 300s (5min) to accommodate WebSocket long-polling
+      # Combined with 10s heartbeat, this prevents proxy timeouts
+      idle_timeout = 300
       h2_backend = true
 
 # Concurrency configuration
@@ -97,9 +96,8 @@ primary_region = "sjc"  # San Jose, CA (change to your preferred region)
   port = 9091
   path = "/metrics"
 
-# Process groups (optional - for multi-process apps)
-[processes]
-  app = "bun run start"
+# Process command removed - conflicts with services config
+# Command is defined in Dockerfile CMD instead
 
 # Deploy command examples:
 # 

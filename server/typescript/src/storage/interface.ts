@@ -40,6 +40,16 @@ export interface SessionEntry {
   metadata?: Record<string, any>;
 }
 
+export interface SnapshotEntry {
+  id: string;
+  documentId: string;
+  state: any; // JSONB document state
+  version: Record<string, bigint>; // Vector clock at time of snapshot
+  sizeBytes: number;
+  createdAt: Date;
+  compressed?: boolean;
+}
+
 /**
  * Storage adapter interface
  */
@@ -72,11 +82,20 @@ export interface StorageAdapter {
   deleteSession(sessionId: string): Promise<boolean>;
   getSessions(userId: string): Promise<SessionEntry[]>;
 
+  // Snapshot operations (optional - for state snapshots)
+  saveSnapshot(snapshot: Omit<SnapshotEntry, 'id' | 'createdAt'>): Promise<SnapshotEntry>;
+  getSnapshot(snapshotId: string): Promise<SnapshotEntry | null>;
+  getLatestSnapshot(documentId: string): Promise<SnapshotEntry | null>;
+  listSnapshots(documentId: string, limit?: number): Promise<SnapshotEntry[]>;
+  deleteSnapshot(snapshotId: string): Promise<boolean>;
+
   // Maintenance
-  cleanup(options?: { 
-    oldSessionsHours?: number; 
-    oldDeltasDays?: number; 
-  }): Promise<{ sessionsDeleted: number; deltasDeleted: number }>;
+  cleanup(options?: {
+    oldSessionsHours?: number;
+    oldDeltasDays?: number;
+    oldSnapshotsDays?: number;
+    maxSnapshotsPerDocument?: number;
+  }): Promise<{ sessionsDeleted: number; deltasDeleted: number; snapshotsDeleted: number }>;
 }
 
 /**

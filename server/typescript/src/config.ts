@@ -24,8 +24,9 @@ const configSchema = z.object({
   jwtRefreshExpiresIn: z.string().default('7d'),
   
   // WebSocket
-  wsHeartbeatInterval: z.number().int().positive().default(30000), // 30s
-  wsHeartbeatTimeout: z.number().int().positive().default(60000),  // 60s
+  // Reduced from 30s to 10s to keep Fly.io proxy connections alive (4-min timeout)
+  wsHeartbeatInterval: z.number().int().positive().default(10000), // 10s
+  wsHeartbeatTimeout: z.number().int().positive().default(30000),  // 30s
   wsMaxConnections: z.number().int().positive().default(10000),
   
   // Sync

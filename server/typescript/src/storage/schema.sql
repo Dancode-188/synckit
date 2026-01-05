@@ -75,6 +75,25 @@ CREATE INDEX IF NOT EXISTS idx_sessions_user_id ON sessions(user_id);
 CREATE INDEX IF NOT EXISTS idx_sessions_last_seen ON sessions(last_seen DESC);
 
 -- =============================================================================
+-- SNAPSHOTS TABLE (Optional - for document state snapshots)
+-- =============================================================================
+-- Stores point-in-time snapshots of document states
+CREATE TABLE IF NOT EXISTS snapshots (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  document_id VARCHAR(255) NOT NULL,
+  state JSONB NOT NULL,
+  version JSONB NOT NULL, -- Stores vector clock at time of snapshot
+  size_bytes INTEGER NOT NULL,
+  compressed BOOLEAN DEFAULT FALSE,
+  created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
+  FOREIGN KEY (document_id) REFERENCES documents(id) ON DELETE CASCADE
+);
+
+-- Indexes for snapshot queries
+CREATE INDEX IF NOT EXISTS idx_snapshots_document_id ON snapshots(document_id, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_snapshots_created_at ON snapshots(created_at DESC);
+
+-- =============================================================================
 -- FUNCTIONS
 -- =============================================================================
 
@@ -165,8 +184,10 @@ COMMENT ON TABLE documents IS 'Stores document states with JSONB for flexible sc
 COMMENT ON TABLE vector_clocks IS 'Tracks vector clock values for causality tracking';
 COMMENT ON TABLE deltas IS 'Audit trail of all document operations (optional)';
 COMMENT ON TABLE sessions IS 'Active WebSocket session tracking (optional)';
+COMMENT ON TABLE snapshots IS 'Point-in-time snapshots of document states (optional)';
 
 COMMENT ON COLUMN documents.state IS 'Document state stored as JSONB for flexibility';
 COMMENT ON COLUMN documents.version IS 'Monotonically increasing version number';
 COMMENT ON COLUMN vector_clocks.clock_value IS 'Lamport timestamp for this client';
 COMMENT ON COLUMN deltas.operation_type IS 'Type of operation: set, delete, or merge';
+COMMENT ON COLUMN snapshots.version IS 'Vector clock state at time of snapshot';
