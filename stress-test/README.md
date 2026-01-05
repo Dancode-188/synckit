@@ -69,26 +69,64 @@ This stress test validates:
 
 ## Quick Start
 
-### 1. Deploy Server to Fly.io
+There are two ways to run the stress test:
+- **Option A (Recommended):** Node.js client on Fly.io (24/7, no local machine needed)
+- **Option B:** Browser client locally (requires keeping browser tab open)
 
+### Option A: Deploy Node.js Client to Fly.io (Recommended)
+
+This runs 24/7 in the cloud - no need to keep your laptop on.
+
+**1. Deploy Server:**
 ```bash
 cd server/typescript
 
-# Login to Fly.io
 fly auth login
-
-# Create app for stress test
 fly launch --name synckit-stress-test --region sjc
-
-# Set secrets
 fly secrets set JWT_SECRET=$(openssl rand -base64 32)
+fly deploy
+```
+
+**2. Deploy Node.js Stress Test Client:**
+```bash
+cd stress-test/client-node
+
+# Create app
+fly apps create synckit-stress-test-client --region sjc
+
+# Create persistent volume for metrics
+fly volumes create stress_test_metrics --region sjc --size 1
+
+# Set server URL
+fly secrets set SERVER_URL=wss://synckit-stress-test.fly.dev
 
 # Deploy
 fly deploy
 ```
 
-### 2. Run Stress Test Client
+**3. Monitor:**
+```bash
+# View logs
+fly logs -a synckit-stress-test-client
 
+# Check health
+curl https://synckit-stress-test-client.fly.dev/health
+
+# Get metrics
+curl https://synckit-stress-test-client.fly.dev/metrics
+```
+
+That's it! The stress test will run 24/7 for 48 days.
+
+---
+
+### Option B: Run Browser Client Locally
+
+**Warning:** Requires keeping your browser tab open for the entire test duration.
+
+**1. Deploy Server** (same as above)
+
+**2. Run Browser Client:**
 ```bash
 cd stress-test/client
 
@@ -165,14 +203,24 @@ fly dashboard -a synckit-stress-test
 
 ```
 stress-test/
-├── client/
-│   ├── index.html          # Dashboard UI
-│   ├── stress-test.ts      # Client implementation
-│   ├── package.json        # Dependencies
-│   ├── vite.config.js      # Dev server config
-│   └── .env.example        # Server URL config
-├── fly.toml                # Fly.io deployment config (custom)
-└── README.md               # This file
+├── client/                      # Browser-based client (local testing)
+│   ├── index.html              # Dashboard UI
+│   ├── stress-test.ts          # Browser client implementation
+│   ├── package.json            # Dependencies (Vite, SDK)
+│   ├── vite.config.js          # Dev server config
+│   ├── tsconfig.json           # TypeScript configuration
+│   ├── vite-env.d.ts           # Vite type definitions
+│   └── .env.example            # Server URL configuration
+├── client-node/                 # Node.js client (Fly.io deployment) ⭐ Recommended
+│   ├── src/
+│   │   └── index.ts            # Node.js client with health checks
+│   ├── package.json            # Dependencies
+│   ├── tsconfig.json           # TypeScript configuration
+│   ├── Dockerfile              # Docker build configuration
+│   ├── fly.toml                # Fly.io deployment config
+│   └── .env.example            # Environment variables
+├── fly.toml                    # Server deployment config
+└── README.md                   # This file
 ```
 
 ---
