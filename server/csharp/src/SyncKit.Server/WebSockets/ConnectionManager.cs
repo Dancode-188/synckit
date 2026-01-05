@@ -20,6 +20,13 @@ public class ConnectionManager : IConnectionManager
     private int _connectionCounter;
 
     /// <summary>
+    /// Semaphore to throttle concurrent connection creation.
+    /// This helps prevent socket accept race conditions under burst traffic on macOS.
+    /// See: dotnet/runtime#47020
+    /// </summary>
+    private readonly SemaphoreSlim _connectionSemaphore = new(50, 50);
+
+    /// <summary>
     /// Creates a new ConnectionManager instance.
     /// </summary>
     /// <param name="loggerFactory">Logger factory for creating connection loggers.</param>
@@ -43,73 +50,84 @@ public class ConnectionManager : IConnectionManager
     /// <inheritdoc />
     public async Task<IConnection> CreateConnectionAsync(WebSocket webSocket, CancellationToken cancellationToken = default)
     {
-        // Check max connections limit
-        if (_connections.Count >= _config.WsMaxConnections)
+        // Throttle concurrent connection creation to prevent socket accept race conditions
+        // on macOS under burst traffic (dotnet/runtime#47020)
+        await _connectionSemaphore.WaitAsync(cancellationToken);
+
+        try
         {
-            _logger.LogWarning("Max connection limit reached ({MaxConnections}), rejecting new connection",
-                _config.WsMaxConnections);
-
-            await webSocket.CloseAsync(
-                WebSocketCloseStatus.PolicyViolation,
-                "Server connection limit reached",
-                cancellationToken);
-
-            throw new InvalidOperationException("Maximum connection limit reached");
-        }
-
-        // Generate unique connection ID
-        var connectionId = GenerateConnectionId();
-
-        // Create protocol handlers
-        var jsonHandlerLogger = _loggerFactory.CreateLogger<JsonProtocolHandler>();
-        var binaryHandlerLogger = _loggerFactory.CreateLogger<BinaryProtocolHandler>();
-        var jsonHandler = new JsonProtocolHandler(jsonHandlerLogger);
-        var binaryHandler = new BinaryProtocolHandler(binaryHandlerLogger);
-
-        // Create connection instance
-        var connectionLogger = _loggerFactory.CreateLogger<Connection>();
-        var connection = new Connection(
-            webSocket,
-            connectionId,
-            jsonHandler,
-            binaryHandler,
-            connectionLogger);
-
-        // Track the connection
-        if (!_connections.TryAdd(connectionId, connection))
-        {
-            // Extremely unlikely - regenerate ID
-            _logger.LogWarning("Connection ID collision, regenerating: {ConnectionId}", connectionId);
-            await connection.DisposeAsync();
-            return await CreateConnectionAsync(webSocket, cancellationToken);
-        }
-
-        // Start heartbeat monitoring
-        connection.StartHeartbeat(_config.WsHeartbeatInterval, _config.WsHeartbeatTimeout);
-
-        // Auto-authenticate if auth is disabled (development/testing mode)
-        if (!_config.AuthRequired)
-        {
-            connection.State = ConnectionState.Authenticated;
-            connection.UserId = "anonymous";
-            connection.ClientId = "anonymous";
-            connection.TokenPayload = new Auth.TokenPayload
+            // Check max connections limit
+            if (_connections.Count >= _config.WsMaxConnections)
             {
-                UserId = "anonymous",
-                Permissions = new Auth.DocumentPermissions
+                _logger.LogWarning("Max connection limit reached ({MaxConnections}), rejecting new connection",
+                    _config.WsMaxConnections);
+
+                await webSocket.CloseAsync(
+                    WebSocketCloseStatus.PolicyViolation,
+                    "Server connection limit reached",
+                    cancellationToken);
+
+                throw new InvalidOperationException("Maximum connection limit reached");
+            }
+
+            // Generate unique connection ID
+            var connectionId = GenerateConnectionId();
+
+            // Create protocol handlers
+            var jsonHandlerLogger = _loggerFactory.CreateLogger<JsonProtocolHandler>();
+            var binaryHandlerLogger = _loggerFactory.CreateLogger<BinaryProtocolHandler>();
+            var jsonHandler = new JsonProtocolHandler(jsonHandlerLogger);
+            var binaryHandler = new BinaryProtocolHandler(binaryHandlerLogger);
+
+            // Create connection instance
+            var connectionLogger = _loggerFactory.CreateLogger<Connection>();
+            var connection = new Connection(
+                webSocket,
+                connectionId,
+                jsonHandler,
+                binaryHandler,
+                connectionLogger);
+
+            // Track the connection
+            if (!_connections.TryAdd(connectionId, connection))
+            {
+                // Extremely unlikely - regenerate ID
+                _logger.LogWarning("Connection ID collision, regenerating: {ConnectionId}", connectionId);
+                await connection.DisposeAsync();
+                return await CreateConnectionAsync(webSocket, cancellationToken);
+            }
+
+            // Start heartbeat monitoring
+            connection.StartHeartbeat(_config.WsHeartbeatInterval, _config.WsHeartbeatTimeout);
+
+            // Auto-authenticate if auth is disabled (development/testing mode)
+            if (!_config.AuthRequired)
+            {
+                connection.State = ConnectionState.Authenticated;
+                connection.UserId = "anonymous";
+                connection.ClientId = "anonymous";
+                connection.TokenPayload = new Auth.TokenPayload
                 {
-                    CanRead = [],
-                    CanWrite = [],
-                    IsAdmin = true
-                }
-            };
-            _logger.LogInformation("Connection {ConnectionId} auto-authenticated (auth disabled)", connectionId);
+                    UserId = "anonymous",
+                    Permissions = new Auth.DocumentPermissions
+                    {
+                        CanRead = [],
+                        CanWrite = [],
+                        IsAdmin = true
+                    }
+                };
+                _logger.LogInformation("Connection {ConnectionId} auto-authenticated (auth disabled)", connectionId);
+            }
+
+            _logger.LogDebug("Connection created: {ConnectionId} (Total: {ConnectionCount})",
+                connectionId, _connections.Count);
+
+            return connection;
         }
-
-        _logger.LogDebug("Connection created: {ConnectionId} (Total: {ConnectionCount})",
-            connectionId, _connections.Count);
-
-        return connection;
+        finally
+        {
+            _connectionSemaphore.Release();
+        }
     }
 
     /// <inheritdoc />

@@ -12,6 +12,7 @@ namespace SyncKit.Server.WebSockets;
 /// - Creates a Connection for each WebSocket and tracks it via ConnectionManager
 /// - Handles connection lifecycle with proper error handling and logging
 /// - Gracefully handles client disconnects without error logs
+/// - Throttles concurrent socket accepts to prevent macOS socket race conditions
 /// </remarks>
 public class SyncWebSocketMiddleware
 {
@@ -19,6 +20,13 @@ public class SyncWebSocketMiddleware
     private readonly IConnectionManager _connectionManager;
     private readonly Handlers.IMessageDispatcher _messageDispatcher;
     private readonly ILogger<SyncWebSocketMiddleware> _logger;
+
+    /// <summary>
+    /// Semaphore to throttle concurrent WebSocket accept operations.
+    /// This helps prevent socket accept race conditions under burst traffic on macOS.
+    /// See: dotnet/runtime#47020 - SocketAddress validation errors during high burst accepts
+    /// </summary>
+    private static readonly SemaphoreSlim _acceptSemaphore = new(100, 100);
 
     /// <summary>
     /// Creates a new instance of the WebSocket middleware.
@@ -72,6 +80,10 @@ public class SyncWebSocketMiddleware
     {
         WebSocket webSocket;
 
+        // Throttle concurrent WebSocket accepts to prevent macOS socket race condition
+        // This introduces a small delay under burst load but prevents crashes
+        await _acceptSemaphore.WaitAsync(context.RequestAborted);
+
         try
         {
             webSocket = await context.WebSockets.AcceptWebSocketAsync();
@@ -81,6 +93,10 @@ public class SyncWebSocketMiddleware
             _logger.LogError(ex, "Failed to accept WebSocket connection");
             context.Response.StatusCode = StatusCodes.Status500InternalServerError;
             return;
+        }
+        finally
+        {
+            _acceptSemaphore.Release();
         }
 
         IConnection? connection = null;

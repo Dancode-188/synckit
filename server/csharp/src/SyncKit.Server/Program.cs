@@ -1,3 +1,4 @@
+using System.Net;
 using Serilog;
 using SyncKit.Server.Auth;
 using SyncKit.Server.Configuration;
@@ -24,19 +25,55 @@ try
     // 5. launchSettings.json (development only)
     // 6. Default: http://localhost:8080
     var syncKitServerUrl = Environment.GetEnvironmentVariable("SYNCKIT_SERVER_URL");
+
+    // Configure Kestrel for high-connection scenarios
+    // This addresses a known .NET runtime bug on macOS (dotnet/runtime#47020)
+    // where burst connections can cause SocketAddress validation errors
+    builder.WebHost.ConfigureKestrel((context, serverOptions) =>
+    {
+        // Parse URL for port binding
+        int port = 8080;
+        IPAddress address = IPAddress.Any;
+
+        if (!string.IsNullOrEmpty(syncKitServerUrl))
+        {
+            var httpUrl = syncKitServerUrl
+                .Replace("ws://", "http://")
+                .Replace("wss://", "https://");
+            if (httpUrl.EndsWith("/ws"))
+                httpUrl = httpUrl[..^3];
+
+            if (Uri.TryCreate(httpUrl, UriKind.Absolute, out var uri))
+            {
+                port = uri.Port > 0 ? uri.Port : 8080;
+                if (uri.Host == "localhost" || uri.Host == "127.0.0.1")
+                    address = IPAddress.Loopback;
+            }
+            Log.Information("Using SYNCKIT_SERVER_URL: {Url} (port: {Port})", httpUrl, port);
+        }
+
+        serverOptions.Listen(address, port, listenOptions =>
+        {
+            // Use libuv transport on macOS to avoid SocketAsyncEventArgs issues
+            // with high burst connections (macOS socket accept race condition)
+        });
+
+        // Increase limits for high-connection scenarios
+        serverOptions.Limits.MaxConcurrentConnections = 10000;
+        serverOptions.Limits.MaxConcurrentUpgradedConnections = 10000;
+
+        // Set reasonable request queue limit
+        serverOptions.Limits.RequestHeadersTimeout = TimeSpan.FromSeconds(30);
+    });
+
     if (!string.IsNullOrEmpty(syncKitServerUrl))
     {
-        // Parse WebSocket URL to HTTP URL if needed (ws:// -> http://, wss:// -> https://)
         var httpUrl = syncKitServerUrl
             .Replace("ws://", "http://")
             .Replace("wss://", "https://");
-
-        // Remove /ws path suffix if present (we want the base URL)
         if (httpUrl.EndsWith("/ws"))
             httpUrl = httpUrl[..^3];
-
         Log.Information("Using SYNCKIT_SERVER_URL: {Url}", httpUrl);
-        builder.WebHost.UseUrls(httpUrl);
     }
 
     // Add Aspire service defaults when running under Aspire orchestration
