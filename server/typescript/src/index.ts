@@ -5,6 +5,7 @@ import { cors } from 'hono/cors';
 import { config } from './config';
 import { SyncWebSocketServer } from './websocket/server';
 import { auth } from './routes/auth';
+import { createSnapshotRoutes } from './routes/snapshots';
 import { PostgresAdapter } from './storage/postgres';
 import { RedisPubSub } from './storage/redis';
 
@@ -28,6 +29,8 @@ app.use('*', cors({
 
 // Mount routes
 app.route('/auth', auth);
+
+// Note: Snapshot routes will be mounted after wsServer initialization
 
 // Health check endpoint
 app.get('/health', (c) => {
@@ -138,6 +141,9 @@ const wsServer = new SyncWebSocketServer(
     pubsub: redisConnected ? pubsub : undefined,
   }
 );
+
+// Mount snapshot routes (requires wsServer for in-memory access)
+app.route('/snapshots', createSnapshotRoutes(storage, wsServer));
 
 // console.log(`🚀 SyncKit Server running on ${config.host}:${config.port}`);
 // console.log(`📊 Health check: http://${config.host}:${config.port}/health`);

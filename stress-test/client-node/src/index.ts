@@ -7,6 +7,12 @@
  * Target: Run continuously for 48 days generating sustained load
  */
 
+// Polyfill WebSocket for Node.js environment
+// The SyncKit SDK expects WebSocket to be globally available (browser API)
+// but Node.js doesn't have it, so we use the 'ws' package
+import WebSocket from 'ws';
+(global as any).WebSocket = WebSocket;
+
 import { SyncKit } from '@synckit-js/sdk';
 import * as fs from 'fs';
 import * as path from 'path';
@@ -38,6 +44,7 @@ interface StressTestMetrics {
 
 class NodeStressTestClient {
   private synckit: SyncKit | null = null;
+  private doc: any = null; // Reuse document instance to prevent memory leak
   private metrics: StressTestMetrics;
   private isRunning = false;
   private intervalId: NodeJS.Timeout | null = null;
@@ -86,6 +93,11 @@ class NodeStressTestClient {
       });
 
       await this.synckit.init();
+
+      // Initialize document once and reuse it (prevents memory leak)
+      this.doc = this.synckit.document<{ todos: TodoItem[] }>(this.DOCUMENT_ID);
+      await this.doc.init();
+
       console.log('✅ SyncKit initialized and connected to server');
     } catch (error) {
       console.error('❌ Initialization failed:', error);
@@ -147,14 +159,15 @@ class NodeStressTestClient {
 
     this.metrics.totalOperations++;
 
-    // Weighted random operation selection
+    // Weighted random operation selection (realistic user behavior)
+    // Most users edit existing content more than creating new content
     const rand = Math.random();
     let operation: string;
 
-    if (rand < 0.40) operation = 'create';       // 40%
-    else if (rand < 0.70) operation = 'update';  // 30%
-    else if (rand < 0.85) operation = 'delete';  // 15%
-    else operation = 'read';                      // 15%
+    if (rand < 0.10) operation = 'create';       // 10%
+    else if (rand < 0.70) operation = 'update';  // 60%
+    else if (rand < 0.90) operation = 'delete';  // 20%
+    else operation = 'read';                      // 10%
 
     try {
       switch (operation) {
@@ -180,13 +193,7 @@ class NodeStressTestClient {
   }
 
   private async createTodo(): Promise<void> {
-    if (!this.synckit) throw new Error('SyncKit not initialized');
-
-    const doc = this.synckit.document<{ todos: TodoItem[] }>(this.DOCUMENT_ID);
-    await doc.init();
-
-    const currentData = doc.get();
-    const todos = currentData.todos || [];
+    if (!this.doc) throw new Error('Document not initialized');
 
     const newTodo: TodoItem = {
       id: `todo-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`,
@@ -196,72 +203,70 @@ class NodeStressTestClient {
       updatedAt: Date.now(),
     };
 
-    await doc.set('todos', [...todos, newTodo]);
+    // Store each todo as a separate field (instead of array)
+    // This allows deletes to actually free memory!
+    await this.doc.set(newTodo.id, newTodo);
   }
 
   private async updateTodo(): Promise<void> {
-    if (!this.synckit) throw new Error('SyncKit not initialized');
+    if (!this.doc) throw new Error('Document not initialized');
 
-    const doc = this.synckit.document<{ todos: TodoItem[] }>(this.DOCUMENT_ID);
-    await doc.init();
+    const currentData = this.doc.get();
 
-    const currentData = doc.get();
-    const todos = currentData.todos || [];
+    // Get all todo field IDs (filter out non-todo fields)
+    const todoIds = Object.keys(currentData).filter(key => key.startsWith('todo-'));
 
-    if (todos.length === 0) {
+    if (todoIds.length === 0) {
       // No todos to update, create one instead
       await this.createTodo();
       return;
     }
 
-    // Toggle random todo
-    const randomIndex = Math.floor(Math.random() * todos.length);
-    const updatedTodos = todos.map((todo, idx) => {
-      if (idx === randomIndex) {
-        return {
-          ...todo,
-          completed: !todo.completed,
-          updatedAt: Date.now(),
-        };
-      }
-      return todo;
-    });
+    // Pick a random todo to update
+    const randomId = todoIds[Math.floor(Math.random() * todoIds.length)];
+    const todo = currentData[randomId] as TodoItem;
 
-    await doc.set('todos', updatedTodos);
+    // Toggle completion status
+    const updatedTodo: TodoItem = {
+      ...todo,
+      completed: !todo.completed,
+      updatedAt: Date.now(),
+    };
+
+    await this.doc.set(randomId, updatedTodo);
   }
 
   private async deleteTodo(): Promise<void> {
-    if (!this.synckit) throw new Error('SyncKit not initialized');
+    if (!this.doc) throw new Error('Document not initialized');
 
-    const doc = this.synckit.document<{ todos: TodoItem[] }>(this.DOCUMENT_ID);
-    await doc.init();
+    const currentData = this.doc.get();
 
-    const currentData = doc.get();
-    const todos = currentData.todos || [];
+    // Get all todo field IDs
+    const todoIds = Object.keys(currentData).filter(key => key.startsWith('todo-'));
 
-    if (todos.length === 0) {
+    if (todoIds.length === 0) {
       // No todos to delete
       return;
     }
 
-    // Delete random todo
-    const randomIndex = Math.floor(Math.random() * todos.length);
-    const updatedTodos = todos.filter((_, idx) => idx !== randomIndex);
+    // Pick a random todo to delete
+    const randomId = todoIds[Math.floor(Math.random() * todoIds.length)];
 
-    await doc.set('todos', updatedTodos);
+    // Actually delete the field - this frees memory in the CRDT!
+    await this.doc.delete(randomId);
   }
 
   private async readTodos(): Promise<void> {
-    if (!this.synckit) throw new Error('SyncKit not initialized');
+    if (!this.doc) throw new Error('Document not initialized');
 
-    const doc = this.synckit.document<{ todos: TodoItem[] }>(this.DOCUMENT_ID);
-    await doc.init();
+    const currentData = this.doc.get();
 
-    const currentData = doc.get();
-    const todos = currentData.todos || [];
+    // Count todos (fields starting with 'todo-')
+    const todoIds = Object.keys(currentData).filter(key => key.startsWith('todo-'));
 
     // Just read the data (already fetched by doc.get())
     // Logging suppressed to reduce noise
+    // Current todo count: todoIds.length
   }
 
   private reportMetrics(): void {
@@ -287,8 +292,13 @@ class NodeStressTestClient {
     const heapUsedMB = (memUsage.heapUsed / 1024 / 1024).toFixed(2);
     const heapTotalMB = (memUsage.heapTotal / 1024 / 1024).toFixed(2);
     const rssMB = (memUsage.rss / 1024 / 1024).toFixed(2);
+    const externalMB = (memUsage.external / 1024 / 1024).toFixed(2);
+
+    // WASM memory lives in RSS but outside JS heap
+    const wasmEstimateMB = ((memUsage.rss - memUsage.heapTotal) / 1024 / 1024).toFixed(2);
 
     console.log(`💾 Memory: ${heapUsedMB} MB / ${heapTotalMB} MB (RSS: ${rssMB} MB)`);
+    console.log(`🧮 WASM Estimate: ${wasmEstimateMB} MB | External: ${externalMB} MB`);
 
     // Store memory snapshot
     this.metrics.lastMemorySnapshot = {

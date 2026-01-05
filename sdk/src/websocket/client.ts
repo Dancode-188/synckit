@@ -455,11 +455,27 @@ export class WebSocketClient {
 
     this.reconnectTimer = setTimeout(async () => {
       try {
+        // Clear any stale connection state before reconnecting
+        // This ensures fresh auth token fetch and clean WebSocket state
+        if (this.ws) {
+          this.ws.onopen = null
+          this.ws.onmessage = null
+          this.ws.onclose = null
+          this.ws.onerror = null
+        }
+
         await this.establishConnection()
         this.reconnectAttempts = 0
         // console.log('Reconnected successfully')
       } catch (error) {
-        console.error('Reconnection failed:', error)
+        // Log reconnection failures with error details for debugging
+        if (error instanceof WebSocketError &&
+            error.code === WebSocketErrorCode.AUTH_FAILED) {
+          console.error('Reconnection failed due to authentication:', error.message)
+        } else {
+          console.error('Reconnection failed:', error)
+        }
+
         await this.reconnect()
       }
     }, totalDelay)

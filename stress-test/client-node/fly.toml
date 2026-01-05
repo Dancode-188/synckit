@@ -4,6 +4,9 @@
 app = "synckit-stress-test-client"
 primary_region = "sjc"  # San Jose, CA
 
+# OOM protection: Add swap to prevent kernel from killing the process
+swap_size_mb = 512
+
 # Build configuration
 [build]
   dockerfile = "Dockerfile"
@@ -13,35 +16,14 @@ primary_region = "sjc"  # San Jose, CA
   NODE_ENV = "production"
   METRICS_DIR = "/app/metrics"
 
-# HTTP service (for health checks)
-[[services]]
-  internal_port = 8080
-  protocol = "tcp"
+# No HTTP service needed for stress test - just runs as a background process
+# Uses CMD from Dockerfile
 
-  # Keep client running continuously
-  auto_stop_machines = false
-  auto_start_machines = true
-  min_machines_running = 1
-
-  # Health check endpoint (optional - we'll add a simple HTTP server)
-  [[services.http_checks]]
-    interval = "60s"
-    timeout = "10s"
-    grace_period = "30s"
-    method = "GET"
-    path = "/health"
-    protocol = "http"
-
-  # HTTP handlers
-  [[services.ports]]
-    handlers = ["http"]
-    port = 80
-
-# Resource allocation - minimal for cost efficiency
+# Resource allocation - increased due to memory growth observed
 [vm]
   cpu_kind = "shared"
   cpus = 1
-  memory_mb = 256  # Tiny machine, just for stress testing
+  memory_mb = 1024  # Increased from 256 to handle CRDT state growth
 
 # Persistent storage for metrics
 [mounts]

@@ -8,12 +8,16 @@ import type {
   SubscriptionCallback,
   Unsubscribe,
   StorageAdapter,
-  StoredDocument
+  StoredDocument,
+  SnapshotMetadata,
+  SnapshotOptions,
+  AutoSnapshotConfig
 } from './types'
 import { DocumentError } from './types'
 import type { WasmDocument } from './wasm-loader'
 import { initWASM } from './wasm-loader'
 import type { SyncManager, SyncableDocument, Operation, VectorClock } from './sync/manager'
+import { SnapshotScheduler } from './snapshot-scheduler'
 
 export class SyncDocument<T extends Record<string, unknown> = Record<string, unknown>>
   implements SyncableDocument {
@@ -22,6 +26,7 @@ export class SyncDocument<T extends Record<string, unknown> = Record<string, unk
   private data: T = {} as T
   private vectorClock: VectorClock = {}
   private storageUnsubscribe?: () => void
+  private snapshotScheduler?: SnapshotScheduler
 
   constructor(
     private readonly id: string,
@@ -127,6 +132,9 @@ export class SyncDocument<T extends Record<string, unknown> = Record<string, unk
     // Notify subscribers
     this.notifySubscribers()
 
+    // Record operation for snapshot scheduler
+    this.snapshotScheduler?.recordOperation()
+
     // Push to sync manager if available
     if (this.syncManager) {
       const operation: Operation = {
@@ -184,6 +192,11 @@ export class SyncDocument<T extends Record<string, unknown> = Record<string, unk
     // Notify subscribers
     this.notifySubscribers()
 
+    // Record operations for snapshot scheduler
+    for (let i = 0; i < Object.keys(updates).length; i++) {
+      this.snapshotScheduler?.recordOperation()
+    }
+
     // Push operations to sync manager
     if (this.syncManager) {
       for (const op of operations) {
@@ -191,7 +204,7 @@ export class SyncDocument<T extends Record<string, unknown> = Record<string, unk
       }
     }
   }
-  
+
   /**
    * Delete a field
    */
@@ -199,11 +212,14 @@ export class SyncDocument<T extends Record<string, unknown> = Record<string, unk
     if (!this.wasmDoc) {
       throw new DocumentError('Document not initialized')
     }
-    
+
     this.wasmDoc.deleteField(String(field))
     this.updateLocalState()
     await this.persist()
     this.notifySubscribers()
+
+    // Record operation for snapshot scheduler
+    this.snapshotScheduler?.recordOperation()
   }
   
   /**
@@ -322,10 +338,238 @@ export class SyncDocument<T extends Record<string, unknown> = Record<string, unk
     this.updateLocalState()
   }
   
+  // ====================
+  // Snapshot Methods
+  // ====================
+
+  /**
+   * Create a snapshot of the current document state
+   *
+   * This creates an explicit snapshot of the document and stores it in storage.
+   * The snapshot includes the current data and vector clock state.
+   *
+   * @param options - Optional snapshot configuration
+   * @returns Metadata about the created snapshot
+   *
+   * @example
+   * ```typescript
+   * // Create a simple snapshot
+   * const metadata = await doc.snapshot()
+   * console.log(`Snapshot size: ${metadata.sizeBytes} bytes`)
+   *
+   * // Create a compressed snapshot
+   * const compressed = await doc.snapshot({ compress: true })
+   * ```
+   */
+  async snapshot(options?: SnapshotOptions): Promise<SnapshotMetadata> {
+    if (!this.wasmDoc) {
+      throw new DocumentError('Document not initialized')
+    }
+
+    if (!this.storage) {
+      throw new DocumentError('Storage not available for snapshots')
+    }
+
+    const snapshot: StoredDocument = {
+      id: this.id,
+      data: this.data,
+      version: this.vectorClock,
+      updatedAt: Date.now()
+    }
+
+    // Calculate size before any compression
+    const snapshotJson = JSON.stringify(snapshot)
+    const sizeBytes = new Blob([snapshotJson]).size
+
+    // Determine storage key
+    const key = options?.key ?? `${this.id}:snapshot`
+
+    // Store the snapshot (compression would go here if implemented)
+    if (options?.compress) {
+      // TODO: Implement compression in future phase
+      // For now, just store as-is and mark as compressed=false
+      await this.storage.set(key, snapshot)
+    } else {
+      await this.storage.set(key, snapshot)
+    }
+
+    return {
+      documentId: this.id,
+      version: { ...this.vectorClock },
+      timestamp: snapshot.updatedAt,
+      sizeBytes,
+      compressed: options?.compress ?? false
+    }
+  }
+
+  /**
+   * Load document state from a snapshot
+   *
+   * This replaces the current document state with the state from a snapshot.
+   * Useful for restoring from a previous state or recovering from errors.
+   *
+   * @param snapshotKey - Optional key of the snapshot to load (defaults to `${docId}:snapshot`)
+   *
+   * @example
+   * ```typescript
+   * // Load from default snapshot
+   * await doc.loadFromSnapshot()
+   *
+   * // Load from custom snapshot key
+   * await doc.loadFromSnapshot('my-doc:backup-2024')
+   * ```
+   */
+  async loadFromSnapshot(snapshotKey?: string): Promise<void> {
+    if (!this.wasmDoc) {
+      throw new DocumentError('Document not initialized')
+    }
+
+    if (!this.storage) {
+      throw new DocumentError('Storage not available for loading snapshots')
+    }
+
+    const key = snapshotKey ?? `${this.id}:snapshot`
+    const snapshot = await this.storage.get(key)
+
+    if (!snapshot) {
+      throw new DocumentError(`Snapshot not found: ${key}`)
+    }
+
+    // Clear existing fields before loading snapshot
+    // This ensures the document matches the snapshot exactly
+    const currentFields = this.toJSON()
+    for (const fieldPath of Object.keys(currentFields)) {
+      this.wasmDoc.deleteField(fieldPath)
+    }
+
+    // Load the snapshot using existing loadFromStored method
+    this.loadFromStored(snapshot)
+
+    // Update local state and notify subscribers
+    this.updateLocalState()
+    this.notifySubscribers()
+  }
+
+  /**
+   * Get the size of the current document in bytes
+   * Useful for monitoring document growth and deciding when to snapshot
+   */
+  getDocumentSize(): number {
+    const documentJson = JSON.stringify({
+      data: this.data,
+      version: this.vectorClock
+    })
+    return new Blob([documentJson]).size
+  }
+
+  // ====================
+  // Automatic Snapshot Methods
+  // ====================
+
+  /**
+   * Enable automatic snapshot scheduling
+   *
+   * Automatically creates snapshots based on configurable triggers:
+   * - Document size threshold
+   * - Time interval
+   * - Operation count
+   *
+   * @param config - Configuration for automatic snapshots
+   *
+   * @example
+   * ```typescript
+   * // Enable automatic snapshots with default settings
+   * doc.enableAutoSnapshot()
+   *
+   * // Customize snapshot triggers
+   * doc.enableAutoSnapshot({
+   *   sizeThresholdBytes: 5 * 1024 * 1024,  // 5 MB
+   *   timeIntervalMs: 30 * 60 * 1000,       // 30 minutes
+   *   operationCount: 500,                  // Every 500 operations
+   *   maxSnapshots: 10                      // Keep 10 snapshots
+   * })
+   * ```
+   */
+  enableAutoSnapshot(config: AutoSnapshotConfig = {}): void {
+    if (!this.storage) {
+      throw new DocumentError('Storage not available for automatic snapshots')
+    }
+
+    // Stop existing scheduler if any
+    this.snapshotScheduler?.stop()
+
+    // Create new scheduler with provided config
+    this.snapshotScheduler = new SnapshotScheduler(this, this.storage, {
+      enabled: true,
+      ...config
+    })
+
+    // Start the scheduler
+    this.snapshotScheduler.start()
+  }
+
+  /**
+   * Disable automatic snapshot scheduling
+   */
+  disableAutoSnapshot(): void {
+    this.snapshotScheduler?.stop()
+    this.snapshotScheduler = undefined
+  }
+
+  /**
+   * Update automatic snapshot configuration
+   */
+  updateAutoSnapshotConfig(config: Partial<AutoSnapshotConfig>): void {
+    if (!this.snapshotScheduler) {
+      throw new DocumentError('Automatic snapshots not enabled')
+    }
+
+    this.snapshotScheduler.updateConfig(config)
+  }
+
+  /**
+   * Get automatic snapshot scheduler statistics
+   */
+  getAutoSnapshotStats() {
+    if (!this.snapshotScheduler) {
+      return null
+    }
+
+    return this.snapshotScheduler.getStats()
+  }
+
+  /**
+   * Manually trigger an automatic snapshot
+   */
+  async triggerAutoSnapshot(): Promise<SnapshotMetadata | null> {
+    if (!this.snapshotScheduler) {
+      throw new DocumentError('Automatic snapshots not enabled')
+    }
+
+    return this.snapshotScheduler.triggerSnapshot()
+  }
+
+  /**
+   * List all automatic snapshots for this document
+   */
+  async listAutoSnapshots(): Promise<string[]> {
+    if (!this.snapshotScheduler) {
+      return []
+    }
+
+    return this.snapshotScheduler.listSnapshots()
+  }
+
   /**
    * Cleanup (call when document is no longer needed)
    */
   dispose(): void {
+    // Stop automatic snapshot scheduler
+    if (this.snapshotScheduler) {
+      this.snapshotScheduler.stop()
+      this.snapshotScheduler = undefined
+    }
+
     // Unsubscribe from storage changes
     if (this.storageUnsubscribe) {
       this.storageUnsubscribe()

@@ -32,15 +32,8 @@ COPY --from=builder /app/dist ./dist
 COPY --from=builder /app/src ./src
 COPY --from=builder /app/wasm ./wasm
 
-# Create non-root user
-RUN addgroup --system --gid 1001 synckit && \
-    adduser --system --uid 1001 --ingroup synckit synckit
-
-# Change ownership
-RUN chown -R synckit:synckit /app
-
-# Switch to non-root user
-USER synckit
+# Note: Running as root for simplicity in stress test environment
+# In production, you'd want to create a non-root user
 
 # Expose port
 EXPOSE 8080
