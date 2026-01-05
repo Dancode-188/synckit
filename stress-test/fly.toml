@@ -1,0 +1,95 @@
+# SyncKit Stress Test Server - Fly.io Configuration
+# 48-day production stress test (Jan 4 - Feb 21, 2026)
+
+app = "synckit-stress-test"
+primary_region = "sjc"  # San Jose, CA
+
+# Build configuration - use server Dockerfile
+[build]
+
+[build.dockerfile]
+  dockerfile = "../server/typescript/Dockerfile"
+  context = "../server/typescript"
+
+# Environment variables
+[env]
+  NODE_ENV = "production"
+  HOST = "0.0.0.0"
+  PORT = "8080"
+
+# HTTP service configuration
+[[services]]
+  internal_port = 8080
+  protocol = "tcp"
+
+  # Keep server running continuously for 48-day test
+  auto_stop_machines = false
+  auto_start_machines = true
+  min_machines_running = 1
+
+  # Health checks - critical for detecting crashes
+  [[services.http_checks]]
+    interval = "30s"
+    timeout = "10s"
+    grace_period = "10s"
+    method = "GET"
+    path = "/health"
+    protocol = "http"
+    restart_limit = 3  # Allow 3 restarts before giving up
+
+    [services.http_checks.headers]
+      User-Agent = "Fly-Health-Check"
+
+  # HTTP handlers
+  [[services.ports]]
+    handlers = ["http"]
+    port = 80
+    force_https = true
+
+  [[services.ports]]
+    handlers = ["tls", "http"]
+    port = 443
+
+  # WebSocket configuration - keep connections alive
+  [[services.ports]]
+    handlers = ["tls", "http"]
+    port = 443
+
+    [services.ports.http_options]
+      idle_timeout = "120s"  # 2 minutes idle before close
+      h2_backend = true
+
+# Concurrency configuration
+[services.concurrency]
+  type = "connections"
+  hard_limit = 100   # Limited for stress test (1 client expected)
+  soft_limit = 80
+
+# Resource allocation - minimal for cost efficiency
+[vm]
+  cpu_kind = "shared"
+  cpus = 1
+  memory_mb = 512  # Should be enough with memory leak fixes
+
+# Scaling configuration - single instance for stress test
+[[vm.scaling]]
+  min_count = 1
+  max_count = 1  # No auto-scaling during test
+
+# No database or Redis needed - client uses OPFS storage
+
+# Secrets (set via fly secrets)
+# fly secrets set JWT_SECRET=$(openssl rand -base64 32)
+
+# Monitoring & Metrics
+[metrics]
+  port = 9091
+  path = "/metrics"
+
+# Process configuration
+[processes]
+  app = "bun run start"
+
+# Deploy command:
+# cd stress-test
+# fly deploy --config fly.toml --app synckit-stress-test
