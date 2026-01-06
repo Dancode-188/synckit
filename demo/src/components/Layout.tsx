@@ -5,7 +5,6 @@
 
 import { ReactNode } from 'react';
 import { Header } from './Header';
-import { UI_CONFIG } from '../lib/constants';
 
 interface LayoutProps {
   storageType?: 'opfs' | 'indexeddb';

@@ -1,9 +1,12 @@
 import { useState, useEffect } from 'react';
+import { SyncKit } from '@synckit-js/sdk';
 import { Layout } from './components/Layout';
 import { Sidebar } from './components/Sidebar';
 import { Editor } from './components/Editor';
+import { SyncKitProvider } from './contexts/SyncKitContext';
 import { initializeSyncKit } from './lib/synckit';
 import { StorageType } from './lib/storage';
+import { createPage } from './lib/blocks';
 
 interface Page {
   id: string;
@@ -13,6 +16,7 @@ interface Page {
 }
 
 function App() {
+  const [synckit, setSynckit] = useState<SyncKit | null>(null);
   const [storageType, setStorageType] = useState<StorageType | undefined>();
   const [isConnected] = useState(false);
   const [pages, setPages] = useState<Page[]>([]);
@@ -33,11 +37,9 @@ function App() {
 
         if (!mounted) return;
 
-        // Set storage type from initialization
+        // Store synckit instance and storage type
+        setSynckit(synckit);
         setStorageType(storage.type);
-
-        // TODO: Store synckit instance in state/context for later use
-        console.log('SyncKit ready:', synckit);
 
         setIsInitializing(false);
         console.log('✅ LocalWrite initialized successfully');
@@ -59,12 +61,19 @@ function App() {
 
   // Handle new page creation
   const handleNewPage = () => {
+    if (!synckit) return;
+
+    // Create page data
+    const pageData = createPage();
+
+    // Create simple page entry for sidebar
     const newPage: Page = {
-      id: `page-${Date.now()}`,
-      title: 'Untitled',
-      icon: '📄',
-      updatedAt: new Date(),
+      id: pageData.id,
+      title: pageData.title,
+      icon: pageData.icon,
+      updatedAt: new Date(pageData.createdAt),
     };
+
     setPages([newPage, ...pages]);
     setCurrentPageId(newPage.id);
   };
@@ -109,25 +118,32 @@ function App() {
     );
   }
 
+  // Wait for SyncKit to be ready
+  if (!synckit || !storageType) {
+    return null; // This should never happen since we check isInitializing above
+  }
+
   return (
-    <Layout
-      storageType={storageType}
-      isConnected={isConnected}
-      sidebar={
-        <Sidebar
-          pages={pages}
-          currentPageId={currentPageId}
-          onPageSelect={handlePageSelect}
-          onNewPage={handleNewPage}
+    <SyncKitProvider synckit={synckit} storageType={storageType}>
+      <Layout
+        storageType={storageType}
+        isConnected={isConnected}
+        sidebar={
+          <Sidebar
+            pages={pages}
+            currentPageId={currentPageId}
+            onPageSelect={handlePageSelect}
+            onNewPage={handleNewPage}
+          />
+        }
+      >
+        <Editor
+          pageId={currentPageId}
+          pageTitle={currentPage?.title}
+          pageIcon={currentPage?.icon}
         />
-      }
-    >
-      <Editor
-        pageId={currentPageId}
-        pageTitle={currentPage?.title}
-        pageIcon={currentPage?.icon}
-      />
-    </Layout>
+      </Layout>
+    </SyncKitProvider>
   );
 }
 
