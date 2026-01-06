@@ -71,7 +71,35 @@ const MENU_ITEMS: MenuItem[] = [
     label: 'Quote',
     description: 'Highlight a quote or callout',
     icon: '"',
-    keywords: ['quote', 'blockquote', 'callout', 'citation'],
+    keywords: ['quote', 'blockquote', 'citation'],
+  },
+  {
+    type: BLOCK_TYPES.CALLOUT_INFO,
+    label: 'Info Callout',
+    description: 'Informational callout box',
+    icon: 'ℹ️',
+    keywords: ['info', 'information', 'callout', 'note'],
+  },
+  {
+    type: BLOCK_TYPES.CALLOUT_WARNING,
+    label: 'Warning Callout',
+    description: 'Warning callout box',
+    icon: '⚠️',
+    keywords: ['warning', 'caution', 'callout', 'alert'],
+  },
+  {
+    type: BLOCK_TYPES.CALLOUT_ERROR,
+    label: 'Error Callout',
+    description: 'Error callout box',
+    icon: '❌',
+    keywords: ['error', 'danger', 'callout', 'critical'],
+  },
+  {
+    type: BLOCK_TYPES.CALLOUT_SUCCESS,
+    label: 'Success Callout',
+    description: 'Success callout box',
+    icon: '✅',
+    keywords: ['success', 'done', 'callout', 'complete'],
   },
 ];
 
@@ -142,10 +170,10 @@ export function SlashMenu({ query, position, onSelect, onClose }: SlashMenuProps
     return (
       <div
         ref={menuRef}
-        className="absolute z-50 bg-white border border-gray-200 rounded-lg shadow-lg p-3 min-w-[280px]"
+        className="absolute z-50 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-lg p-3 min-w-[280px]"
         style={{ top: position.top, left: position.left }}
       >
-        <div className="text-sm text-gray-500 text-center py-2">
+        <div className="text-sm text-gray-500 dark:text-gray-400 text-center py-2">
           No blocks found for "{query}"
         </div>
       </div>
@@ -155,7 +183,7 @@ export function SlashMenu({ query, position, onSelect, onClose }: SlashMenuProps
   return (
     <div
       ref={menuRef}
-      className="absolute z-50 bg-white border border-gray-200 rounded-lg shadow-lg py-1 min-w-[280px] max-h-[320px] overflow-y-auto"
+      className="absolute z-50 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-lg py-1 min-w-[280px] max-h-[320px] overflow-y-auto"
       style={{ top: position.top, left: position.left }}
     >
       {filteredItems.map((item, index) => (
@@ -163,14 +191,14 @@ export function SlashMenu({ query, position, onSelect, onClose }: SlashMenuProps
           key={item.type}
           onClick={() => onSelect(item.type)}
           className={`
-            w-full px-3 py-2 flex items-center gap-3 hover:bg-gray-100 transition-colors
-            ${index === selectedIndex ? 'bg-gray-100' : ''}
+            w-full px-3 py-2 flex items-center gap-3 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors
+            ${index === selectedIndex ? 'bg-gray-100 dark:bg-gray-700' : ''}
           `}
         >
           <span className="text-xl w-8 text-center flex-shrink-0">{item.icon}</span>
           <div className="flex-1 text-left">
-            <div className="text-sm font-medium text-gray-900">{item.label}</div>
-            <div className="text-xs text-gray-500">{item.description}</div>
+            <div className="text-sm font-medium text-gray-900 dark:text-gray-100">{item.label}</div>
+            <div className="text-xs text-gray-500 dark:text-gray-400">{item.description}</div>
           </div>
         </button>
       ))}

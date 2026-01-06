@@ -35,6 +35,10 @@ export const BLOCK_TYPES = {
   TODO: 'todo',
   CODE: 'code',
   QUOTE: 'quote',
+  CALLOUT_INFO: 'calloutInfo',
+  CALLOUT_WARNING: 'calloutWarning',
+  CALLOUT_ERROR: 'calloutError',
+  CALLOUT_SUCCESS: 'calloutSuccess',
 } as const;
 
 export type BlockType = typeof BLOCK_TYPES[keyof typeof BLOCK_TYPES];

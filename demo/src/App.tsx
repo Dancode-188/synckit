@@ -4,6 +4,7 @@ import { Layout } from './components/Layout';
 import { Sidebar } from './components/Sidebar';
 import { Editor } from './components/Editor';
 import { SyncKitProvider } from './contexts/SyncKitContext';
+import { ThemeProvider } from './contexts/ThemeContext';
 import { initializeSyncKit } from './lib/synckit';
 import { StorageType } from './lib/storage';
 import { createPage, PageDocument } from './lib/blocks';
@@ -191,32 +192,36 @@ function App() {
   // Loading state
   if (isInitializing) {
     return (
-      <div className="h-screen flex items-center justify-center bg-white">
-        <div className="text-center">
-          <div className="w-16 h-16 border-4 border-primary-500 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
-          <p className="text-gray-600 font-medium">Initializing LocalWrite...</p>
-          <p className="text-sm text-gray-500 mt-2">Setting up OPFS storage and SyncKit client</p>
+      <ThemeProvider>
+        <div className="h-screen flex items-center justify-center bg-white dark:bg-gray-900">
+          <div className="text-center">
+            <div className="w-16 h-16 border-4 border-primary-500 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
+            <p className="text-gray-600 dark:text-gray-300 font-medium">Initializing LocalWrite...</p>
+            <p className="text-sm text-gray-500 dark:text-gray-400 mt-2">Setting up OPFS storage and SyncKit client</p>
+          </div>
         </div>
-      </div>
+      </ThemeProvider>
     );
   }
 
   // Error state
   if (error) {
     return (
-      <div className="h-screen flex items-center justify-center bg-white">
-        <div className="text-center max-w-md">
-          <div className="text-6xl mb-4">⚠️</div>
-          <h2 className="text-2xl font-bold text-gray-900 mb-2">Initialization Failed</h2>
-          <p className="text-gray-600 mb-4">{error}</p>
-          <button
-            onClick={() => window.location.reload()}
-            className="px-4 py-2 bg-primary-500 hover:bg-primary-600 text-white rounded-lg font-medium transition-colors"
-          >
-            Retry
-          </button>
+      <ThemeProvider>
+        <div className="h-screen flex items-center justify-center bg-white dark:bg-gray-900">
+          <div className="text-center max-w-md">
+            <div className="text-6xl mb-4">⚠️</div>
+            <h2 className="text-2xl font-bold text-gray-900 dark:text-gray-100 mb-2">Initialization Failed</h2>
+            <p className="text-gray-600 dark:text-gray-400 mb-4">{error}</p>
+            <button
+              onClick={() => window.location.reload()}
+              className="px-4 py-2 bg-primary-500 hover:bg-primary-600 text-white rounded-lg font-medium transition-colors"
+            >
+              Retry
+            </button>
+          </div>
         </div>
-      </div>
+      </ThemeProvider>
     );
   }
 
@@ -226,26 +231,28 @@ function App() {
   }
 
   return (
-    <SyncKitProvider synckit={synckit} storageType={storageType}>
-      <Layout
-        storageType={storageType}
-        isConnected={isConnected}
-        sidebar={
-          <Sidebar
-            pages={pages}
-            currentPageId={currentPageId}
-            onPageSelect={handlePageSelect}
-            onNewPage={handleNewPage}
+    <ThemeProvider>
+      <SyncKitProvider synckit={synckit} storageType={storageType}>
+        <Layout
+          storageType={storageType}
+          isConnected={isConnected}
+          sidebar={
+            <Sidebar
+              pages={pages}
+              currentPageId={currentPageId}
+              onPageSelect={handlePageSelect}
+              onNewPage={handleNewPage}
+            />
+          }
+        >
+          <Editor
+            pageId={currentPageId}
+            pageTitle={currentPage?.title}
+            pageIcon={currentPage?.icon}
           />
-        }
-      >
-        <Editor
-          pageId={currentPageId}
-          pageTitle={currentPage?.title}
-          pageIcon={currentPage?.icon}
-        />
-      </Layout>
-    </SyncKitProvider>
+        </Layout>
+      </SyncKitProvider>
+    </ThemeProvider>
   );
 }
 

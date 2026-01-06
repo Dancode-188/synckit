@@ -490,15 +490,15 @@ export function Editor({ pageId }: EditorProps) {
   // Empty state
   if (!pageId) {
     return (
-      <div className="flex-1 flex items-center justify-center bg-white">
+      <div className="flex-1 flex items-center justify-center bg-white dark:bg-gray-900">
         <div className="text-center max-w-md">
           <div className="text-6xl mb-4">📝</div>
-          <h2 className="text-2xl font-bold text-gray-900 mb-2">Welcome to LocalWrite</h2>
-          <p className="text-gray-600 mb-6">
+          <h2 className="text-2xl font-bold text-gray-900 dark:text-gray-100 mb-2">Welcome to LocalWrite</h2>
+          <p className="text-gray-600 dark:text-gray-400 mb-6">
             Create a new page to start writing, or select an existing page from the sidebar.
           </p>
-          <div className="bg-primary-50 border border-primary-200 rounded-lg p-4">
-            <p className="text-sm text-primary-900">
+          <div className="bg-primary-50 dark:bg-primary-900/20 border border-primary-200 dark:border-primary-800 rounded-lg p-4">
+            <p className="text-sm text-primary-900 dark:text-primary-100">
               <strong>Features:</strong> Real-time collaboration, OPFS storage, and field-per-block
               pattern for optimal performance.
             </p>
@@ -511,19 +511,19 @@ export function Editor({ pageId }: EditorProps) {
   // Loading state
   if (!pageData) {
     return (
-      <div className="flex-1 flex items-center justify-center bg-white">
-        <div className="text-gray-500">Loading page...</div>
+      <div className="flex-1 flex items-center justify-center bg-white dark:bg-gray-900">
+        <div className="text-gray-500 dark:text-gray-400">Loading page...</div>
       </div>
     );
   }
 
   return (
-    <div ref={editorRef} className="flex-1 overflow-y-auto bg-white scrollbar-thin relative">
+    <div ref={editorRef} className="flex-1 overflow-y-auto bg-white dark:bg-gray-900 scrollbar-thin relative">
       <div className="mx-auto py-12 px-8" style={{ maxWidth: UI_CONFIG.maxContentWidth }}>
         {/* Page header */}
         <div className="mb-8">
           <div className="flex items-center gap-3 mb-2">
-            <button className="text-4xl hover:bg-gray-100 rounded p-1 transition-colors">
+            <button className="text-4xl hover:bg-gray-100 dark:hover:bg-gray-800 rounded p-1 transition-colors">
               {pageData.icon}
             </button>
             <input
@@ -534,7 +534,7 @@ export function Editor({ pageId }: EditorProps) {
                   pageDoc.set('title', e.target.value);
                 }
               }}
-              className="flex-1 text-4xl font-bold text-gray-900 bg-transparent border-none outline-none focus:outline-none"
+              className="flex-1 text-4xl font-bold text-gray-900 dark:text-gray-100 bg-transparent border-none outline-none focus:outline-none placeholder:text-gray-400 dark:placeholder:text-gray-600"
               placeholder="Untitled"
             />
           </div>

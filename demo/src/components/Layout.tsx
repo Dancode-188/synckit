@@ -15,7 +15,7 @@ interface LayoutProps {
 
 export function Layout({ storageType, isConnected, sidebar, children }: LayoutProps) {
   return (
-    <div className="h-screen flex flex-col bg-white">
+    <div className="h-screen flex flex-col bg-white dark:bg-gray-900">
       {/* Header */}
       <Header storageType={storageType} isConnected={isConnected} />
 
