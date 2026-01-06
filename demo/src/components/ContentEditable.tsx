@@ -1,9 +1,11 @@
 /**
  * ContentEditable component
  * Controlled contenteditable with proper React integration
+ * Supports markdown rendering for WYSIWYG experience
  */
 
 import { useRef, useEffect, KeyboardEvent } from 'react';
+import { parseMarkdown, htmlToMarkdown } from '../lib/markdown';
 
 interface ContentEditableProps {
   content: string;
@@ -27,10 +29,14 @@ export function ContentEditable({
 
   // Update content when it changes externally (not during user typing)
   useEffect(() => {
-    if (ref.current && ref.current.textContent !== content) {
+    if (ref.current) {
+      const parsedHtml = parseMarkdown(content);
+      const isCurrentlyFocused = document.activeElement === ref.current;
+
       // Only update if element is not focused (external change)
-      if (document.activeElement !== ref.current) {
-        ref.current.textContent = content;
+      // When focused, the user is editing and we shouldn't interfere
+      if (!isCurrentlyFocused && ref.current.innerHTML !== parsedHtml) {
+        ref.current.innerHTML = parsedHtml;
       }
     }
   }, [content]); // Run when content prop changes
@@ -40,25 +46,24 @@ export function ContentEditable({
     if (autoFocus && ref.current) {
       ref.current.focus();
 
-      // Move cursor to end
-      const range = document.createRange();
+      // Move cursor to end - works with both text and HTML content
       const selection = window.getSelection();
-      const textNode = ref.current.firstChild;
+      const range = document.createRange();
 
-      if (textNode) {
-        const length = textNode.textContent?.length || 0;
-        range.setStart(textNode, length);
-        range.collapse(true);
-        selection?.removeAllRanges();
-        selection?.addRange(range);
-      }
+      // Select all content then collapse to end
+      range.selectNodeContents(ref.current);
+      range.collapse(false); // false = collapse to end
+
+      selection?.removeAllRanges();
+      selection?.addRange(range);
     }
   }, [autoFocus]);
 
   const handleInput = () => {
     if (ref.current && !isComposingRef.current) {
-      const newContent = ref.current.textContent || '';
-      onChange(newContent);
+      // Convert HTML back to markdown to preserve formatting
+      const markdownContent = htmlToMarkdown(ref.current);
+      onChange(markdownContent);
     }
   };
 
@@ -69,8 +74,8 @@ export function ContentEditable({
   const handleCompositionEnd = () => {
     isComposingRef.current = false;
     if (ref.current) {
-      const newContent = ref.current.textContent || '';
-      onChange(newContent);
+      const markdownContent = htmlToMarkdown(ref.current);
+      onChange(markdownContent);
     }
   };
 

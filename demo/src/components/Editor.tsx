@@ -8,6 +8,7 @@ import { SyncDocument } from '@synckit-js/sdk';
 import { useSyncKit } from '../contexts/SyncKitContext';
 import { BlockComponent } from './BlockComponent';
 import { SlashMenu } from './SlashMenu';
+import { LinkDialog } from './LinkDialog';
 import { UI_CONFIG, BLOCK_TYPES, BlockType } from '../lib/constants';
 import {
   Block,
@@ -18,6 +19,7 @@ import {
   detectBlockTypeFromPrefix,
   removeTypePrefix,
 } from '../lib/blocks';
+import { htmlToMarkdown } from '../lib/markdown';
 
 interface EditorProps {
   pageId?: string;
@@ -37,6 +39,11 @@ export function Editor({ pageId }: EditorProps) {
   } | null>(null);
   const [draggedBlockId, setDraggedBlockId] = useState<string | null>(null);
   const [dropTargetIndex, setDropTargetIndex] = useState<number | null>(null);
+  const [linkDialog, setLinkDialog] = useState<{
+    blockId: string;
+    selectedText: string;
+    range: Range;
+  } | null>(null);
   const editorRef = useRef<HTMLDivElement>(null);
 
   // Load page document when pageId changes
@@ -170,6 +177,58 @@ export function Editor({ pageId }: EditorProps) {
     setSlashMenu(null);
   }, []);
 
+  // Handle link dialog
+  const handleLinkConfirm = useCallback(
+    (url: string, text: string) => {
+      if (!linkDialog || !pageDoc || !pageData) return;
+
+      const block = (pageData as any)[getBlockKey(linkDialog.blockId)] as Block;
+      if (!block) return;
+
+      // Create link element
+      const linkElement = document.createElement('a');
+      linkElement.href = url;
+      linkElement.className = 'link';
+      linkElement.textContent = text || linkDialog.selectedText || 'link';
+
+      // Insert link at the saved range
+      const range = linkDialog.range;
+      range.deleteContents();
+      range.insertNode(linkElement);
+
+      // Get the block element to extract markdown
+      const blockElements = document.querySelectorAll('[contenteditable]');
+      let targetElement: HTMLElement | null = null;
+
+      for (const el of blockElements) {
+        // Find the element containing our link
+        if (el.contains(linkElement)) {
+          targetElement = el as HTMLElement;
+          break;
+        }
+      }
+
+      if (targetElement) {
+        // Extract markdown from the updated DOM
+        const markdownContent = htmlToMarkdown(targetElement);
+        const updatedBlock = {
+          ...block,
+          content: markdownContent,
+          updatedAt: Date.now(),
+        };
+
+        pageDoc.set(getBlockKey(linkDialog.blockId) as any, updatedBlock);
+      }
+
+      setLinkDialog(null);
+    },
+    [linkDialog, pageDoc, pageData]
+  );
+
+  const handleLinkCancel = useCallback(() => {
+    setLinkDialog(null);
+  }, []);
+
   // Drag and drop handlers
   const handleDragStart = useCallback(
     (blockId: string) => (e: React.DragEvent) => {
@@ -238,6 +297,133 @@ export function Editor({ pageId }: EditorProps) {
       const blockIds = parseBlockOrder(pageData.blockOrder || '[]');
       const blockIndex = blockIds.indexOf(blockId);
       const currentBlock = (pageData as any)[getBlockKey(blockId)] as Block;
+
+      const isMod = e.metaKey || e.ctrlKey; // Cmd on Mac, Ctrl on Windows
+
+      // Text formatting shortcuts: Cmd/Ctrl + B/I/E/K
+      if (isMod && (e.key === 'b' || e.key === 'i' || e.key === 'e' || e.key === 'k')) {
+        e.preventDefault();
+
+        const selection = window.getSelection();
+        if (!selection || selection.rangeCount === 0) return;
+
+        const range = selection.getRangeAt(0);
+        const target = e.currentTarget;
+
+        // For link dialog - check if already in a link (toggle behavior)
+        if (e.key === 'k') {
+          // Check if selection is inside a link
+          let node: Node | null = range.commonAncestorContainer;
+          let linkElement: HTMLElement | null = null;
+
+          while (node && node !== target) {
+            if (node.nodeType === Node.ELEMENT_NODE) {
+              const element = node as HTMLElement;
+              if (element.tagName === 'A') {
+                linkElement = element;
+                break;
+              }
+            }
+            node = node.parentNode;
+          }
+
+          if (linkElement) {
+            // Toggle OFF: Remove link by unwrapping it
+            const parent = linkElement.parentNode;
+            if (parent) {
+              while (linkElement.firstChild) {
+                parent.insertBefore(linkElement.firstChild, linkElement);
+              }
+              parent.removeChild(linkElement);
+            }
+
+            // Extract markdown and save
+            const markdownContent = htmlToMarkdown(target);
+            const updatedBlock = {
+              ...currentBlock,
+              content: markdownContent,
+              updatedAt: Date.now(),
+            };
+
+            pageDoc.set(getBlockKey(blockId) as any, updatedBlock);
+          } else {
+            // Toggle ON: Show dialog to insert link
+            const selectedText = range.toString();
+            setLinkDialog({
+              blockId,
+              selectedText,
+              range: range.cloneRange(),
+            });
+          }
+
+          return;
+        }
+
+        // Check if selection is already formatted by inspecting the DOM
+        const tagMap = {
+          b: 'STRONG',
+          i: 'EM',
+          e: 'CODE',
+        };
+        const targetTag = tagMap[e.key as keyof typeof tagMap];
+
+        // Check if selection is inside the target formatting tag
+        let node: Node | null = range.commonAncestorContainer;
+        let isFormatted = false;
+        let formattedElement: HTMLElement | null = null;
+
+        while (node && node !== target) {
+          if (node.nodeType === Node.ELEMENT_NODE) {
+            const element = node as HTMLElement;
+            if (element.tagName === targetTag) {
+              isFormatted = true;
+              formattedElement = element;
+              break;
+            }
+          }
+          node = node.parentNode;
+        }
+
+        if (isFormatted && formattedElement) {
+          // Toggle OFF: Remove formatting by unwrapping the tag
+          const parent = formattedElement.parentNode;
+          if (parent) {
+            // Move all children out of the formatted element
+            while (formattedElement.firstChild) {
+              parent.insertBefore(formattedElement.firstChild, formattedElement);
+            }
+            parent.removeChild(formattedElement);
+          }
+        } else {
+          // Toggle ON: Add formatting
+          if (!range.collapsed) {
+            const selectedContent = range.extractContents();
+            const newElement = document.createElement(targetTag.toLowerCase());
+            if (targetTag === 'CODE') {
+              newElement.className = 'inline-code';
+            }
+            newElement.appendChild(selectedContent);
+            range.insertNode(newElement);
+
+            // Select the newly formatted text
+            range.selectNodeContents(newElement);
+            selection.removeAllRanges();
+            selection.addRange(range);
+          }
+        }
+
+        // After DOM manipulation, extract markdown and save
+        const markdownContent = htmlToMarkdown(target);
+        const updatedBlock = {
+          ...currentBlock,
+          content: markdownContent,
+          updatedAt: Date.now(),
+        };
+
+        pageDoc.set(getBlockKey(blockId) as any, updatedBlock);
+
+        return; // Don't process other shortcuts
+      }
 
       // Enter: Create new block below
       if (e.key === 'Enter' && !e.shiftKey) {
@@ -387,6 +573,15 @@ export function Editor({ pageId }: EditorProps) {
           position={slashMenu.position}
           onSelect={handleSlashMenuSelect}
           onClose={handleSlashMenuClose}
+        />
+      )}
+
+      {/* Link Dialog */}
+      {linkDialog && (
+        <LinkDialog
+          initialText={linkDialog.selectedText}
+          onConfirm={handleLinkConfirm}
+          onCancel={handleLinkCancel}
         />
       )}
     </div>

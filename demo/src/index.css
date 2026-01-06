@@ -30,4 +30,50 @@
   .scrollbar-thin::-webkit-scrollbar-thumb:hover {
     @apply bg-gray-400;
   }
+
+  /* Rich text formatting styles */
+  [contenteditable] strong {
+    @apply font-bold text-gray-900;
+  }
+
+  [contenteditable] em {
+    @apply italic text-gray-900;
+  }
+
+  [contenteditable] code.inline-code {
+    @apply font-mono text-sm bg-gray-100 text-red-600 px-1.5 py-0.5 rounded;
+  }
+
+  [contenteditable] a.link {
+    @apply text-blue-600 underline hover:text-blue-700 cursor-pointer;
+  }
+
+  /* Dialog animations */
+  .animate-fade-in {
+    animation: fadeIn 0.15s ease-out;
+  }
+
+  .animate-scale-in {
+    animation: scaleIn 0.2s ease-out;
+  }
+
+  @keyframes fadeIn {
+    from {
+      opacity: 0;
+    }
+    to {
+      opacity: 1;
+    }
+  }
+
+  @keyframes scaleIn {
+    from {
+      opacity: 0;
+      transform: translate(-50%, -50%) scale(0.95);
+    }
+    to {
+      opacity: 1;
+      transform: translate(-50%, -50%) scale(1);
+    }
+  }
 }
