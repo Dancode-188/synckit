@@ -214,6 +214,7 @@ export function Editor({ pageId }: EditorProps) {
             <BlockComponent
               key={block.id}
               block={block}
+              blockIndex={index}
               onContentChange={(content) => handleBlockContentChange(block.id, content)}
               onKeyDown={(e) => handleBlockKeyDown(block.id, e)}
               autoFocus={index === blocks.length - 1 && blocks.length > 1}
