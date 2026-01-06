@@ -3,11 +3,12 @@
  * Main document editor with SyncKit integration
  */
 
-import { useState, useEffect, KeyboardEvent, useCallback } from 'react';
+import { useState, useEffect, KeyboardEvent, useCallback, useRef } from 'react';
 import { SyncDocument } from '@synckit-js/sdk';
 import { useSyncKit } from '../contexts/SyncKitContext';
 import { BlockComponent } from './BlockComponent';
-import { UI_CONFIG, BLOCK_TYPES } from '../lib/constants';
+import { SlashMenu } from './SlashMenu';
+import { UI_CONFIG, BLOCK_TYPES, BlockType } from '../lib/constants';
 import {
   Block,
   PageDocument,
@@ -29,6 +30,12 @@ export function Editor({ pageId }: EditorProps) {
   const [pageDoc, setPageDoc] = useState<SyncDocument<PageDocument> | null>(null);
   const [pageData, setPageData] = useState<PageDocument | null>(null);
   const [blocks, setBlocks] = useState<Block[]>([]);
+  const [slashMenu, setSlashMenu] = useState<{
+    blockId: string;
+    query: string;
+    position: { top: number; left: number };
+  } | null>(null);
+  const editorRef = useRef<HTMLDivElement>(null);
 
   // Load page document when pageId changes
   useEffect(() => {
@@ -97,6 +104,32 @@ export function Editor({ pageId }: EditorProps) {
       const block = (pageData as any)?.[getBlockKey(blockId)];
       if (!block) return;
 
+      // Check for slash command
+      if (content.startsWith('/')) {
+        const query = content.slice(1); // Remove the '/'
+
+        // Get cursor position for menu
+        const selection = window.getSelection();
+        const range = selection?.getRangeAt(0);
+        if (range) {
+          const rect = range.getBoundingClientRect();
+          const editorRect = editorRef.current?.getBoundingClientRect();
+          if (editorRect) {
+            setSlashMenu({
+              blockId,
+              query,
+              position: {
+                top: rect.bottom - editorRect.top + 4,
+                left: rect.left - editorRect.left,
+              },
+            });
+          }
+        }
+      } else {
+        // Close slash menu if content doesn't start with /
+        setSlashMenu(null);
+      }
+
       const updatedBlock = {
         ...block,
         content,
@@ -107,6 +140,33 @@ export function Editor({ pageId }: EditorProps) {
     },
     [pageDoc, pageData]
   );
+
+  // Handle slash menu selection
+  const handleSlashMenuSelect = useCallback(
+    (type: BlockType) => {
+      if (!slashMenu || !pageDoc || !pageData) return;
+
+      const block = (pageData as any)[getBlockKey(slashMenu.blockId)] as Block;
+      if (!block) return;
+
+      // Convert block to selected type with empty content
+      const updatedBlock = {
+        ...block,
+        type,
+        content: '',
+        updatedAt: Date.now(),
+      };
+
+      pageDoc.set(getBlockKey(slashMenu.blockId) as any, updatedBlock);
+      setSlashMenu(null);
+    },
+    [slashMenu, pageDoc, pageData]
+  );
+
+  // Close slash menu
+  const handleSlashMenuClose = useCallback(() => {
+    setSlashMenu(null);
+  }, []);
 
   // Handle keyboard shortcuts
   const handleBlockKeyDown = useCallback(
@@ -210,7 +270,7 @@ export function Editor({ pageId }: EditorProps) {
   }
 
   return (
-    <div className="flex-1 overflow-y-auto bg-white scrollbar-thin">
+    <div ref={editorRef} className="flex-1 overflow-y-auto bg-white scrollbar-thin relative">
       <div className="mx-auto py-12 px-8" style={{ maxWidth: UI_CONFIG.maxContentWidth }}>
         {/* Page header */}
         <div className="mb-8">
@@ -246,6 +306,16 @@ export function Editor({ pageId }: EditorProps) {
           ))}
         </div>
       </div>
+
+      {/* Slash Command Menu */}
+      {slashMenu && (
+        <SlashMenu
+          query={slashMenu.query}
+          position={slashMenu.position}
+          onSelect={handleSlashMenuSelect}
+          onClose={handleSlashMenuClose}
+        />
+      )}
     </div>
   );
 }
