@@ -355,12 +355,12 @@ export function Editor({ pageId }: EditorProps) {
         </div>
 
         {/* Blocks */}
-        <div className="space-y-1">
+        <div className="space-y-2">
           {blocks.map((block, index) => (
             <div key={block.id} className="relative">
               {/* Drop indicator */}
               {dropTargetIndex === index && draggedBlockId !== block.id && (
-                <div className="absolute -top-0.5 left-0 right-0 h-0.5 bg-primary-500 rounded-full z-10" />
+                <div className="absolute -top-1 left-0 right-0 h-1 bg-primary-500 rounded-full z-10 shadow-lg shadow-primary-500/50 animate-pulse" />
               )}
 
               <BlockComponent

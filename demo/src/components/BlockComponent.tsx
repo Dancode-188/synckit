@@ -55,7 +55,9 @@ export function BlockComponent({
 
     return (
       <div
-        className={`group relative flex items-start gap-2 py-1 transition-opacity ${isDragging ? 'opacity-50' : 'opacity-100'}`}
+        className={`group relative flex items-start gap-2 py-1.5 px-2 -mx-2 rounded-md transition-all duration-150 ${
+          isDragging ? 'opacity-50' : 'opacity-100 hover:bg-gray-50'
+        }`}
         draggable
         onDragStart={onDragStart}
         onDragOver={onDragOver}
@@ -98,7 +100,9 @@ export function BlockComponent({
   if (block.type === BLOCK_TYPES.NUMBERED_LIST) {
     return (
       <div
-        className={`group relative flex items-start gap-3 py-1 transition-opacity ${isDragging ? 'opacity-50' : 'opacity-100'}`}
+        className={`group relative flex items-start gap-3 py-1.5 px-2 -mx-2 rounded-md transition-all duration-150 ${
+          isDragging ? 'opacity-50' : 'opacity-100 hover:bg-gray-50'
+        }`}
         draggable
         onDragStart={onDragStart}
         onDragOver={onDragOver}
@@ -131,17 +135,17 @@ export function BlockComponent({
     switch (block.type) {
       case BLOCK_TYPES.HEADING_1:
         return {
-          className: 'text-4xl font-bold text-gray-900 py-2',
+          className: 'text-4xl font-bold text-gray-900 py-3 leading-tight',
           placeholder: 'Heading 1',
         };
       case BLOCK_TYPES.HEADING_2:
         return {
-          className: 'text-3xl font-bold text-gray-900 py-2',
+          className: 'text-3xl font-bold text-gray-900 py-2.5 leading-tight',
           placeholder: 'Heading 2',
         };
       case BLOCK_TYPES.HEADING_3:
         return {
-          className: 'text-2xl font-bold text-gray-900 py-1',
+          className: 'text-2xl font-bold text-gray-900 py-2 leading-tight',
           placeholder: 'Heading 3',
         };
       case BLOCK_TYPES.BULLETED_LIST:
@@ -151,18 +155,18 @@ export function BlockComponent({
         };
       case BLOCK_TYPES.CODE:
         return {
-          className: 'text-sm font-mono bg-gray-100 text-gray-900 py-3 px-4 rounded-md border border-gray-200',
+          className: 'text-sm font-mono bg-gray-100 text-gray-900 py-3 px-4 rounded-md border border-gray-200 leading-relaxed',
           placeholder: 'Code',
         };
       case BLOCK_TYPES.QUOTE:
         return {
-          className: 'text-base text-gray-700 italic py-2 pl-4 border-l-4 border-primary-400',
+          className: 'text-base text-gray-700 italic py-2 pl-4 border-l-4 border-primary-400 leading-relaxed',
           placeholder: 'Quote',
         };
       case BLOCK_TYPES.PARAGRAPH:
       default:
         return {
-          className: 'text-base text-gray-900 py-1',
+          className: 'text-base text-gray-900 py-1 leading-relaxed',
           placeholder: "Type '/' for commands",
         };
     }
@@ -172,7 +176,9 @@ export function BlockComponent({
 
   return (
     <div
-      className={`group relative transition-opacity ${isDragging ? 'opacity-50' : 'opacity-100'}`}
+      className={`group relative py-0.5 px-2 -mx-2 rounded-md transition-all duration-150 ${
+        isDragging ? 'opacity-50' : 'opacity-100 hover:bg-gray-50'
+      }`}
       draggable
       onDragStart={onDragStart}
       onDragOver={onDragOver}
@@ -198,8 +204,8 @@ export function BlockComponent({
 // Drag handle component (reusable)
 function DragHandle() {
   return (
-    <div className="absolute left-0 top-0 -ml-8 opacity-0 group-hover:opacity-100 transition-opacity">
-      <button className="w-6 h-6 flex items-center justify-center text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded cursor-grab active:cursor-grabbing">
+    <div className="absolute left-0 top-1/2 -translate-y-1/2 -ml-8 opacity-0 group-hover:opacity-100 transition-all duration-200">
+      <button className="w-6 h-6 flex items-center justify-center text-gray-400 hover:text-gray-700 hover:bg-gray-200 rounded cursor-grab active:cursor-grabbing transition-colors">
         <svg
           className="w-4 h-4"
           fill="none"
