@@ -35,6 +35,8 @@ export function Editor({ pageId }: EditorProps) {
     query: string;
     position: { top: number; left: number };
   } | null>(null);
+  const [draggedBlockId, setDraggedBlockId] = useState<string | null>(null);
+  const [dropTargetIndex, setDropTargetIndex] = useState<number | null>(null);
   const editorRef = useRef<HTMLDivElement>(null);
 
   // Load page document when pageId changes
@@ -168,6 +170,66 @@ export function Editor({ pageId }: EditorProps) {
     setSlashMenu(null);
   }, []);
 
+  // Drag and drop handlers
+  const handleDragStart = useCallback(
+    (blockId: string) => (e: React.DragEvent) => {
+      setDraggedBlockId(blockId);
+      e.dataTransfer.effectAllowed = 'move';
+      // Add a small delay to allow the drag image to be created
+      setTimeout(() => {
+        (e.target as HTMLElement).style.opacity = '0.5';
+      }, 0);
+    },
+    []
+  );
+
+  const handleDragOver = useCallback(
+    (blockIndex: number) => (e: React.DragEvent) => {
+      e.preventDefault();
+      e.dataTransfer.dropEffect = 'move';
+      setDropTargetIndex(blockIndex);
+    },
+    []
+  );
+
+  const handleDrop = useCallback(
+    (targetIndex: number) => (e: React.DragEvent) => {
+      e.preventDefault();
+
+      if (!draggedBlockId || !pageDoc || !pageData) return;
+
+      const blockIds = parseBlockOrder(pageData.blockOrder || '[]');
+      const draggedIndex = blockIds.indexOf(draggedBlockId);
+
+      if (draggedIndex === -1 || draggedIndex === targetIndex) {
+        setDraggedBlockId(null);
+        setDropTargetIndex(null);
+        return;
+      }
+
+      // Reorder blocks
+      const newBlockIds = [...blockIds];
+      const [removed] = newBlockIds.splice(draggedIndex, 1);
+
+      // Adjust target index if dragging from above
+      const adjustedTarget = draggedIndex < targetIndex ? targetIndex - 1 : targetIndex;
+      newBlockIds.splice(adjustedTarget, 0, removed);
+
+      // Update SyncKit
+      pageDoc.set('blockOrder', JSON.stringify(newBlockIds));
+
+      setDraggedBlockId(null);
+      setDropTargetIndex(null);
+    },
+    [draggedBlockId, pageDoc, pageData]
+  );
+
+  const handleDragEnd = useCallback((e: React.DragEvent) => {
+    (e.target as HTMLElement).style.opacity = '1';
+    setDraggedBlockId(null);
+    setDropTargetIndex(null);
+  }, []);
+
   // Handle keyboard shortcuts
   const handleBlockKeyDown = useCallback(
     (blockId: string, e: KeyboardEvent<HTMLDivElement>) => {
@@ -295,14 +357,25 @@ export function Editor({ pageId }: EditorProps) {
         {/* Blocks */}
         <div className="space-y-1">
           {blocks.map((block, index) => (
-            <BlockComponent
-              key={block.id}
-              block={block}
-              blockIndex={index}
-              onContentChange={(content) => handleBlockContentChange(block.id, content)}
-              onKeyDown={(e) => handleBlockKeyDown(block.id, e)}
-              autoFocus={index === blocks.length - 1 && blocks.length > 1}
-            />
+            <div key={block.id} className="relative">
+              {/* Drop indicator */}
+              {dropTargetIndex === index && draggedBlockId !== block.id && (
+                <div className="absolute -top-0.5 left-0 right-0 h-0.5 bg-primary-500 rounded-full z-10" />
+              )}
+
+              <BlockComponent
+                block={block}
+                blockIndex={index}
+                onContentChange={(content) => handleBlockContentChange(block.id, content)}
+                onKeyDown={(e) => handleBlockKeyDown(block.id, e)}
+                onDragStart={handleDragStart(block.id)}
+                onDragOver={handleDragOver(index)}
+                onDrop={handleDrop(index)}
+                onDragEnd={handleDragEnd}
+                isDragging={draggedBlockId === block.id}
+                autoFocus={index === blocks.length - 1 && blocks.length > 1}
+              />
+            </div>
           ))}
         </div>
       </div>

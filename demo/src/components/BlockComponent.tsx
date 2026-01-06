@@ -14,6 +14,11 @@ interface BlockComponentProps {
   onKeyDown: (e: KeyboardEvent<HTMLDivElement>) => void;
   blockIndex?: number;
   autoFocus?: boolean;
+  onDragStart?: (e: React.DragEvent) => void;
+  onDragOver?: (e: React.DragEvent) => void;
+  onDrop?: (e: React.DragEvent) => void;
+  onDragEnd?: (e: React.DragEvent) => void;
+  isDragging?: boolean;
 }
 
 export function BlockComponent({
@@ -22,6 +27,11 @@ export function BlockComponent({
   onKeyDown,
   blockIndex = 0,
   autoFocus = false,
+  onDragStart,
+  onDragOver,
+  onDrop,
+  onDragEnd,
+  isDragging = false,
 }: BlockComponentProps) {
   // Local state for TODO checkbox
   const [isChecked, setIsChecked] = useState(
@@ -44,7 +54,14 @@ export function BlockComponent({
     const contentWithoutCheckbox = block.content.replace(/^\[([ x])\]\s/, '');
 
     return (
-      <div className="group relative flex items-start gap-2 py-1">
+      <div
+        className={`group relative flex items-start gap-2 py-1 transition-opacity ${isDragging ? 'opacity-50' : 'opacity-100'}`}
+        draggable
+        onDragStart={onDragStart}
+        onDragOver={onDragOver}
+        onDrop={onDrop}
+        onDragEnd={onDragEnd}
+      >
         {/* Checkbox */}
         <button
           onClick={handleTodoToggle}
@@ -80,7 +97,14 @@ export function BlockComponent({
   // Render numbered list with number
   if (block.type === BLOCK_TYPES.NUMBERED_LIST) {
     return (
-      <div className="group relative flex items-start gap-3 py-1">
+      <div
+        className={`group relative flex items-start gap-3 py-1 transition-opacity ${isDragging ? 'opacity-50' : 'opacity-100'}`}
+        draggable
+        onDragStart={onDragStart}
+        onDragOver={onDragOver}
+        onDrop={onDrop}
+        onDragEnd={onDragEnd}
+      >
         {/* Number */}
         <span className="text-gray-500 font-medium select-none flex-shrink-0" style={{ minWidth: '1.5rem' }}>
           {blockIndex + 1}.
@@ -147,7 +171,14 @@ export function BlockComponent({
   const { className, placeholder } = getBlockStyles();
 
   return (
-    <div className="group relative">
+    <div
+      className={`group relative transition-opacity ${isDragging ? 'opacity-50' : 'opacity-100'}`}
+      draggable
+      onDragStart={onDragStart}
+      onDragOver={onDragOver}
+      onDrop={onDrop}
+      onDragEnd={onDragEnd}
+    >
       {/* Block content */}
       <ContentEditable
         content={block.content}
