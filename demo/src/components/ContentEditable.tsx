@@ -23,40 +23,17 @@ export function ContentEditable({
   autoFocus = false,
 }: ContentEditableProps) {
   const ref = useRef<HTMLDivElement>(null);
-  const lastContentRef = useRef(content);
+  const isComposingRef = useRef(false);
 
-  // Update DOM when content changes externally (from sync)
+  // Update content when it changes externally (not during user typing)
   useEffect(() => {
-    if (ref.current && lastContentRef.current !== content) {
-      const selection = window.getSelection();
-      const currentNode = selection?.anchorNode;
-      const currentOffset = selection?.anchorOffset || 0;
-
-      // Check if cursor is inside this element
-      const isInside = currentNode ? ref.current.contains(currentNode) : false;
-
-      ref.current.textContent = content;
-      lastContentRef.current = content;
-
-      // Restore cursor position if it was inside
-      if (isInside && currentNode && selection) {
-        try {
-          const range = document.createRange();
-          const textNode = ref.current.firstChild;
-
-          if (textNode) {
-            const offset = Math.min(currentOffset, textNode.textContent?.length || 0);
-            range.setStart(textNode, offset);
-            range.setEnd(textNode, offset);
-            selection.removeAllRanges();
-            selection.addRange(range);
-          }
-        } catch (error) {
-          // Cursor restoration failed, ignore
-        }
+    if (ref.current && ref.current.textContent !== content) {
+      // Only update if element is not focused (external change)
+      if (document.activeElement !== ref.current) {
+        ref.current.textContent = content;
       }
     }
-  }, [content]);
+  }, [content]); // Run when content prop changes
 
   // Auto-focus if requested
   useEffect(() => {
@@ -66,8 +43,11 @@ export function ContentEditable({
       // Move cursor to end
       const range = document.createRange();
       const selection = window.getSelection();
-      if (ref.current.firstChild) {
-        range.setStart(ref.current.firstChild, ref.current.textContent?.length || 0);
+      const textNode = ref.current.firstChild;
+
+      if (textNode) {
+        const length = textNode.textContent?.length || 0;
+        range.setStart(textNode, length);
         range.collapse(true);
         selection?.removeAllRanges();
         selection?.addRange(range);
@@ -76,9 +56,20 @@ export function ContentEditable({
   }, [autoFocus]);
 
   const handleInput = () => {
+    if (ref.current && !isComposingRef.current) {
+      const newContent = ref.current.textContent || '';
+      onChange(newContent);
+    }
+  };
+
+  const handleCompositionStart = () => {
+    isComposingRef.current = true;
+  };
+
+  const handleCompositionEnd = () => {
+    isComposingRef.current = false;
     if (ref.current) {
       const newContent = ref.current.textContent || '';
-      lastContentRef.current = newContent;
       onChange(newContent);
     }
   };
@@ -95,6 +86,8 @@ export function ContentEditable({
       contentEditable
       suppressContentEditableWarning
       onInput={handleInput}
+      onCompositionStart={handleCompositionStart}
+      onCompositionEnd={handleCompositionEnd}
       onKeyDown={handleKeyDown}
       className={className}
       data-placeholder={placeholder}
@@ -103,8 +96,6 @@ export function ContentEditable({
         whiteSpace: 'pre-wrap',
         wordBreak: 'break-word',
       }}
-    >
-      {content}
-    </div>
+    />
   );
 }

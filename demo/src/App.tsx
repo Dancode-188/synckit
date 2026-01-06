@@ -6,7 +6,7 @@ import { Editor } from './components/Editor';
 import { SyncKitProvider } from './contexts/SyncKitContext';
 import { initializeSyncKit } from './lib/synckit';
 import { StorageType } from './lib/storage';
-import { createPage } from './lib/blocks';
+import { createPage, PageDocument } from './lib/blocks';
 
 interface Page {
   id: string;
@@ -23,6 +23,7 @@ function App() {
   const [currentPageId, setCurrentPageId] = useState<string | undefined>();
   const [isInitializing, setIsInitializing] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [pageSubscriptions] = useState<Map<string, () => void>>(new Map());
 
   // Initialize SyncKit on mount
   useEffect(() => {
@@ -41,8 +42,67 @@ function App() {
         setSynckit(synckit);
         setStorageType(storage.type);
 
+        // Load existing pages from storage
+        const docIds = await storage.storage.list();
+        console.log('📂 Found documents in storage:', docIds);
+        const loadedPages: Page[] = [];
+
+        for (const docId of docIds) {
+          // Load document data directly from storage
+          const storedDoc = await storage.storage.get(docId);
+          console.log(`  Loading ${docId}:`, storedDoc);
+
+          if (storedDoc && storedDoc.data) {
+            const data = storedDoc.data as any;
+            console.log(`    Data:`, data);
+
+            if (data.title) {
+              // This is a page document
+              loadedPages.push({
+                id: docId,
+                title: data.title || 'Untitled',
+                icon: data.icon || '📄',
+                updatedAt: data.updatedAt ? new Date(data.updatedAt) : new Date(),
+              });
+              console.log(`    ✅ Added page: ${data.title}`);
+            } else {
+              console.log(`    ⚠️ Skipping (no title field)`);
+            }
+          } else {
+            console.log(`    ⚠️ No data found for ${docId}`);
+          }
+        }
+
+        // Sort by updatedAt (newest first)
+        loadedPages.sort((a, b) => (b.updatedAt?.getTime() || 0) - (a.updatedAt?.getTime() || 0));
+        setPages(loadedPages);
+
+        // Subscribe to all loaded pages for sidebar updates
+        if (!mounted) return;
+        for (const page of loadedPages) {
+          const doc = synckit.document<PageDocument>(page.id);
+          const unsubscribe = doc.subscribe((data) => {
+            if (!mounted) return;
+            setPages((prevPages) =>
+              prevPages.map((p) =>
+                p.id === page.id
+                  ? {
+                      ...p,
+                      title: (data.title as string) || 'Untitled',
+                      icon: (data.icon as string) || '📄',
+                      updatedAt: data.updatedAt
+                        ? new Date(data.updatedAt as number)
+                        : p.updatedAt,
+                    }
+                  : p
+              )
+            );
+          });
+          pageSubscriptions.set(page.id, unsubscribe);
+        }
+
         setIsInitializing(false);
-        console.log('✅ LocalWrite initialized successfully');
+        console.log(`✅ LocalWrite initialized successfully (${loadedPages.length} pages loaded)`);
       } catch (err) {
         console.error('❌ Failed to initialize LocalWrite:', err);
         if (mounted) {
@@ -56,15 +116,34 @@ function App() {
 
     return () => {
       mounted = false;
+      // Cleanup all page subscriptions
+      pageSubscriptions.forEach((unsub) => unsub());
+      pageSubscriptions.clear();
     };
-  }, []);
+  }, [pageSubscriptions]);
 
   // Handle new page creation
-  const handleNewPage = () => {
+  const handleNewPage = async () => {
     if (!synckit) return;
 
     // Create page data
     const pageData = createPage();
+    console.log('📝 Creating new page:', pageData.id, pageData);
+
+    // Initialize the document in SyncKit
+    const doc = synckit.document<PageDocument>(pageData.id);
+
+    // CRITICAL: Initialize document for persistence
+    await doc.init();
+    console.log('  Document initialized');
+
+    // Set all page data (MUST await each set call for persistence)
+    for (const [key, value] of Object.entries(pageData)) {
+      console.log(`  Setting ${key}:`, value);
+      await doc.set(key as any, value);
+    }
+
+    console.log('✅ Page created and saved to SyncKit');
 
     // Create simple page entry for sidebar
     const newPage: Page = {
@@ -76,6 +155,29 @@ function App() {
 
     setPages([newPage, ...pages]);
     setCurrentPageId(newPage.id);
+
+    // Subscribe to title changes for sidebar updates
+    const unsubscribe = doc.subscribe((data) => {
+      setPages((prevPages) =>
+        prevPages.map((p) =>
+          p.id === pageData.id
+            ? {
+                ...p,
+                title: (data.title as string) || 'Untitled',
+                icon: (data.icon as string) || '📄',
+                updatedAt: data.updatedAt
+                  ? new Date(data.updatedAt as number)
+                  : p.updatedAt,
+              }
+            : p
+        )
+      );
+    });
+
+    // Store subscription for cleanup
+    pageSubscriptions.set(pageData.id, unsubscribe);
+
+    console.log('Subscription active for:', pageData.id);
   };
 
   // Handle page selection

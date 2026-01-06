@@ -12,7 +12,6 @@ import {
   Block,
   PageDocument,
   createBlock,
-  createPage,
   getBlockKey,
   parseBlockOrder,
   detectBlockTypeFromPrefix,
@@ -40,47 +39,59 @@ export function Editor({ pageId }: EditorProps) {
       return;
     }
 
-    // Get or create document
-    const doc = synckit.document<PageDocument>(pageId);
+    let mounted = true;
 
-    // Initialize with default page if empty
-    const data = doc.get();
-    if (!data.id) {
-      const newPage = createPage();
-      // Set all fields
-      Object.entries(newPage).forEach(([key, value]) => {
-        doc.set(key as any, value);
+    async function loadDocument() {
+      // Type guard - pageId is checked above but TS needs it here too
+      if (!pageId) return;
+
+      // Get document
+      const doc = synckit.document<PageDocument>(pageId);
+
+      // Initialize document (loads from storage)
+      await doc.init();
+
+      if (!mounted) return;
+
+      // Subscribe to changes
+      const unsubscribe = doc.subscribe((updatedData) => {
+        if (!mounted) return;
+
+        setPageData(updatedData);
+
+        // Extract blocks in order
+        const blockIds = parseBlockOrder(updatedData.blockOrder || '[]');
+        const loadedBlocks: Block[] = [];
+
+        for (const blockId of blockIds) {
+          const block = (updatedData as any)[getBlockKey(blockId)];
+          if (block) {
+            loadedBlocks.push(block);
+          }
+        }
+
+        setBlocks(loadedBlocks);
       });
+
+      setPageDoc(doc);
+
+      return unsubscribe;
     }
 
-    // Subscribe to changes
-    const unsubscribe = doc.subscribe((updatedData) => {
-      setPageData(updatedData);
-
-      // Extract blocks in order
-      const blockIds = parseBlockOrder(updatedData.blockOrder || '[]');
-      const loadedBlocks: Block[] = [];
-
-      for (const blockId of blockIds) {
-        const block = (updatedData as any)[getBlockKey(blockId)];
-        if (block) {
-          loadedBlocks.push(block);
-        }
-      }
-
-      setBlocks(loadedBlocks);
+    let cleanup: (() => void) | undefined;
+    loadDocument().then(unsubscribe => {
+      cleanup = unsubscribe;
     });
 
-    setPageDoc(doc);
-
     return () => {
-      unsubscribe();
+      mounted = false;
+      if (cleanup) cleanup();
     };
   }, [pageId, synckit]);
 
   // Update block content
   const handleBlockContentChange = useCallback(
-    (blockId: string, content: string) => {
+    async (blockId: string, content: string) => {
       if (!pageDoc) return;
 
       const block = (pageData as any)?.[getBlockKey(blockId)];
@@ -92,7 +103,7 @@ export function Editor({ pageId }: EditorProps) {
         updatedAt: Date.now(),
       };
 
-      pageDoc.set(getBlockKey(blockId) as any, updatedBlock);
+      await pageDoc.set(getBlockKey(blockId) as any, updatedBlock);
     },
     [pageDoc, pageData]
   );
@@ -110,18 +121,29 @@ export function Editor({ pageId }: EditorProps) {
       if (e.key === 'Enter' && !e.shiftKey) {
         e.preventDefault();
 
+        // Capture the target before any async operations (React event pooling)
+        const target = e.currentTarget;
+
         // Check for type prefix
         const detectedType = detectBlockTypeFromPrefix(currentBlock.content);
 
         if (detectedType) {
           // Remove prefix and convert block type
           const cleanContent = removeTypePrefix(currentBlock.content, detectedType);
+
+          // Immediately update the DOM to show cleaned content (before async operations)
+          if (target && target.textContent !== cleanContent) {
+            target.textContent = cleanContent;
+          }
+
           const updatedBlock = {
             ...currentBlock,
             type: detectedType,
             content: cleanContent,
             updatedAt: Date.now(),
           };
+
+          // Update SyncKit asynchronously (don't await in event handler)
           pageDoc.set(getBlockKey(blockId) as any, updatedBlock);
         }
 
@@ -133,10 +155,8 @@ export function Editor({ pageId }: EditorProps) {
           ...blockIds.slice(blockIndex + 1),
         ];
 
-        // Update block order
+        // Update block order and add new block (async, but don't await in event handler)
         pageDoc.set('blockOrder', JSON.stringify(newBlockIds));
-
-        // Add new block
         pageDoc.set(getBlockKey(newBlock.id) as any, newBlock);
 
         // Focus will be handled by autoFocus prop
@@ -147,7 +167,7 @@ export function Editor({ pageId }: EditorProps) {
         e.preventDefault();
 
         if (blockIds.length > 1) {
-          // Remove this block
+          // Remove this block (async, but don't await in event handler)
           const newBlockIds = blockIds.filter((id) => id !== blockId);
           pageDoc.set('blockOrder', JSON.stringify(newBlockIds));
           pageDoc.delete(getBlockKey(blockId) as any);
@@ -200,8 +220,12 @@ export function Editor({ pageId }: EditorProps) {
             </button>
             <input
               type="text"
-              value={pageData.title}
-              onChange={(e) => pageDoc?.set('title', e.target.value)}
+              value={pageData.title || ''}
+              onChange={(e) => {
+                if (pageDoc) {
+                  pageDoc.set('title', e.target.value);
+                }
+              }}
               className="flex-1 text-4xl font-bold text-gray-900 bg-transparent border-none outline-none focus:outline-none"
               placeholder="Untitled"
             />
