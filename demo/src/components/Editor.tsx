@@ -44,7 +44,20 @@ export function Editor({ pageId }: EditorProps) {
     selectedText: string;
     range: Range;
   } | null>(null);
+  const [changingBlocks, setChangingBlocks] = useState<Set<string>>(new Set());
   const editorRef = useRef<HTMLDivElement>(null);
+
+  // Trigger block change animation
+  const triggerBlockChangeAnimation = useCallback((blockId: string) => {
+    setChangingBlocks((prev) => new Set(prev).add(blockId));
+    setTimeout(() => {
+      setChangingBlocks((prev) => {
+        const next = new Set(prev);
+        next.delete(blockId);
+        return next;
+      });
+    }, 200); // Match animation duration
+  }, []);
 
   // Load page document when pageId changes
   useEffect(() => {
@@ -205,9 +218,10 @@ export function Editor({ pageId }: EditorProps) {
       };
 
       pageDoc.set(getBlockKey(slashMenu.blockId) as any, updatedBlock);
+      triggerBlockChangeAnimation(slashMenu.blockId);
       setSlashMenu(null);
     },
-    [slashMenu, pageDoc, pageData]
+    [slashMenu, pageDoc, pageData, triggerBlockChangeAnimation]
   );
 
   // Close slash menu
@@ -463,6 +477,68 @@ export function Editor({ pageId }: EditorProps) {
         return; // Don't process other shortcuts
       }
 
+      // Block type conversion shortcuts: Cmd+Alt+Key
+      if (isMod && e.altKey) {
+        let newType: BlockType | null = null;
+
+        // Cmd+Alt+0 - Paragraph
+        if (e.key === '0') {
+          e.preventDefault();
+          newType = BLOCK_TYPES.PARAGRAPH;
+        }
+        // Cmd+Alt+1 - Heading 1
+        else if (e.key === '1') {
+          e.preventDefault();
+          newType = BLOCK_TYPES.HEADING_1;
+        }
+        // Cmd+Alt+2 - Heading 2
+        else if (e.key === '2') {
+          e.preventDefault();
+          newType = BLOCK_TYPES.HEADING_2;
+        }
+        // Cmd+Alt+3 - Heading 3
+        else if (e.key === '3') {
+          e.preventDefault();
+          newType = BLOCK_TYPES.HEADING_3;
+        }
+        // Cmd+Alt+L - Bulleted list
+        else if (e.key === 'l' || e.key === 'L') {
+          e.preventDefault();
+          newType = BLOCK_TYPES.BULLETED_LIST;
+        }
+        // Cmd+Alt+N - Numbered list
+        else if (e.key === 'n' || e.key === 'N') {
+          e.preventDefault();
+          newType = BLOCK_TYPES.NUMBERED_LIST;
+        }
+        // Cmd+Alt+T - Todo
+        else if (e.key === 't' || e.key === 'T') {
+          e.preventDefault();
+          newType = BLOCK_TYPES.TODO;
+        }
+        // Cmd+Alt+Q - Quote
+        else if (e.key === 'q' || e.key === 'Q') {
+          e.preventDefault();
+          newType = BLOCK_TYPES.QUOTE;
+        }
+        // Cmd+Alt+C - Code block
+        else if (e.key === 'c' || e.key === 'C') {
+          e.preventDefault();
+          newType = BLOCK_TYPES.CODE;
+        }
+
+        if (newType) {
+          const updatedBlock = {
+            ...currentBlock,
+            type: newType,
+            updatedAt: Date.now(),
+          };
+          pageDoc.set(getBlockKey(blockId) as any, updatedBlock);
+          triggerBlockChangeAnimation(blockId);
+          return;
+        }
+      }
+
       // Enter: Create new block below
       if (e.key === 'Enter' && !e.shiftKey) {
         e.preventDefault();
@@ -522,23 +598,27 @@ export function Editor({ pageId }: EditorProps) {
         }
       }
     },
-    [pageDoc, pageData]
+    [pageDoc, pageData, triggerBlockChangeAnimation]
   );
 
   // Empty state
   if (!pageId) {
     return (
-      <div className="flex-1 flex items-center justify-center bg-white dark:bg-gray-900">
-        <div className="text-center max-w-md">
-          <div className="text-6xl mb-4">📝</div>
-          <h2 className="text-2xl font-bold text-gray-900 dark:text-gray-100 mb-2">Welcome to LocalWrite</h2>
-          <p className="text-gray-600 dark:text-gray-400 mb-6">
+      <div className="flex-1 flex items-center justify-center bg-white dark:bg-gray-900 animate-fade-in">
+        <div className="text-center max-w-md px-8">
+          <div className="text-7xl mb-6 animate-scale-in">📝</div>
+          <h2 className="text-3xl font-bold text-gray-900 dark:text-gray-100 mb-3">Welcome to LocalWrite</h2>
+          <p className="text-gray-600 dark:text-gray-400 mb-8 text-lg">
             Create a new page to start writing, or select an existing page from the sidebar.
           </p>
-          <div className="bg-primary-50 dark:bg-primary-900/20 border border-primary-200 dark:border-primary-800 rounded-lg p-4">
-            <p className="text-sm text-primary-900 dark:text-primary-100">
-              <strong>Features:</strong> Real-time collaboration, OPFS storage, and field-per-block
-              pattern for optimal performance.
+          <div className="bg-gradient-to-br from-primary-50 to-primary-100 dark:from-primary-900/20 dark:to-primary-800/20 border border-primary-200 dark:border-primary-700 rounded-xl p-6 shadow-sm">
+            <p className="text-sm text-primary-900 dark:text-primary-100 leading-relaxed">
+              <strong className="block mb-2">Keyboard Shortcuts:</strong>
+              <span className="block text-xs opacity-80 space-y-1">
+                <span className="block">• Cmd+B/I/E for formatting</span>
+                <span className="block">• Cmd+Alt+1/2/3 for headings</span>
+                <span className="block">• Type / for block menu</span>
+              </span>
             </p>
           </div>
         </div>
@@ -550,7 +630,10 @@ export function Editor({ pageId }: EditorProps) {
   if (!pageData) {
     return (
       <div className="flex-1 flex items-center justify-center bg-white dark:bg-gray-900">
-        <div className="text-gray-500 dark:text-gray-400">Loading page...</div>
+        <div className="flex flex-col items-center gap-4">
+          <div className="w-8 h-8 border-3 border-gray-300 dark:border-gray-600 border-t-primary-500 dark:border-t-primary-400 rounded-full animate-spin"></div>
+          <div className="text-sm text-gray-500 dark:text-gray-400 animate-pulse">Loading page...</div>
+        </div>
       </div>
     );
   }
@@ -561,7 +644,7 @@ export function Editor({ pageId }: EditorProps) {
         {/* Page header */}
         <div className="mb-8">
           <div className="flex items-center gap-3 mb-2">
-            <button className="text-4xl hover:bg-gray-100 dark:hover:bg-gray-800 rounded p-1 transition-colors">
+            <button className="text-4xl hover:bg-gray-100 dark:hover:bg-gray-800 hover:scale-110 active:scale-95 rounded p-1 transition-all duration-150">
               {pageData.icon}
             </button>
             <input
@@ -587,20 +670,22 @@ export function Editor({ pageId }: EditorProps) {
                 <div className="absolute -top-1 left-0 right-0 h-1 bg-primary-500 rounded-full z-10 shadow-lg shadow-primary-500/50 animate-pulse" />
               )}
 
-              <BlockComponent
-                block={block}
-                blockIndex={index}
-                onContentChange={(content) => handleBlockContentChange(block.id, content)}
-                onKeyDown={(e) => handleBlockKeyDown(block.id, e)}
-                onDragStart={handleDragStart(block.id)}
-                onDragOver={handleDragOver(index)}
-                onDrop={handleDrop(index)}
-                onDragEnd={handleDragEnd}
-                isDragging={draggedBlockId === block.id}
-                autoFocus={index === blocks.length - 1 && blocks.length > 1}
-                onToggleBodyChange={(body) => handleToggleBodyChange(block.id, body)}
-                onToggleStateChange={(collapsed) => handleToggleStateChange(block.id, collapsed)}
-              />
+              <div className={changingBlocks.has(block.id) ? 'animate-block-change' : ''}>
+                <BlockComponent
+                  block={block}
+                  blockIndex={index}
+                  onContentChange={(content) => handleBlockContentChange(block.id, content)}
+                  onKeyDown={(e) => handleBlockKeyDown(block.id, e)}
+                  onDragStart={handleDragStart(block.id)}
+                  onDragOver={handleDragOver(index)}
+                  onDrop={handleDrop(index)}
+                  onDragEnd={handleDragEnd}
+                  isDragging={draggedBlockId === block.id}
+                  autoFocus={index === blocks.length - 1 && blocks.length > 1}
+                  onToggleBodyChange={(body) => handleToggleBodyChange(block.id, body)}
+                  onToggleStateChange={(collapsed) => handleToggleStateChange(block.id, collapsed)}
+                />
+              </div>
             </div>
           ))}
         </div>

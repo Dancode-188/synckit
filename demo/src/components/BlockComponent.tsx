@@ -71,7 +71,7 @@ export function BlockComponent({
         {/* Checkbox */}
         <button
           onClick={handleTodoToggle}
-          className="mt-1 w-4 h-4 rounded border-2 border-gray-300 dark:border-gray-600 flex items-center justify-center hover:border-primary-500 transition-colors flex-shrink-0"
+          className="mt-1 w-4 h-4 rounded border-2 border-gray-300 dark:border-gray-600 flex items-center justify-center hover:border-primary-500 hover:scale-110 active:scale-95 transition-all duration-150 flex-shrink-0"
           style={{ marginTop: '0.2rem' }}
         >
           {isChecked && (
@@ -225,7 +225,7 @@ export function BlockComponent({
           <div className="flex items-start gap-2 p-3">
             <button
               onClick={handleToggle}
-              className="flex-shrink-0 w-5 h-5 flex items-center justify-center text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 transition-all duration-200"
+              className="flex-shrink-0 w-5 h-5 flex items-center justify-center text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 hover:scale-110 active:scale-95 transition-all duration-200"
               style={{ transform: isExpanded ? 'rotate(90deg)' : 'rotate(0deg)' }}
             >
               <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -342,7 +342,7 @@ export function BlockComponent({
 function DragHandle() {
   return (
     <div className="absolute left-0 top-1/2 -translate-y-1/2 -ml-8 opacity-0 group-hover:opacity-100 transition-all duration-200">
-      <button className="w-6 h-6 flex items-center justify-center text-gray-400 dark:text-gray-600 hover:text-gray-700 dark:hover:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700 rounded cursor-grab active:cursor-grabbing transition-colors">
+      <button className="w-6 h-6 flex items-center justify-center text-gray-400 dark:text-gray-600 hover:text-gray-700 dark:hover:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700 hover:scale-110 active:scale-95 rounded cursor-grab active:cursor-grabbing transition-all duration-150">
         <svg
           className="w-4 h-4"
           fill="none"

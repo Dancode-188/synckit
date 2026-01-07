@@ -177,7 +177,7 @@ export function SlashMenu({ query, position, onSelect, onClose }: SlashMenuProps
     return (
       <div
         ref={menuRef}
-        className="absolute z-50 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-lg p-3 min-w-[280px]"
+        className="absolute z-50 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-lg p-3 min-w-[280px] animate-slide-in"
         style={{ top: position.top, left: position.left }}
       >
         <div className="text-sm text-gray-500 dark:text-gray-400 text-center py-2">
@@ -190,7 +190,7 @@ export function SlashMenu({ query, position, onSelect, onClose }: SlashMenuProps
   return (
     <div
       ref={menuRef}
-      className="absolute z-50 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-lg py-1 min-w-[280px] max-h-[320px] overflow-y-auto"
+      className="absolute z-50 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-xl py-1 min-w-[280px] max-h-[320px] overflow-y-auto animate-slide-in"
       style={{ top: position.top, left: position.left }}
     >
       {filteredItems.map((item, index) => (
@@ -198,7 +198,7 @@ export function SlashMenu({ query, position, onSelect, onClose }: SlashMenuProps
           key={item.type}
           onClick={() => onSelect(item.type)}
           className={`
-            w-full px-3 py-2 flex items-center gap-3 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors
+            w-full px-3 py-2 flex items-center gap-3 hover:bg-gray-100 dark:hover:bg-gray-700 hover:scale-[1.02] active:scale-[0.98] transition-all duration-150
             ${index === selectedIndex ? 'bg-gray-100 dark:bg-gray-700' : ''}
           `}
         >

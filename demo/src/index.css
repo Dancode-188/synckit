@@ -57,6 +57,15 @@
     animation: scaleIn 0.2s ease-out;
   }
 
+  /* Block animations */
+  .animate-block-change {
+    animation: blockChange 0.2s ease-out;
+  }
+
+  .animate-slide-in {
+    animation: slideIn 0.2s ease-out;
+  }
+
   @keyframes fadeIn {
     from {
       opacity: 0;
@@ -75,5 +84,42 @@
       opacity: 1;
       transform: translate(-50%, -50%) scale(1);
     }
+  }
+
+  @keyframes blockChange {
+    0% {
+      transform: scale(1);
+      opacity: 1;
+    }
+    50% {
+      transform: scale(0.98);
+      opacity: 0.8;
+    }
+    100% {
+      transform: scale(1);
+      opacity: 1;
+    }
+  }
+
+  @keyframes slideIn {
+    from {
+      opacity: 0;
+      transform: translateY(-8px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+
+  /* Enhanced focus states */
+  [contenteditable]:focus {
+    outline: none;
+    @apply ring-2 ring-primary-500/20 ring-offset-0;
+  }
+
+  /* Smooth transitions for all interactive elements */
+  .group:hover .drag-handle {
+    @apply opacity-100;
   }
 }

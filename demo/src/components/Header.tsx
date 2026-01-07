@@ -63,7 +63,7 @@ export function Header({ storageType, isConnected = false }: HeaderProps) {
           {/* Theme toggle */}
           <button
             onClick={toggleTheme}
-            className="p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
+            className="p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 hover:scale-110 active:scale-95 transition-all duration-150"
             aria-label="Toggle theme"
           >
             {theme === 'light' ? (

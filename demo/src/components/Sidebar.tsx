@@ -29,7 +29,7 @@ export function Sidebar({ pages, currentPageId, onPageSelect, onNewPage }: Sideb
       <div className="p-4 border-b border-gray-200 dark:border-gray-700">
         <button
           onClick={onNewPage}
-          className="w-full px-4 py-2 bg-primary-500 hover:bg-primary-600 text-white rounded-lg font-medium text-sm transition-colors"
+          className="w-full px-4 py-2 bg-primary-500 hover:bg-primary-600 hover:scale-105 active:scale-95 text-white rounded-lg font-medium text-sm transition-all duration-150 shadow-sm hover:shadow-md"
         >
           + New Page
         </button>
@@ -47,7 +47,7 @@ export function Sidebar({ pages, currentPageId, onPageSelect, onNewPage }: Sideb
               <button
                 key={page.id}
                 onClick={() => onPageSelect(page.id)}
-                className={`w-full text-left px-3 py-2 rounded-lg transition-colors ${
+                className={`w-full text-left px-3 py-2 rounded-lg hover:scale-[1.02] active:scale-[0.98] transition-all duration-150 ${
                   currentPageId === page.id
                     ? 'bg-primary-100 dark:bg-primary-900/30 text-primary-900 dark:text-primary-100'
                     : 'hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-300'
