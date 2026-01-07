@@ -186,6 +186,39 @@ function App() {
     setCurrentPageId(pageId);
   };
 
+  // Handle page deletion
+  const handleDeletePage = async (pageId: string) => {
+    if (!synckit) return;
+
+    try {
+      // Unsubscribe from page updates
+      const unsubscribe = pageSubscriptions.get(pageId);
+      if (unsubscribe) {
+        unsubscribe();
+        pageSubscriptions.delete(pageId);
+      }
+
+      // Delete from storage
+      const storage = (synckit as any).storage;
+      if (storage) {
+        await storage.delete(pageId);
+        console.log(`🗑️ Deleted page: ${pageId}`);
+      }
+
+      // Remove from pages list
+      setPages((prevPages) => prevPages.filter((p) => p.id !== pageId));
+
+      // If this was the current page, switch to another page or clear
+      if (currentPageId === pageId) {
+        const remainingPages = pages.filter((p) => p.id !== pageId);
+        setCurrentPageId(remainingPages.length > 0 ? remainingPages[0].id : undefined);
+      }
+    } catch (error) {
+      console.error('Failed to delete page:', error);
+      alert('Failed to delete page. Please try again.');
+    }
+  };
+
   // Get current page data
   const currentPage = pages.find(p => p.id === currentPageId);
 
@@ -242,6 +275,7 @@ function App() {
               currentPageId={currentPageId}
               onPageSelect={handlePageSelect}
               onNewPage={handleNewPage}
+              onDeletePage={handleDeletePage}
             />
           }
         >

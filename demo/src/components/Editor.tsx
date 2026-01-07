@@ -4,11 +4,12 @@
  */
 
 import { useState, useEffect, KeyboardEvent, useCallback, useRef } from 'react';
-import { SyncDocument } from '@synckit-js/sdk';
+import { SyncDocument, SnapshotScheduler } from '@synckit-js/sdk';
 import { useSyncKit } from '../contexts/SyncKitContext';
 import { BlockComponent } from './BlockComponent';
 import { SlashMenu } from './SlashMenu';
 import { LinkDialog } from './LinkDialog';
+import { SnapshotDialog } from './SnapshotDialog';
 import { UI_CONFIG, BLOCK_TYPES, BlockType } from '../lib/constants';
 import {
   Block,
@@ -45,7 +46,25 @@ export function Editor({ pageId }: EditorProps) {
     range: Range;
   } | null>(null);
   const [changingBlocks, setChangingBlocks] = useState<Set<string>>(new Set());
+  const [snapshotScheduler, setSnapshotScheduler] = useState<SnapshotScheduler | null>(null);
+  const [lastSnapshotTime, setLastSnapshotTime] = useState<number | null>(null);
+  const [showSnapshotDialog, setShowSnapshotDialog] = useState(false);
   const editorRef = useRef<HTMLDivElement>(null);
+
+  // Clean up duplicate blocks (one-time utility)
+  const cleanupDuplicates = useCallback(async () => {
+    if (!pageDoc || !pageData) return;
+
+    const blockIds = parseBlockOrder(pageData.blockOrder || '[]');
+
+    // Remove duplicates from blockOrder
+    const uniqueBlockIds = Array.from(new Set(blockIds));
+
+    if (uniqueBlockIds.length !== blockIds.length) {
+      console.log(`Removing ${blockIds.length - uniqueBlockIds.length} duplicate blocks`);
+      await pageDoc.set('blockOrder', JSON.stringify(uniqueBlockIds));
+    }
+  }, [pageDoc, pageData]);
 
   // Trigger block change animation
   const triggerBlockChangeAnimation = useCallback((blockId: string) => {
@@ -65,10 +84,15 @@ export function Editor({ pageId }: EditorProps) {
       setPageDoc(null);
       setPageData(null);
       setBlocks([]);
+      setSnapshotScheduler(null);
+      setLastSnapshotTime(null);
       return;
     }
 
     let mounted = true;
+    let unsubscribe: (() => void) | undefined;
+    let scheduler: SnapshotScheduler | null = null;
+    let snapshotInterval: NodeJS.Timeout | null = null;
 
     async function loadDocument() {
       // Type guard - pageId is checked above but TS needs it here too
@@ -83,7 +107,7 @@ export function Editor({ pageId }: EditorProps) {
       if (!mounted) return;
 
       // Subscribe to changes
-      const unsubscribe = doc.subscribe((updatedData) => {
+      unsubscribe = doc.subscribe((updatedData) => {
         if (!mounted) return;
 
         setPageData(updatedData);
@@ -104,17 +128,46 @@ export function Editor({ pageId }: EditorProps) {
 
       setPageDoc(doc);
 
-      return unsubscribe;
+      // Clean up any duplicate blocks (safety check)
+      const blockIds = parseBlockOrder((await doc.get()).blockOrder || '[]');
+      const uniqueBlockIds = Array.from(new Set(blockIds));
+      if (uniqueBlockIds.length !== blockIds.length) {
+        console.log(`Found ${blockIds.length - uniqueBlockIds.length} duplicate blocks, cleaning up...`);
+        await doc.set('blockOrder', JSON.stringify(uniqueBlockIds));
+      }
+
+      // Set up auto-snapshots
+      const storage = (synckit as any).storage; // Access internal storage
+      if (storage) {
+        scheduler = new SnapshotScheduler(doc, storage, {
+          enabled: true,
+          timeIntervalMs: 5 * 60 * 1000, // 5 minutes for demo (instead of default 1 hour)
+          operationCount: 100, // Snapshot after 100 operations (instead of default 1000)
+          maxSnapshots: 10, // Keep 10 snapshots (instead of default 5)
+          compress: false,
+        });
+
+        scheduler.start();
+        setSnapshotScheduler(scheduler);
+
+        // Update last snapshot time periodically
+        snapshotInterval = setInterval(() => {
+          if (scheduler) {
+            const stats = scheduler.getStats();
+            setLastSnapshotTime(stats.lastSnapshotTime);
+          }
+        }, 1000);
+      }
     }
 
-    let cleanup: (() => void) | undefined;
-    loadDocument().then(unsubscribe => {
-      cleanup = unsubscribe;
-    });
+    loadDocument();
 
     return () => {
       mounted = false;
-      if (cleanup) cleanup();
+      if (unsubscribe) unsubscribe();
+      if (scheduler) scheduler.stop();
+      if (snapshotInterval) clearInterval(snapshotInterval);
+      setSnapshotScheduler(null);
     };
   }, [pageId, synckit]);
 
@@ -159,8 +212,13 @@ export function Editor({ pageId }: EditorProps) {
       };
 
       await pageDoc.set(getBlockKey(blockId) as any, updatedBlock);
+
+      // Record operation for snapshot scheduler
+      if (snapshotScheduler) {
+        snapshotScheduler.recordOperation();
+      }
     },
-    [pageDoc, pageData]
+    [pageDoc, pageData, snapshotScheduler]
   );
 
   // Update toggle block body
@@ -658,6 +716,29 @@ export function Editor({ pageId }: EditorProps) {
               className="flex-1 text-4xl font-bold text-gray-900 dark:text-gray-100 bg-transparent border-none outline-none focus:outline-none placeholder:text-gray-400 dark:placeholder:text-gray-600"
               placeholder="Untitled"
             />
+            {/* Snapshot indicator */}
+            {snapshotScheduler && lastSnapshotTime && (
+              <div className="flex items-center gap-2 px-3 py-1.5 bg-gray-100 dark:bg-gray-700 rounded-full text-xs">
+                <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
+                <span className="text-gray-700 dark:text-gray-300">
+                  Auto-save: {formatTimeSince(lastSnapshotTime)}
+                </span>
+                <button
+                  onClick={() => snapshotScheduler.triggerSnapshot()}
+                  className="ml-1 px-2 py-0.5 bg-primary-500 hover:bg-primary-600 text-white rounded text-xs hover:scale-105 active:scale-95 transition-all duration-150"
+                  title="Create snapshot now"
+                >
+                  Save
+                </button>
+                <button
+                  onClick={() => setShowSnapshotDialog(true)}
+                  className="px-2 py-0.5 bg-gray-600 hover:bg-gray-700 text-white rounded text-xs hover:scale-105 active:scale-95 transition-all duration-150"
+                  title="Restore from snapshot"
+                >
+                  Restore
+                </button>
+              </div>
+            )}
           </div>
         </div>
 
@@ -709,6 +790,26 @@ export function Editor({ pageId }: EditorProps) {
           onCancel={handleLinkCancel}
         />
       )}
+
+      {/* Snapshot Dialog */}
+      {showSnapshotDialog && (
+        <SnapshotDialog
+          scheduler={snapshotScheduler}
+          document={pageDoc}
+          onClose={() => setShowSnapshotDialog(false)}
+        />
+      )}
     </div>
   );
+}
+
+// Helper function to format time since last snapshot
+function formatTimeSince(timestamp: number): string {
+  const seconds = Math.floor((Date.now() - timestamp) / 1000);
+
+  if (seconds < 60) return 'just now';
+  if (seconds < 120) return '1 min ago';
+  if (seconds < 3600) return `${Math.floor(seconds / 60)} mins ago`;
+  if (seconds < 7200) return '1 hour ago';
+  return `${Math.floor(seconds / 3600)} hours ago`;
 }

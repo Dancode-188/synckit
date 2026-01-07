@@ -41,6 +41,10 @@ export type { CrossTabSyncOptions } from './sync/cross-tab'
 export { UndoManager } from './undo/undo-manager'
 export type { Operation, UndoManagerState } from './undo/undo-manager'
 
+// Snapshots
+export { SnapshotScheduler } from './snapshot-scheduler'
+export type { SnapshotMetadata, SnapshotOptions, AutoSnapshotConfig } from './types'
+
 // Storage adapters
 export { MemoryStorage, IndexedDBStorage, OPFSStorage, createStorage } from './storage'
 export type { StorageAdapter, StoredDocument } from './storage'
