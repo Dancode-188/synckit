@@ -12,13 +12,14 @@ interface LayoutProps {
   sidebar: ReactNode;
   children: ReactNode;
   onSearchClick?: () => void;
+  onExportClick?: () => void;
 }
 
-export function Layout({ storageType, isConnected, sidebar, children, onSearchClick }: LayoutProps) {
+export function Layout({ storageType, isConnected, sidebar, children, onSearchClick, onExportClick }: LayoutProps) {
   return (
     <div className="h-screen flex flex-col bg-white dark:bg-gray-900">
       {/* Header */}
-      <Header storageType={storageType} isConnected={isConnected} onSearchClick={onSearchClick} />
+      <Header storageType={storageType} isConnected={isConnected} onSearchClick={onSearchClick} onExportClick={onExportClick} />
 
       {/* Main content area */}
       <div className="flex-1 flex overflow-hidden">

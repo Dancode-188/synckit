@@ -10,9 +10,10 @@ interface HeaderProps {
   storageType?: 'opfs' | 'indexeddb';
   isConnected?: boolean;
   onSearchClick?: () => void;
+  onExportClick?: () => void;
 }
 
-export function Header({ storageType, isConnected = false, onSearchClick }: HeaderProps) {
+export function Header({ storageType, isConnected = false, onSearchClick, onExportClick }: HeaderProps) {
   const [currentTime, setCurrentTime] = useState(new Date());
   const { theme, toggleTheme } = useTheme();
 
@@ -81,6 +82,19 @@ export function Header({ storageType, isConnected = false, onSearchClick }: Head
               {isConnected ? 'Connected' : 'Offline'}
             </span>
           </div>
+
+          {/* Export button */}
+          {onExportClick && (
+            <button
+              onClick={onExportClick}
+              className="p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 hover:scale-110 active:scale-95 transition-all duration-150"
+              title="Export pages"
+            >
+              <svg className="w-5 h-5 text-gray-700 dark:text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+              </svg>
+            </button>
+          )}
 
           {/* Theme toggle */}
           <button

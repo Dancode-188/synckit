@@ -4,6 +4,7 @@ import { Layout } from './components/Layout';
 import { Sidebar } from './components/Sidebar';
 import { Editor } from './components/Editor';
 import { SearchDialog } from './components/SearchDialog';
+import { ExportDialog } from './components/ExportDialog';
 import { SyncKitProvider } from './contexts/SyncKitContext';
 import { ThemeProvider } from './contexts/ThemeContext';
 import { initializeSyncKit } from './lib/synckit';
@@ -27,6 +28,7 @@ function App() {
   const [error, setError] = useState<string | null>(null);
   const [pageSubscriptions] = useState<Map<string, () => void>>(new Map());
   const [showSearchDialog, setShowSearchDialog] = useState(false);
+  const [showExportDialog, setShowExportDialog] = useState(false);
 
   // Initialize SyncKit on mount
   useEffect(() => {
@@ -315,6 +317,7 @@ function App() {
           storageType={storageType}
           isConnected={isConnected}
           onSearchClick={() => setShowSearchDialog(true)}
+          onExportClick={() => setShowExportDialog(true)}
           sidebar={
             <Sidebar
               pages={pages}
@@ -339,6 +342,18 @@ function App() {
             pages={pages}
             onNavigate={handlePageSelect}
             onClose={() => setShowSearchDialog(false)}
+          />
+        )}
+
+        {/* Export Dialog */}
+        {showExportDialog && (
+          <ExportDialog
+            synckit={synckit}
+            currentPageId={currentPageId}
+            currentPageTitle={currentPage?.title}
+            currentPageIcon={currentPage?.icon}
+            allPages={pages}
+            onClose={() => setShowExportDialog(false)}
           />
         )}
       </SyncKitProvider>
