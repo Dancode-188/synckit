@@ -3,6 +3,7 @@ import { SyncKit } from '@synckit-js/sdk';
 import { Layout } from './components/Layout';
 import { Sidebar } from './components/Sidebar';
 import { Editor } from './components/Editor';
+import { SearchDialog } from './components/SearchDialog';
 import { SyncKitProvider } from './contexts/SyncKitContext';
 import { ThemeProvider } from './contexts/ThemeContext';
 import { initializeSyncKit } from './lib/synckit';
@@ -25,6 +26,7 @@ function App() {
   const [isInitializing, setIsInitializing] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [pageSubscriptions] = useState<Map<string, () => void>>(new Map());
+  const [showSearchDialog, setShowSearchDialog] = useState(false);
 
   // Initialize SyncKit on mount
   useEffect(() => {
@@ -46,9 +48,14 @@ function App() {
         // Load existing pages from storage
         const docIds = await storage.storage.list();
         console.log('📂 Found documents in storage:', docIds);
+
+        // Filter out snapshot keys - they shouldn't be loaded as pages
+        const pageIds = docIds.filter(id => !id.startsWith('snapshot:'));
+        console.log('📄 Page documents (excluding snapshots):', pageIds);
+
         const loadedPages: Page[] = [];
 
-        for (const docId of docIds) {
+        for (const docId of pageIds) {
           // Load document data directly from storage
           const storedDoc = await storage.storage.get(docId);
           console.log(`  Loading ${docId}:`, storedDoc);
@@ -79,8 +86,15 @@ function App() {
         setPages(loadedPages);
 
         // Subscribe to all loaded pages for sidebar updates
+        // Use local Map to prevent race conditions with cleanup
         if (!mounted) return;
+
+        const newSubscriptions = new Map<string, () => void>();
+
         for (const page of loadedPages) {
+          // Check mounted status on each iteration
+          if (!mounted) break;
+
           const doc = synckit.document<PageDocument>(page.id);
           const unsubscribe = doc.subscribe((data) => {
             if (!mounted) return;
@@ -99,8 +113,20 @@ function App() {
               )
             );
           });
-          pageSubscriptions.set(page.id, unsubscribe);
+          newSubscriptions.set(page.id, unsubscribe);
         }
+
+        // Final mounted check before committing subscriptions
+        if (!mounted) {
+          // Clean up subscriptions we just created
+          newSubscriptions.forEach((unsub) => unsub());
+          return;
+        }
+
+        // Only now add to shared Map
+        newSubscriptions.forEach((unsub, id) => {
+          pageSubscriptions.set(id, unsub);
+        });
 
         setIsInitializing(false);
         console.log(`✅ LocalWrite initialized successfully (${loadedPages.length} pages loaded)`);
@@ -121,7 +147,20 @@ function App() {
       pageSubscriptions.forEach((unsub) => unsub());
       pageSubscriptions.clear();
     };
-  }, [pageSubscriptions]);
+  }, []); // Empty deps - this should run once on mount
+
+  // Keyboard shortcut for search (Cmd/Ctrl+P)
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && e.key === 'p') {
+        e.preventDefault();
+        setShowSearchDialog(true);
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, []);
 
   // Handle new page creation
   const handleNewPage = async () => {
@@ -154,7 +193,8 @@ function App() {
       updatedAt: new Date(pageData.createdAt),
     };
 
-    setPages([newPage, ...pages]);
+    // Use functional form to avoid stale closure
+    setPages((prevPages) => [newPage, ...prevPages]);
     setCurrentPageId(newPage.id);
 
     // Subscribe to title changes for sidebar updates
@@ -205,13 +245,18 @@ function App() {
         console.log(`🗑️ Deleted page: ${pageId}`);
       }
 
-      // Remove from pages list
-      setPages((prevPages) => prevPages.filter((p) => p.id !== pageId));
-
-      // If this was the current page, switch to another page or clear
+      // Remove from pages list and switch page if needed
       if (currentPageId === pageId) {
-        const remainingPages = pages.filter((p) => p.id !== pageId);
-        setCurrentPageId(remainingPages.length > 0 ? remainingPages[0].id : undefined);
+        // Need to switch to another page
+        setPages((prevPages) => {
+          const remainingPages = prevPages.filter((p) => p.id !== pageId);
+          // Switch to first remaining page or clear
+          setCurrentPageId(remainingPages.length > 0 ? remainingPages[0].id : undefined);
+          return remainingPages;
+        });
+      } else {
+        // Just remove from list
+        setPages((prevPages) => prevPages.filter((p) => p.id !== pageId));
       }
     } catch (error) {
       console.error('Failed to delete page:', error);
@@ -269,6 +314,7 @@ function App() {
         <Layout
           storageType={storageType}
           isConnected={isConnected}
+          onSearchClick={() => setShowSearchDialog(true)}
           sidebar={
             <Sidebar
               pages={pages}
@@ -285,6 +331,16 @@ function App() {
             pageIcon={currentPage?.icon}
           />
         </Layout>
+
+        {/* Search Dialog */}
+        {showSearchDialog && (
+          <SearchDialog
+            synckit={synckit}
+            pages={pages}
+            onNavigate={handlePageSelect}
+            onClose={() => setShowSearchDialog(false)}
+          />
+        )}
       </SyncKitProvider>
     </ThemeProvider>
   );

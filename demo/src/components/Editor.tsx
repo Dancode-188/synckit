@@ -51,21 +51,6 @@ export function Editor({ pageId }: EditorProps) {
   const [showSnapshotDialog, setShowSnapshotDialog] = useState(false);
   const editorRef = useRef<HTMLDivElement>(null);
 
-  // Clean up duplicate blocks (one-time utility)
-  const cleanupDuplicates = useCallback(async () => {
-    if (!pageDoc || !pageData) return;
-
-    const blockIds = parseBlockOrder(pageData.blockOrder || '[]');
-
-    // Remove duplicates from blockOrder
-    const uniqueBlockIds = Array.from(new Set(blockIds));
-
-    if (uniqueBlockIds.length !== blockIds.length) {
-      console.log(`Removing ${blockIds.length - uniqueBlockIds.length} duplicate blocks`);
-      await pageDoc.set('blockOrder', JSON.stringify(uniqueBlockIds));
-    }
-  }, [pageDoc, pageData]);
-
   // Trigger block change animation
   const triggerBlockChangeAnimation = useCallback((blockId: string) => {
     setChangingBlocks((prev) => new Set(prev).add(blockId));

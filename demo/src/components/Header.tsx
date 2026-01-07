@@ -9,9 +9,10 @@ import { useTheme } from '../contexts/ThemeContext';
 interface HeaderProps {
   storageType?: 'opfs' | 'indexeddb';
   isConnected?: boolean;
+  onSearchClick?: () => void;
 }
 
-export function Header({ storageType, isConnected = false }: HeaderProps) {
+export function Header({ storageType, isConnected = false, onSearchClick }: HeaderProps) {
   const [currentTime, setCurrentTime] = useState(new Date());
   const { theme, toggleTheme } = useTheme();
 
@@ -39,6 +40,27 @@ export function Header({ storageType, isConnected = false }: HeaderProps) {
             </p>
           </div>
         </div>
+
+        {/* Center: Search */}
+        {onSearchClick && (
+          <div className="flex-1 flex justify-center px-8">
+            <button
+              onClick={onSearchClick}
+              className="w-full max-w-md px-4 py-2 bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 rounded-lg flex items-center gap-3 transition-all duration-150 hover:scale-[1.02] active:scale-[0.98]"
+            >
+              <svg className="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+              </svg>
+              <span className="text-sm text-gray-500 dark:text-gray-400">Search pages...</span>
+              <div className="ml-auto flex items-center gap-1">
+                <kbd className="px-1.5 py-0.5 bg-gray-200 dark:bg-gray-600 rounded text-xs font-mono text-gray-600 dark:text-gray-300">
+                  {navigator.platform.includes('Mac') ? '⌘' : 'Ctrl'}
+                </kbd>
+                <kbd className="px-1.5 py-0.5 bg-gray-200 dark:bg-gray-600 rounded text-xs font-mono text-gray-600 dark:text-gray-300">P</kbd>
+              </div>
+            </button>
+          </div>
+        )}
 
         {/* Right: Status indicators */}
         <div className="flex items-center gap-4">
