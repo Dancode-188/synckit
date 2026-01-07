@@ -23,8 +23,9 @@ public class ConnectionManager : IConnectionManager
     /// Semaphore to throttle concurrent connection creation.
     /// This helps prevent socket accept race conditions under burst traffic on macOS.
     /// See: dotnet/runtime#47020
+    /// Reduced to 10 to spread out connection creation and avoid socket race.
     /// </summary>
-    private readonly SemaphoreSlim _connectionSemaphore = new(50, 50);
+    private readonly SemaphoreSlim _connectionSemaphore = new(10, 10);
 
     /// <summary>
     /// Creates a new ConnectionManager instance.

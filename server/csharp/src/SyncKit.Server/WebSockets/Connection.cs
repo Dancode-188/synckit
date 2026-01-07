@@ -10,7 +10,8 @@ namespace SyncKit.Server.WebSockets;
 /// </summary>
 public class Connection : IConnection
 {
-    private const int BufferSize = 4096;
+    private const int BufferSize = 8192; // Increased to 8KB per receive
+    private const int MaxMessageSize = 10 * 1024 * 1024; // 10MB max message size
 
     private readonly WebSocket _webSocket;
     private readonly IProtocolHandler _jsonHandler;
@@ -21,6 +22,7 @@ public class Connection : IConnection
     private byte[]? _rentedBuffer;
     private Timer? _heartbeatTimer;
     private DateTime _lastPong;
+    private readonly MemoryStream _messageBuffer = new(); // For accumulating fragmented messages
 
     /// <inheritdoc />
     public string Id { get; }
@@ -112,15 +114,41 @@ public class Connection : IConnection
                 LastActivity = DateTime.UtcNow;
                 IsAlive = true;
 
+                // Accumulate message fragments
+                _messageBuffer.Write(buffer, 0, result.Count);
+
+                // Check if this is the end of the message
+                if (!result.EndOfMessage)
+                {
+                    // Check for oversized messages
+                    if (_messageBuffer.Length > MaxMessageSize)
+                    {
+                        _logger.LogWarning("Message from connection {ConnectionId} exceeds max size {MaxSize}",
+                            Id, MaxMessageSize);
+                        _messageBuffer.SetLength(0);
+                        await CloseAsync(
+                            WebSocketCloseStatus.MessageTooBig,
+                            "Message too large",
+                            CancellationToken.None);
+                        break;
+                    }
+
+                    // Wait for more fragments
+                    continue;
+                }
+
+                // Complete message received
+                var completeMessage = _messageBuffer.ToArray();
+                _messageBuffer.SetLength(0); // Reset buffer for next message
+
                 // Detect protocol type from first message
                 if (Protocol == ProtocolType.Unknown)
                 {
-                    DetectProtocol(new ReadOnlySpan<byte>(buffer, 0, result.Count));
+                    DetectProtocol(new ReadOnlySpan<byte>(completeMessage));
                 }
 
-                // Process the message - full implementation in P2-02
-                var messageBytes = new ReadOnlyMemory<byte>(buffer, 0, result.Count);
-                await HandleMessageAsync(messageBytes, linkedCts.Token);
+                // Process the complete message
+                await HandleMessageAsync(new ReadOnlyMemory<byte>(completeMessage), linkedCts.Token);
             }
         }
         finally
@@ -425,6 +453,8 @@ public class Connection : IConnection
             ArrayPool<byte>.Shared.Return(_rentedBuffer);
             _rentedBuffer = null;
         }
+
+        _messageBuffer.Dispose();
 
         GC.SuppressFinalize(this);
     }

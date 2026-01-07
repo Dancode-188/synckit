@@ -25,8 +25,10 @@ public class SyncWebSocketMiddleware
     /// Semaphore to throttle concurrent WebSocket accept operations.
     /// This helps prevent socket accept race conditions under burst traffic on macOS.
     /// See: dotnet/runtime#47020 - SocketAddress validation errors during high burst accepts
+    /// Reduced to 20 concurrent accepts to stay well below the ~180 connection threshold
+    /// where the race condition typically manifests.
     /// </summary>
-    private static readonly SemaphoreSlim _acceptSemaphore = new(100, 100);
+    private static readonly SemaphoreSlim _acceptSemaphore = new(20, 20);
 
     /// <summary>
     /// Creates a new instance of the WebSocket middleware.
