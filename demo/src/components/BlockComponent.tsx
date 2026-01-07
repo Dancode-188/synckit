@@ -19,6 +19,8 @@ interface BlockComponentProps {
   onDrop?: (e: React.DragEvent) => void;
   onDragEnd?: (e: React.DragEvent) => void;
   isDragging?: boolean;
+  onToggleBodyChange?: (body: string) => void;
+  onToggleStateChange?: (collapsed: boolean) => void;
 }
 
 export function BlockComponent({
@@ -32,6 +34,8 @@ export function BlockComponent({
   onDrop,
   onDragEnd,
   isDragging = false,
+  onToggleBodyChange,
+  onToggleStateChange,
 }: BlockComponentProps) {
   // Local state for TODO checkbox
   const [isChecked, setIsChecked] = useState(
@@ -187,6 +191,74 @@ export function BlockComponent({
             className={`flex-1 text-base ${style.textClass} min-h-[1.5em] leading-relaxed empty:before:content-[attr(data-placeholder)] empty:before:opacity-50`}
             autoFocus={autoFocus}
           />
+        </div>
+
+        {/* Hover handle */}
+        <DragHandle />
+      </div>
+    );
+  }
+
+  // Render toggle blocks (collapsible sections)
+  if (block.type === BLOCK_TYPES.TOGGLE) {
+    const isExpanded = !block.collapsed;
+
+    const handleToggle = () => {
+      if (onToggleStateChange) {
+        onToggleStateChange(!isExpanded);
+      }
+    };
+
+    return (
+      <div
+        className={`group relative transition-all duration-150 ${
+          isDragging ? 'opacity-50' : 'opacity-100'
+        }`}
+        draggable
+        onDragStart={onDragStart}
+        onDragOver={onDragOver}
+        onDrop={onDrop}
+        onDragEnd={onDragEnd}
+      >
+        <div className="bg-gray-50 dark:bg-gray-800/50 rounded-lg border border-gray-200 dark:border-gray-700">
+          {/* Toggle header */}
+          <div className="flex items-start gap-2 p-3">
+            <button
+              onClick={handleToggle}
+              className="flex-shrink-0 w-5 h-5 flex items-center justify-center text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 transition-all duration-200"
+              style={{ transform: isExpanded ? 'rotate(90deg)' : 'rotate(0deg)' }}
+            >
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+              </svg>
+            </button>
+
+            <ContentEditable
+              content={block.content}
+              onChange={onContentChange}
+              onKeyDown={onKeyDown}
+              placeholder="Toggle title"
+              className="flex-1 text-base font-medium text-gray-900 dark:text-gray-100 min-h-[1.5em] empty:before:content-[attr(data-placeholder)] empty:before:text-gray-400 dark:empty:before:text-gray-600"
+              autoFocus={autoFocus}
+            />
+          </div>
+
+          {/* Toggle body (collapsible) */}
+          {isExpanded && (
+            <div className="px-3 pb-3 pl-10 animate-fade-in">
+              <ContentEditable
+                content={block.toggleBody || ''}
+                onChange={(newBody) => {
+                  if (onToggleBodyChange) {
+                    onToggleBodyChange(newBody);
+                  }
+                }}
+                onKeyDown={onKeyDown}
+                placeholder="Toggle content..."
+                className="text-sm text-gray-700 dark:text-gray-300 min-h-[1.5em] empty:before:content-[attr(data-placeholder)] empty:before:text-gray-400 dark:empty:before:text-gray-600"
+              />
+            </div>
+          )}
         </div>
 
         {/* Hover handle */}

@@ -150,6 +150,44 @@ export function Editor({ pageId }: EditorProps) {
     [pageDoc, pageData]
   );
 
+  // Update toggle block body
+  const handleToggleBodyChange = useCallback(
+    async (blockId: string, body: string) => {
+      if (!pageDoc || !pageData) return;
+
+      const block = (pageData as any)?.[getBlockKey(blockId)];
+      if (!block) return;
+
+      const updatedBlock = {
+        ...block,
+        toggleBody: body,
+        updatedAt: Date.now(),
+      };
+
+      await pageDoc.set(getBlockKey(blockId) as any, updatedBlock);
+    },
+    [pageDoc, pageData]
+  );
+
+  // Update toggle block collapsed state
+  const handleToggleStateChange = useCallback(
+    async (blockId: string, collapsed: boolean) => {
+      if (!pageDoc || !pageData) return;
+
+      const block = (pageData as any)?.[getBlockKey(blockId)];
+      if (!block) return;
+
+      const updatedBlock = {
+        ...block,
+        collapsed,
+        updatedAt: Date.now(),
+      };
+
+      await pageDoc.set(getBlockKey(blockId) as any, updatedBlock);
+    },
+    [pageDoc, pageData]
+  );
+
   // Handle slash menu selection
   const handleSlashMenuSelect = useCallback(
     (type: BlockType) => {
@@ -560,6 +598,8 @@ export function Editor({ pageId }: EditorProps) {
                 onDragEnd={handleDragEnd}
                 isDragging={draggedBlockId === block.id}
                 autoFocus={index === blocks.length - 1 && blocks.length > 1}
+                onToggleBodyChange={(body) => handleToggleBodyChange(block.id, body)}
+                onToggleStateChange={(collapsed) => handleToggleStateChange(block.id, collapsed)}
               />
             </div>
           ))}

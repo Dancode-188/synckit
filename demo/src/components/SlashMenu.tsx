@@ -101,6 +101,13 @@ const MENU_ITEMS: MenuItem[] = [
     icon: '✅',
     keywords: ['success', 'done', 'callout', 'complete'],
   },
+  {
+    type: BLOCK_TYPES.TOGGLE,
+    label: 'Toggle',
+    description: 'Collapsible section',
+    icon: '▶',
+    keywords: ['toggle', 'collapse', 'expand', 'accordion', 'dropdown'],
+  },
 ];
 
 interface SlashMenuProps {

@@ -15,6 +15,9 @@ export interface Block {
   content: string;
   createdAt: number;
   updatedAt: number;
+  // Optional fields for toggle blocks
+  toggleBody?: string;  // Collapsible content
+  collapsed?: boolean;  // Whether toggle is collapsed
 }
 
 /**
