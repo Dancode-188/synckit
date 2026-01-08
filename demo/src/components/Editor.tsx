@@ -174,7 +174,18 @@ export function Editor({ pageId }: EditorProps) {
       }
       if (scheduler) scheduler.stop();
       if (snapshotInterval) clearInterval(snapshotInterval);
+
+      // CRITICAL: Dispose document to free memory (lazy loading)
+      // This prevents memory leaks when switching pages
+      if (pageDoc) {
+        console.log(`🧹 Disposing page document: ${pageId}`);
+        (pageDoc as any).dispose?.();
+      }
+
       setSnapshotScheduler(null);
+      setPageDoc(null);
+      setPageData(null);
+      setBlocks([]);
     };
   }, [pageId, synckit]);
 
@@ -973,6 +984,7 @@ export function Editor({ pageId }: EditorProps) {
         </div>
 
         {/* Blocks */}
+        {/* TODO: Add virtual scrolling for 100+ blocks */}
         <div className="space-y-2">
           {blocks.map((block, index) => (
             <div key={block.id} className="relative" data-block-id={block.id}>
@@ -1001,6 +1013,13 @@ export function Editor({ pageId }: EditorProps) {
             </div>
           ))}
         </div>
+
+        {/* Warning for large documents */}
+        {blocks.length > 100 && (
+          <div className="mt-4 p-3 bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-lg text-sm text-yellow-800 dark:text-yellow-200">
+            ⚠️ This page has {blocks.length} blocks. Performance may be affected. Virtual scrolling coming soon.
+          </div>
+        )}
       </div>
 
       {/* Slash Command Menu */}

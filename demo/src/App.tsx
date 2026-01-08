@@ -5,6 +5,7 @@ import { Sidebar } from './components/Sidebar';
 import { Editor } from './components/Editor';
 import { SearchDialog } from './components/SearchDialog';
 import { ExportDialog } from './components/ExportDialog';
+import { MemoryMonitor } from './components/MemoryMonitor';
 import { SyncKitProvider } from './contexts/SyncKitContext';
 import { ThemeProvider } from './contexts/ThemeContext';
 import { initializeSyncKit } from './lib/synckit';
@@ -356,6 +357,9 @@ function App() {
             onClose={() => setShowExportDialog(false)}
           />
         )}
+
+        {/* Memory Monitor (dev mode only) */}
+        <MemoryMonitor />
       </SyncKitProvider>
     </ThemeProvider>
   );
