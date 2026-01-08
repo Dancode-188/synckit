@@ -31,12 +31,12 @@ export async function initializeSyncKit(): Promise<SyncKitInfo> {
   const storageInfo = await initializeStorage();
   console.log(`📦 Storage initialized: ${storageInfo.type.toUpperCase()}`);
 
-  // Create SyncKit instance
+  // Create SyncKit instance with server connection
   const synckit = new SyncKit({
     name: 'localwrite',
     storage: storageInfo.storage,
-    // Note: Server sync will be added in v0.3.0
-    // For now (v0.2.3), we're local-first only
+    // Connect to production server for real-time collaboration
+    serverUrl: 'wss://synckit-localwrite.fly.dev/ws',
   });
 
   await synckit.init();

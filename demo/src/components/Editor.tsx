@@ -22,6 +22,7 @@ import {
 } from '../lib/blocks';
 import { htmlToMarkdown } from '../lib/markdown';
 import { getImageFromClipboard, compressImage } from '../lib/images';
+import { initializePlayground, needsArchiving, archiveOldBlocks } from '../lib/playground';
 
 interface EditorProps {
   pageId?: string;
@@ -99,23 +100,56 @@ export function Editor({ pageId }: EditorProps) {
       // Type guard - pageId is checked above but TS needs it here too
       if (!pageId) return;
 
+      console.log('📄 Loading document:', pageId);
+
       // Get document
       const doc = synckit.document<PageDocument>(pageId);
 
       // Initialize document (loads from storage)
-      await doc.init();
+      // For playground, check storage first to avoid sync timeout on fresh load
+      if (pageId === 'playground') {
+        console.log('🌍 Initializing playground document');
+        const storage = (synckit as any).storage;
+        if (storage) {
+          const existingDoc = await storage.get(pageId);
+          if (!existingDoc || !existingDoc.data || Object.keys(existingDoc.data).length === 0) {
+            console.log('🌱 Fresh playground - initializing with seed content before sync...');
+            // Initialize document instance without syncing
+            await doc.init();
+            // Immediately set seed content
+            await initializePlayground(doc);
+          } else {
+            // Document exists in storage, normal init
+            await doc.init();
+          }
+        } else {
+          await doc.init();
+          await initializePlayground(doc);
+        }
+      } else {
+        // For non-playground documents (rooms, personal pages), just init normally
+        console.log('🚪 Initializing room/page document:', pageId);
+        await doc.init();
+      }
 
       if (!mounted) return;
 
-      // Unsubscribe any existing subscription first (prevents StrictMode duplicates)
-      if (subscriptionRef.current) {
-        subscriptionRef.current();
-        subscriptionRef.current = null;
-      }
+        // Unsubscribe any existing subscription first (prevents StrictMode duplicates)
+        if (subscriptionRef.current) {
+          subscriptionRef.current();
+          subscriptionRef.current = null;
+        }
 
-      // Subscribe to changes
-      unsubscribe = doc.subscribe((updatedData) => {
+        // Subscribe to changes
+        unsubscribe = doc.subscribe((updatedData) => {
         if (!mounted) return;
+
+        console.log(`📥 Document ${pageId} updated:`, {
+          title: updatedData.title,
+          icon: updatedData.icon,
+          blockCount: parseBlockOrder(updatedData.blockOrder || '[]').length,
+          keys: Object.keys(updatedData).slice(0, 10) // First 10 keys
+        });
 
         setPageData(updatedData);
 
@@ -132,6 +166,18 @@ export function Editor({ pageId }: EditorProps) {
         }
 
         setBlocks(loadedBlocks);
+
+        // Check if playground needs archiving
+        if (pageId === 'playground' && needsArchiving(loadedBlocks.length)) {
+          console.log('⚠️ Playground approaching block limit, archiving old blocks...');
+          archiveOldBlocks(doc, synckit).then((archivedCount) => {
+            if (archivedCount > 0) {
+              console.log(`✅ Archived ${archivedCount} blocks`);
+            }
+          }).catch((error) => {
+            console.error('Failed to archive blocks:', error);
+          });
+        }
       });
 
       // Store in ref to prevent duplicate subscriptions
@@ -142,12 +188,15 @@ export function Editor({ pageId }: EditorProps) {
       // Set up auto-snapshots
       const storage = (synckit as any).storage; // Access internal storage
       if (storage) {
+        // Use aggressive settings for playground (community restore feature)
+        const isPlayground = pageId === 'playground';
+
         scheduler = new SnapshotScheduler(doc, storage, {
           enabled: true,
-          timeIntervalMs: 5 * 60 * 1000, // 5 minutes for demo (instead of default 1 hour)
-          operationCount: 100, // Snapshot after 100 operations (instead of default 1000)
-          maxSnapshots: 10, // Keep 10 snapshots (instead of default 5)
-          compress: false,
+          timeIntervalMs: isPlayground ? 10 * 1000 : 5 * 60 * 1000, // 10s for playground, 5min for others
+          operationCount: isPlayground ? 50 : 100, // More frequent snapshots in playground
+          maxSnapshots: isPlayground ? 50 : 10, // Keep last ~8 minutes for playground (50 * 10s)
+          compress: true,
         });
 
         scheduler.start();
@@ -940,6 +989,27 @@ export function Editor({ pageId }: EditorProps) {
   return (
     <div ref={editorRef} className="flex-1 overflow-y-auto bg-white dark:bg-gray-900 scrollbar-thin relative">
       <div className="mx-auto py-12 px-8" style={{ maxWidth: UI_CONFIG.maxContentWidth }}>
+        {/* Playground banner */}
+        {pageId === 'playground' && (
+          <div className="mb-6 p-4 bg-gradient-to-r from-purple-50 to-blue-50 dark:from-purple-900/20 dark:to-blue-900/20 border border-purple-200 dark:border-purple-800 rounded-xl">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <div className="text-2xl">🌍</div>
+                <div>
+                  <h3 className="font-semibold text-purple-900 dark:text-purple-100">Public Playground</h3>
+                  <p className="text-sm text-purple-700 dark:text-purple-300">
+                    Everyone here can edit together • Real-time collaboration
+                  </p>
+                </div>
+              </div>
+              <div className="flex items-center gap-2 text-sm text-purple-700 dark:text-purple-300">
+                <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
+                <span>You + others online</span>
+              </div>
+            </div>
+          </div>
+        )}
+
         {/* Page header */}
         <div className="mb-8">
           <div className="flex items-center gap-3 mb-2">
@@ -958,25 +1028,27 @@ export function Editor({ pageId }: EditorProps) {
               placeholder="Untitled"
             />
             {/* Snapshot indicator */}
-            {snapshotScheduler && lastSnapshotTime && (
+            {snapshotScheduler && (
               <div className="flex items-center gap-2 px-3 py-1.5 bg-gray-100 dark:bg-gray-700 rounded-full text-xs">
                 <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
                 <span className="text-gray-700 dark:text-gray-300">
-                  Auto-save: {formatTimeSince(lastSnapshotTime)}
+                  {pageId === 'playground' ? 'Community Restore' : `Auto-save${lastSnapshotTime ? ': ' + formatTimeSince(lastSnapshotTime) : ''}`}
                 </span>
-                <button
-                  onClick={() => snapshotScheduler.triggerSnapshot()}
-                  className="ml-1 px-2 py-0.5 bg-primary-500 hover:bg-primary-600 text-white rounded text-xs hover:scale-105 active:scale-95 transition-all duration-150"
-                  title="Create snapshot now"
-                >
-                  Save
-                </button>
+                {pageId !== 'playground' && (
+                  <button
+                    onClick={() => snapshotScheduler.triggerSnapshot()}
+                    className="ml-1 px-2 py-0.5 bg-primary-500 hover:bg-primary-600 text-white rounded text-xs hover:scale-105 active:scale-95 transition-all duration-150"
+                    title="Create snapshot now"
+                  >
+                    Save
+                  </button>
+                )}
                 <button
                   onClick={() => setShowSnapshotDialog(true)}
-                  className="px-2 py-0.5 bg-gray-600 hover:bg-gray-700 text-white rounded text-xs hover:scale-105 active:scale-95 transition-all duration-150"
-                  title="Restore from snapshot"
+                  className={`px-2 py-0.5 ${pageId === 'playground' ? 'bg-orange-500 hover:bg-orange-600' : 'bg-gray-600 hover:bg-gray-700'} text-white rounded text-xs hover:scale-105 active:scale-95 transition-all duration-150`}
+                  title={pageId === 'playground' ? 'Restore if vandalized (anyone can use this)' : 'Restore from snapshot'}
                 >
-                  Restore
+                  ↺ Restore
                 </button>
               </div>
             )}

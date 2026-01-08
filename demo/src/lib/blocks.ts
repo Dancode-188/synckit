@@ -5,6 +5,10 @@
 
 import { BLOCK_TYPES, BlockType } from './constants';
 
+// Re-export for convenience
+export { BLOCK_TYPES };
+export type { BlockType };
+
 /**
  * Block data structure
  * Each block is stored as a separate field in the document

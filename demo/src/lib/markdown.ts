@@ -13,6 +13,26 @@ function escapeHtml(text: string): string {
 }
 
 /**
+ * Sanitize URL to prevent javascript: protocol injection
+ */
+function sanitizeUrl(url: string): string {
+  // Only allow http:// and https:// protocols
+  if (/^https?:\/\//i.test(url)) {
+    return url;
+  }
+  // For relative URLs, allow them
+  if (url.startsWith('/') || url.startsWith('.')) {
+    return url;
+  }
+  // For anchors, allow them
+  if (url.startsWith('#')) {
+    return url;
+  }
+  // Block everything else (especially javascript:, data:, etc.)
+  return '#';
+}
+
+/**
  * Parse inline markdown and convert to HTML
  * Supports:
  * - **bold** or __bold__ → <strong>bold</strong>
@@ -29,8 +49,11 @@ export function parseMarkdown(text: string): string {
   // Parse inline code first (to avoid processing markdown inside code)
   html = html.replace(/`([^`]+)`/g, '<code class="inline-code">$1</code>');
 
-  // Parse links [text](url)
-  html = html.replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2" class="link">$1</a>');
+  // Parse links [text](url) - with URL sanitization for security
+  html = html.replace(/\[([^\]]+)\]\(([^)]+)\)/g, (_match, text, url) => {
+    const safeUrl = sanitizeUrl(url);
+    return `<a href="${safeUrl}" class="link" target="_blank" rel="noopener noreferrer">${text}</a>`;
+  });
 
   // Parse bold **text** or __text__
   html = html.replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>');

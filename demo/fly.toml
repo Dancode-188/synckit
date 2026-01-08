@@ -1,0 +1,27 @@
+# LocalWrite Demo - Fly.io Configuration
+# Static site deployment
+
+app = "localwrite-demo"
+primary_region = "sjc"
+
+[build]
+  # Use nginx to serve static files
+  dockerfile = "Dockerfile"
+
+[http_service]
+  internal_port = 80
+  force_https = true
+  auto_stop_machines = true
+  auto_start_machines = true
+  min_machines_running = 0
+
+  [http_service.http_options]
+    [http_service.http_options.response_headers]
+      X-Frame-Options = "DENY"
+      X-Content-Type-Options = "nosniff"
+      Referrer-Policy = "strict-origin-when-cross-origin"
+
+[vm]
+  cpu_kind = "shared"
+  cpus = 1
+  memory_mb = 256

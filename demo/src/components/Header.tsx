@@ -11,9 +11,10 @@ interface HeaderProps {
   isConnected?: boolean;
   onSearchClick?: () => void;
   onExportClick?: () => void;
+  onCreateRoom?: () => void;
 }
 
-export function Header({ storageType, isConnected = false, onSearchClick, onExportClick }: HeaderProps) {
+export function Header({ storageType, isConnected = false, onSearchClick, onExportClick, onCreateRoom }: HeaderProps) {
   const [currentTime, setCurrentTime] = useState(new Date());
   const { theme, toggleTheme } = useTheme();
 
@@ -82,6 +83,20 @@ export function Header({ storageType, isConnected = false, onSearchClick, onExpo
               {isConnected ? 'Connected' : 'Offline'}
             </span>
           </div>
+
+          {/* Create Room button */}
+          {onCreateRoom && (
+            <button
+              onClick={onCreateRoom}
+              className="flex items-center gap-2 px-3 py-1.5 bg-primary-500 hover:bg-primary-600 text-white rounded-lg font-medium transition-colors hover:scale-105 active:scale-95"
+              title="Create collaborative room"
+            >
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z" />
+              </svg>
+              <span className="text-sm">Create Room</span>
+            </button>
+          )}
 
           {/* Export button */}
           {onExportClick && (

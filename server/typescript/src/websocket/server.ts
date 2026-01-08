@@ -1,5 +1,6 @@
 import { WebSocketServer, WebSocket } from 'ws';
 import type { Server } from 'http';
+import type { IncomingMessage } from 'http';
 import { Connection, ConnectionState } from './connection';
 import { ConnectionRegistry } from './registry';
 import {
@@ -23,6 +24,12 @@ import { config } from '../config';
 import { verifyToken } from '../auth/jwt';
 import { canReadDocument, canWriteDocument } from '../auth/rbac';
 import { SyncCoordinator } from '../sync/coordinator';
+import {
+  securityManager,
+  validateMessage,
+  validateDocumentId,
+  canAccessDocument,
+} from '../security/middleware';
 
 /**
  * Pending ACK Info - tracks unacknowledged deltas
@@ -98,30 +105,69 @@ export class SyncWebSocketServer {
    * Setup WebSocket server handlers
    */
   private setupHandlers() {
-    this.wss.on('connection', this.handleConnection.bind(this));
-    
+    this.wss.on('connection', (ws: WebSocket, req: IncomingMessage) => {
+      this.handleConnection(ws, req);
+    });
+
     this.wss.on('error', (error) => {
       console.error('WebSocket server error:', error);
     });
   }
 
   /**
+   * Extract client IP from request
+   */
+  private getClientIP(req: IncomingMessage): string {
+    // Check X-Forwarded-For (Fly.io proxy)
+    const forwarded = req.headers['x-forwarded-for'];
+    if (forwarded) {
+      const ips = Array.isArray(forwarded) ? forwarded[0] : forwarded;
+      return ips.split(',')[0].trim();
+    }
+
+    // Check X-Real-IP
+    const realIP = req.headers['x-real-ip'];
+    if (realIP) {
+      return Array.isArray(realIP) ? realIP[0] : realIP;
+    }
+
+    // Fallback to socket address
+    return req.socket.remoteAddress || 'unknown';
+  }
+
+  /**
    * Handle new WebSocket connection
    */
-  private handleConnection(ws: WebSocket) {
-    // Check connection limit
+  private handleConnection(ws: WebSocket, req: IncomingMessage) {
+    // Extract client IP
+    const clientIP = this.getClientIP(req);
+
+    // Check per-IP connection limit (SECURITY)
+    if (!securityManager.connectionLimiter.canConnect(clientIP)) {
+      console.warn(`[SECURITY] Connection limit exceeded for IP: ${clientIP}`);
+      ws.close(1008, 'Too many connections from your IP');
+      return;
+    }
+
+    // Check server connection limit
     if (this.registry.count() >= config.wsMaxConnections) {
       ws.close(1008, 'Server at maximum capacity');
       return;
     }
 
+    // Increment connection count for IP
+    securityManager.connectionLimiter.addConnection(clientIP);
+
     // Create connection
     const connectionId = `conn-${++this.connectionCounter}`;
     const connection = new Connection(ws, connectionId);
-    
+
+    // Store client IP on connection (for rate limiting)
+    (connection as any).clientIP = clientIP;
+
     // Add to registry
     this.registry.add(connection);
-    // console.log(`New connection: ${connectionId} (total: ${this.registry.count()})`);
+    console.log(`[CONNECTION] New: ${connectionId} from ${clientIP} (total: ${this.registry.count()})`);
 
     // Start heartbeat
     connection.startHeartbeat(config.wsHeartbeatInterval);
@@ -130,19 +176,19 @@ export class SyncWebSocketServer {
     const authRequired = process.env.SYNCKIT_AUTH_REQUIRED !== 'false';
 
     if (!authRequired) {
-      // Auto-authenticate for development
+      // Auto-authenticate for public playground (SECURITY: No admin privileges!)
       connection.state = ConnectionState.AUTHENTICATED;
-      connection.userId = 'anonymous';
+      connection.userId = `anonymous-${clientIP}`;
       connection.tokenPayload = {
-        userId: 'anonymous',
+        userId: `anonymous-${clientIP}`,
         permissions: {
-          canRead: [],
-          canWrite: [],
-          isAdmin: true,
+          canRead: ['*'], // Can read all
+          canWrite: ['*'], // Can write all
+          isAdmin: false, // NO ADMIN PRIVILEGES (SECURITY FIX)
         },
       };
-      this.registry.linkUser(connection.id, 'anonymous');
-      // console.log(`Connection ${connection.id} auto-authenticated (auth disabled)`);
+      this.registry.linkUser(connection.id, `anonymous-${clientIP}`);
+      console.log(`[AUTH] Auto-authenticated: ${connection.id} (auth disabled, no admin)`);
     }
 
     // Setup message handlers
@@ -151,6 +197,8 @@ export class SyncWebSocketServer {
     });
 
     connection.on('close', () => {
+      // Decrement connection count for IP (SECURITY)
+      securityManager.connectionLimiter.removeConnection(clientIP);
       this.handleDisconnect(connection);
     });
   }
@@ -160,6 +208,39 @@ export class SyncWebSocketServer {
    */
   private async handleMessage(connection: Connection, message: Message) {
     try {
+      // Get client IP from connection
+      const clientIP = (connection as any).clientIP || 'unknown';
+
+      // Rate limiting check (SECURITY)
+      if (!securityManager.messageRateLimiter.canSendMessage(clientIP)) {
+        console.warn(`[SECURITY] Rate limit exceeded for IP: ${clientIP}`);
+        connection.send({
+          type: MessageType.ERROR,
+          payload: {
+            error: 'Too many messages. Please slow down.',
+            code: 'RATE_LIMIT_EXCEEDED',
+          },
+        });
+        return;
+      }
+
+      // Record message (SECURITY)
+      securityManager.messageRateLimiter.recordMessage(clientIP);
+
+      // Validate message format (SECURITY)
+      const validation = validateMessage(message);
+      if (!validation.valid) {
+        console.warn(`[SECURITY] Invalid message from ${clientIP}: ${validation.error}`);
+        connection.send({
+          type: MessageType.ERROR,
+          payload: {
+            error: validation.error,
+            code: 'INVALID_MESSAGE',
+          },
+        });
+        return;
+      }
+
       switch (message.type) {
         case MessageType.CONNECT:
           // CONNECT is handled during connection setup, acknowledge it
@@ -235,14 +316,14 @@ export class SyncWebSocketServer {
         connection.sendError('API key authentication not yet implemented');
         return;
       } else {
-        // Anonymous connection (read-only by default, admin for tests)
+        // Anonymous connection (SECURITY: No admin privileges!)
         userId = 'anonymous';
         tokenPayload = {
           userId: 'anonymous',
           permissions: {
-            canRead: [],
-            canWrite: [],
-            isAdmin: true, // Give admin permissions for test mode
+            canRead: ['*'],
+            canWrite: ['*'],
+            isAdmin: false, // NO ADMIN (SECURITY FIX)
           },
         };
       }
@@ -293,6 +374,21 @@ export class SyncWebSocketServer {
     // Check authentication
     if (connection.state !== ConnectionState.AUTHENTICATED || !connection.tokenPayload) {
       connection.sendError('Not authenticated');
+      return;
+    }
+
+    // Validate document ID (SECURITY)
+    const docValidation = validateDocumentId(documentId);
+    if (!docValidation.valid) {
+      console.warn(`[SECURITY] Invalid document ID from ${connection.id}: ${docValidation.error}`);
+      connection.sendError(docValidation.error || 'Invalid document ID');
+      return;
+    }
+
+    // Check document access (SECURITY: Playground vs private rooms)
+    if (!canAccessDocument(documentId)) {
+      console.warn(`[SECURITY] Unauthorized document access attempt: ${documentId} by ${connection.id}`);
+      connection.sendError('Access denied to this document');
       return;
     }
 
