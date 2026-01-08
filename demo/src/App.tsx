@@ -27,7 +27,7 @@ function App() {
   const [currentPageId, setCurrentPageId] = useState<string | undefined>();
   const [isInitializing, setIsInitializing] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [pageSubscriptions] = useState<Map<string, () => void>>(new Map());
+  const [pageSubscriptions] = useState<Map<string, { unsubscribe: () => void; document: any }>>(new Map());
   const [showSearchDialog, setShowSearchDialog] = useState(false);
   const [showExportDialog, setShowExportDialog] = useState(false);
 
@@ -92,7 +92,7 @@ function App() {
         // Use local Map to prevent race conditions with cleanup
         if (!mounted) return;
 
-        const newSubscriptions = new Map<string, () => void>();
+        const newSubscriptions = new Map<string, { unsubscribe: () => void; document: any }>();
 
         for (const page of loadedPages) {
           // Check mounted status on each iteration
@@ -116,19 +116,22 @@ function App() {
               )
             );
           });
-          newSubscriptions.set(page.id, unsubscribe);
+          newSubscriptions.set(page.id, { unsubscribe, document: doc });
         }
 
         // Final mounted check before committing subscriptions
         if (!mounted) {
           // Clean up subscriptions we just created
-          newSubscriptions.forEach((unsub) => unsub());
+          newSubscriptions.forEach((sub) => {
+            sub.unsubscribe();
+            sub.document.dispose();
+          });
           return;
         }
 
         // Only now add to shared Map
-        newSubscriptions.forEach((unsub, id) => {
-          pageSubscriptions.set(id, unsub);
+        newSubscriptions.forEach((sub, id) => {
+          pageSubscriptions.set(id, sub);
         });
 
         setIsInitializing(false);
@@ -146,8 +149,11 @@ function App() {
 
     return () => {
       mounted = false;
-      // Cleanup all page subscriptions
-      pageSubscriptions.forEach((unsub) => unsub());
+      // Cleanup all page subscriptions and dispose documents
+      pageSubscriptions.forEach((sub) => {
+        sub.unsubscribe();
+        sub.document.dispose();
+      });
       pageSubscriptions.clear();
     };
   }, []); // Empty deps - this should run once on mount
@@ -218,8 +224,8 @@ function App() {
       );
     });
 
-    // Store subscription for cleanup
-    pageSubscriptions.set(pageData.id, unsubscribe);
+    // Store subscription and document for cleanup
+    pageSubscriptions.set(pageData.id, { unsubscribe, document: doc });
 
     console.log('Subscription active for:', pageData.id);
   };
@@ -234,10 +240,11 @@ function App() {
     if (!synckit) return;
 
     try {
-      // Unsubscribe from page updates
-      const unsubscribe = pageSubscriptions.get(pageId);
-      if (unsubscribe) {
-        unsubscribe();
+      // Unsubscribe from page updates and dispose document
+      const subscription = pageSubscriptions.get(pageId);
+      if (subscription) {
+        subscription.unsubscribe();
+        subscription.document.dispose();
         pageSubscriptions.delete(pageId);
       }
 
