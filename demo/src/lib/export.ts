@@ -40,6 +40,12 @@ export function blockToMarkdown(block: Block): string {
     case 'toggle':
       const toggleContent = block.toggleBody || '';
       return `<details>\n<summary>${content}</summary>\n\n${toggleContent}\n\n</details>\n`;
+    case 'image':
+      const caption = block.imageCaption ? `\n*${block.imageCaption}*` : '';
+      if (block.imageData) {
+        return `![${content || 'Image'}](${block.imageData})${caption}\n`;
+      }
+      return '';
     case 'paragraph':
     default:
       return content ? `${content}\n` : '\n';

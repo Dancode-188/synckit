@@ -18,6 +18,10 @@ export interface Block {
   // Optional fields for toggle blocks
   toggleBody?: string;  // Collapsible content
   collapsed?: boolean;  // Whether toggle is collapsed
+  // Optional fields for image blocks
+  imageData?: string;   // Base64 encoded image data
+  imageCaption?: string; // Optional caption for the image
+  imageWidth?: number;   // Optional width constraint
 }
 
 /**

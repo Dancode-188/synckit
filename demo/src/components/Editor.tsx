@@ -21,6 +21,7 @@ import {
   removeTypePrefix,
 } from '../lib/blocks';
 import { htmlToMarkdown } from '../lib/markdown';
+import { getImageFromClipboard, compressImage } from '../lib/images';
 
 interface EditorProps {
   pageId?: string;
@@ -49,7 +50,19 @@ export function Editor({ pageId }: EditorProps) {
   const [snapshotScheduler, setSnapshotScheduler] = useState<SnapshotScheduler | null>(null);
   const [lastSnapshotTime, setLastSnapshotTime] = useState<number | null>(null);
   const [showSnapshotDialog, setShowSnapshotDialog] = useState(false);
+  const [focusedBlockId, setFocusedBlockId] = useState<string | null>(null);
   const editorRef = useRef<HTMLDivElement>(null);
+  const pageDataRef = useRef<PageDocument | null>(null);
+  const focusedBlockIdRef = useRef<string | null>(null);
+
+  // Keep refs in sync with state
+  useEffect(() => {
+    pageDataRef.current = pageData;
+  }, [pageData]);
+
+  useEffect(() => {
+    focusedBlockIdRef.current = focusedBlockId;
+  }, [focusedBlockId]);
 
   // Trigger block change animation
   const triggerBlockChangeAnimation = useCallback((blockId: string) => {
@@ -62,6 +75,9 @@ export function Editor({ pageId }: EditorProps) {
       });
     }, 200); // Match animation duration
   }, []);
+
+  // Track subscription outside effect to prevent StrictMode duplicates
+  const subscriptionRef = useRef<(() => void) | null>(null);
 
   // Load page document when pageId changes
   useEffect(() => {
@@ -91,6 +107,12 @@ export function Editor({ pageId }: EditorProps) {
 
       if (!mounted) return;
 
+      // Unsubscribe any existing subscription first (prevents StrictMode duplicates)
+      if (subscriptionRef.current) {
+        subscriptionRef.current();
+        subscriptionRef.current = null;
+      }
+
       // Subscribe to changes
       unsubscribe = doc.subscribe((updatedData) => {
         if (!mounted) return;
@@ -99,6 +121,7 @@ export function Editor({ pageId }: EditorProps) {
 
         // Extract blocks in order
         const blockIds = parseBlockOrder(updatedData.blockOrder || '[]');
+        console.log('📊 Block IDs from subscription:', blockIds);
         const loadedBlocks: Block[] = [];
 
         for (const blockId of blockIds) {
@@ -111,15 +134,10 @@ export function Editor({ pageId }: EditorProps) {
         setBlocks(loadedBlocks);
       });
 
-      setPageDoc(doc);
+      // Store in ref to prevent duplicate subscriptions
+      subscriptionRef.current = unsubscribe;
 
-      // Clean up any duplicate blocks (safety check)
-      const blockIds = parseBlockOrder((await doc.get()).blockOrder || '[]');
-      const uniqueBlockIds = Array.from(new Set(blockIds));
-      if (uniqueBlockIds.length !== blockIds.length) {
-        console.log(`Found ${blockIds.length - uniqueBlockIds.length} duplicate blocks, cleaning up...`);
-        await doc.set('blockOrder', JSON.stringify(uniqueBlockIds));
-      }
+      setPageDoc(doc);
 
       // Set up auto-snapshots
       const storage = (synckit as any).storage; // Access internal storage
@@ -150,11 +168,154 @@ export function Editor({ pageId }: EditorProps) {
     return () => {
       mounted = false;
       if (unsubscribe) unsubscribe();
+      if (subscriptionRef.current) {
+        subscriptionRef.current();
+        subscriptionRef.current = null;
+      }
       if (scheduler) scheduler.stop();
       if (snapshotInterval) clearInterval(snapshotInterval);
       setSnapshotScheduler(null);
     };
   }, [pageId, synckit]);
+
+  // Track which block is currently focused
+  useEffect(() => {
+    const handleFocusIn = (e: FocusEvent) => {
+      const target = e.target as HTMLElement;
+
+      // Find the block element by looking for data-block-id attribute
+      let blockElement = target.closest('[data-block-id]') as HTMLElement | null;
+      if (blockElement) {
+        const blockId = blockElement.getAttribute('data-block-id');
+        if (blockId) {
+          setFocusedBlockId(blockId);
+        }
+      }
+    };
+
+    const handleFocusOut = () => {
+      // Don't clear immediately - wait a bit to see if focus moves to another block
+      setTimeout(() => {
+        const activeElement = document.activeElement as HTMLElement;
+        const blockElement = activeElement?.closest('[data-block-id]');
+        if (!blockElement) {
+          setFocusedBlockId(null);
+        }
+      }, 0);
+    };
+
+    document.addEventListener('focusin', handleFocusIn);
+    document.addEventListener('focusout', handleFocusOut);
+
+    return () => {
+      document.removeEventListener('focusin', handleFocusIn);
+      document.removeEventListener('focusout', handleFocusOut);
+    };
+  }, []);
+
+  // Handle paste events for images
+  useEffect(() => {
+    const handlePaste = async (e: ClipboardEvent) => {
+      // Use refs to get current values without causing effect re-runs
+      const currentPageData = pageDataRef.current;
+      const currentFocusedBlockId = focusedBlockIdRef.current;
+
+      if (!pageDoc || !currentPageData) return;
+
+      // Synchronously check if clipboard has an image
+      const hasImage = e.clipboardData?.items
+        ? Array.from(e.clipboardData.items).some(item => item.type.startsWith('image/'))
+        : false;
+
+      if (!hasImage) return;
+
+      // CRITICAL: Prevent default paste behavior BEFORE any async operations
+      // This prevents the browser from inserting the image into the contenteditable
+      e.preventDefault();
+
+      // Now safely do async work to get and process the image
+      const imageData = await getImageFromClipboard(e);
+      if (!imageData) return;
+
+      try {
+        // Compress image if it's too large
+        const compressedData = await compressImage(imageData);
+
+        // Check if we're focused on an empty image block
+        let targetBlockId: string | null = null;
+        if (currentFocusedBlockId) {
+          const focusedBlock = (currentPageData as any)[getBlockKey(currentFocusedBlockId)] as Block | undefined;
+          if (focusedBlock && focusedBlock.type === BLOCK_TYPES.IMAGE && !focusedBlock.imageData) {
+            // Use the existing empty image block
+            targetBlockId = currentFocusedBlockId;
+          }
+        }
+
+        if (targetBlockId) {
+          // Update existing empty image block
+          const block = (currentPageData as any)[getBlockKey(targetBlockId)] as Block;
+          const updatedBlock = {
+            ...block,
+            imageData: compressedData,
+            content: 'Pasted image',
+            updatedAt: Date.now(),
+          };
+
+          await pageDoc.set(getBlockKey(targetBlockId) as any, updatedBlock);
+          console.log('📷 Image pasted into existing block');
+        } else {
+          // Create new image block
+          const newBlock = createBlock(BLOCK_TYPES.IMAGE);
+          newBlock.imageData = compressedData;
+          newBlock.content = 'Pasted image';
+
+          // Get current block order
+          const currentOrder = parseBlockOrder(currentPageData.blockOrder || '[]');
+
+          // Insert after the currently focused block, or at the end if no focus
+          let insertIndex = currentOrder.length;
+          if (currentFocusedBlockId) {
+            const focusedIndex = currentOrder.indexOf(currentFocusedBlockId);
+            if (focusedIndex !== -1) {
+              insertIndex = focusedIndex + 1;
+            }
+          }
+
+          // Create an empty paragraph block to go after the image
+          // This ensures users can always continue typing after inserting an image
+          const followingBlock = createBlock(BLOCK_TYPES.PARAGRAPH);
+
+          const newOrder = [
+            ...currentOrder.slice(0, insertIndex),
+            newBlock.id,
+            followingBlock.id, // Add empty paragraph right after image
+            ...currentOrder.slice(insertIndex),
+          ];
+
+          // Save image block, following paragraph block, and update order
+          await pageDoc.set(getBlockKey(newBlock.id) as any, newBlock);
+          await pageDoc.set(getBlockKey(followingBlock.id) as any, followingBlock);
+          await pageDoc.set('blockOrder', JSON.stringify(newOrder));
+
+          console.log('📷 Image pasted as new block with following paragraph');
+        }
+
+        // Record operation for snapshots
+        if (snapshotScheduler) {
+          snapshotScheduler.recordOperation();
+        }
+      } catch (error) {
+        console.error('Failed to paste image:', error);
+      }
+    };
+
+    // Add paste listener
+    document.addEventListener('paste', handlePaste);
+
+    return () => {
+      document.removeEventListener('paste', handlePaste);
+    };
+  }, [pageDoc, snapshotScheduler]);
 
   // Update block content
   const handleBlockContentChange = useCallback(
@@ -201,6 +362,56 @@ export function Editor({ pageId }: EditorProps) {
       // Record operation for snapshot scheduler
       if (snapshotScheduler) {
         snapshotScheduler.recordOperation();
+      }
+    },
+    [pageDoc, pageData, snapshotScheduler]
+  );
+
+  // Delete a block
+  const handleBlockDelete = useCallback(
+    async (blockId: string) => {
+      if (!pageDoc || !pageData) return;
+
+      try {
+        // Get current block order
+        const currentOrder = parseBlockOrder(pageData.blockOrder || '[]');
+
+        // Don't allow deleting the last block - always keep at least one
+        if (currentOrder.length <= 1) {
+          console.log('⚠️ Cannot delete last block - page must have at least one block');
+          return;
+        }
+
+        // Count editable (non-image) blocks
+        const editableBlocks = currentOrder.filter(id => {
+          const block = (pageData as any)[getBlockKey(id)] as Block | undefined;
+          return block && block.type !== BLOCK_TYPES.IMAGE;
+        });
+
+        // Check if the block being deleted is editable
+        const blockToDelete = (pageData as any)[getBlockKey(blockId)] as Block | undefined;
+        const isDeletingEditableBlock = blockToDelete && blockToDelete.type !== BLOCK_TYPES.IMAGE;
+
+        // Don't allow deleting the last editable block - page must have at least one text block
+        if (isDeletingEditableBlock && editableBlocks.length <= 1) {
+          console.log('⚠️ Cannot delete last text block - page must have at least one editable block');
+          return;
+        }
+
+        // Remove block from order
+        const newOrder = currentOrder.filter((id) => id !== blockId);
+
+        // Update block order
+        await pageDoc.set('blockOrder', JSON.stringify(newOrder));
+
+        // Record operation for snapshot scheduler
+        if (snapshotScheduler) {
+          snapshotScheduler.recordOperation();
+        }
+
+        console.log(`🗑️ Deleted block: ${blockId}`);
+      } catch (error) {
+        console.error('Failed to delete block:', error);
       }
     },
     [pageDoc, pageData, snapshotScheduler]
@@ -582,6 +793,26 @@ export function Editor({ pageId }: EditorProps) {
         }
       }
 
+      // Shift+Enter on image blocks: Create new block ABOVE
+      if (e.key === 'Enter' && e.shiftKey && currentBlock.type === BLOCK_TYPES.IMAGE) {
+        e.preventDefault();
+
+        // Create new block above the image
+        const newBlock = createBlock(BLOCK_TYPES.PARAGRAPH);
+        const newBlockIds = [
+          ...blockIds.slice(0, blockIndex), // Insert BEFORE current block
+          newBlock.id,
+          ...blockIds.slice(blockIndex),
+        ];
+
+        // Update block order and add new block (async, but don't await in event handler)
+        pageDoc.set('blockOrder', JSON.stringify(newBlockIds));
+        pageDoc.set(getBlockKey(newBlock.id) as any, newBlock);
+
+        console.log('📝 Created block above image');
+        return;
+      }
+
       // Enter: Create new block below
       if (e.key === 'Enter' && !e.shiftKey) {
         e.preventDefault();
@@ -627,11 +858,25 @@ export function Editor({ pageId }: EditorProps) {
         // Focus will be handled by autoFocus prop
       }
 
-      // Backspace at start: Merge with previous block
-      if (e.key === 'Backspace' && currentBlock.content === '') {
+      // Backspace at start: Delete empty block
+      // Allow deletion if content is empty or only whitespace
+      if (e.key === 'Backspace' && currentBlock.content.trim() === '') {
         e.preventDefault();
 
         if (blockIds.length > 1) {
+          // Count editable (non-image) blocks
+          const editableBlocks = blockIds.filter(id => {
+            const block = (pageData as any)?.[getBlockKey(id)] as Block | undefined;
+            return block && block.type !== BLOCK_TYPES.IMAGE;
+          });
+
+          // Don't allow deleting the last editable block via backspace
+          const isDeletingEditableBlock = currentBlock.type !== BLOCK_TYPES.IMAGE;
+          if (isDeletingEditableBlock && editableBlocks.length <= 1) {
+            console.log('⚠️ Cannot delete last text block - page must have at least one editable block');
+            return;
+          }
+
           // Remove this block (async, but don't await in event handler)
           const newBlockIds = blockIds.filter((id) => id !== blockId);
           pageDoc.set('blockOrder', JSON.stringify(newBlockIds));
@@ -730,7 +975,7 @@ export function Editor({ pageId }: EditorProps) {
         {/* Blocks */}
         <div className="space-y-2">
           {blocks.map((block, index) => (
-            <div key={block.id} className="relative">
+            <div key={block.id} className="relative" data-block-id={block.id}>
               {/* Drop indicator */}
               {dropTargetIndex === index && draggedBlockId !== block.id && (
                 <div className="absolute -top-1 left-0 right-0 h-1 bg-primary-500 rounded-full z-10 shadow-lg shadow-primary-500/50 animate-pulse" />
@@ -750,6 +995,7 @@ export function Editor({ pageId }: EditorProps) {
                   autoFocus={index === blocks.length - 1 && blocks.length > 1}
                   onToggleBodyChange={(body) => handleToggleBodyChange(block.id, body)}
                   onToggleStateChange={(collapsed) => handleToggleStateChange(block.id, collapsed)}
+                  onDelete={() => handleBlockDelete(block.id)}
                 />
               </div>
             </div>

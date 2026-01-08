@@ -21,6 +21,7 @@ interface BlockComponentProps {
   isDragging?: boolean;
   onToggleBodyChange?: (body: string) => void;
   onToggleStateChange?: (collapsed: boolean) => void;
+  onDelete?: () => void;
 }
 
 export function BlockComponent({
@@ -36,6 +37,7 @@ export function BlockComponent({
   isDragging = false,
   onToggleBodyChange,
   onToggleStateChange,
+  onDelete,
 }: BlockComponentProps) {
   // Local state for TODO checkbox
   const [isChecked, setIsChecked] = useState(
@@ -257,6 +259,91 @@ export function BlockComponent({
                 placeholder="Toggle content..."
                 className="text-sm text-gray-700 dark:text-gray-300 min-h-[1.5em] empty:before:content-[attr(data-placeholder)] empty:before:text-gray-400 dark:empty:before:text-gray-600"
               />
+            </div>
+          )}
+        </div>
+
+        {/* Hover handle */}
+        <DragHandle />
+      </div>
+    );
+  }
+
+  // Render image blocks
+  if (block.type === BLOCK_TYPES.IMAGE) {
+    return (
+      <div
+        className={`group relative transition-all duration-150 ${
+          isDragging ? 'opacity-50' : 'opacity-100'
+        }`}
+        draggable
+        onDragStart={onDragStart}
+        onDragOver={onDragOver}
+        onDrop={onDrop}
+        onDragEnd={onDragEnd}
+      >
+        <div
+          className="py-2 relative cursor-pointer focus:outline-none focus:ring-2 focus:ring-primary-500 focus:ring-offset-2 rounded-lg"
+          tabIndex={0}
+          onKeyDown={onKeyDown}
+          title="Press Enter to add block below, Shift+Enter to add block above"
+        >
+          {block.imageData ? (
+            <div className="space-y-2 relative">
+              <div className="relative inline-block w-full">
+                <img
+                  src={block.imageData}
+                  alt={block.content || 'Image'}
+                  className="rounded-lg max-w-full h-auto shadow-md"
+                  style={{
+                    maxWidth: block.imageWidth ? `${block.imageWidth}px` : '100%',
+                  }}
+                />
+                {/* Delete button */}
+                {onDelete && (
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onDelete();
+                    }}
+                    className="absolute top-2 right-2 w-7 h-7 bg-red-500 hover:bg-red-600 text-white rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 hover:scale-110 active:scale-95 transition-all duration-200 shadow-lg"
+                    title="Delete image"
+                  >
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                    </svg>
+                  </button>
+                )}
+              </div>
+              {block.imageCaption && (
+                <div className="text-sm text-gray-500 dark:text-gray-400 italic text-center">
+                  {block.imageCaption}
+                </div>
+              )}
+            </div>
+          ) : (
+            <div className="border-2 border-dashed border-gray-300 dark:border-gray-600 rounded-lg p-8 text-center relative">
+              <svg className="w-12 h-12 text-gray-400 dark:text-gray-500 mx-auto mb-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+              </svg>
+              <p className="text-gray-500 dark:text-gray-400 text-sm">
+                Paste or drop an image here
+              </p>
+              {/* Delete button for empty image block */}
+              {onDelete && (
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onDelete();
+                  }}
+                  className="absolute top-2 right-2 w-7 h-7 bg-red-500 hover:bg-red-600 text-white rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 hover:scale-110 active:scale-95 transition-all duration-200 shadow-lg"
+                  title="Delete empty image block"
+                >
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                </button>
+              )}
             </div>
           )}
         </div>
