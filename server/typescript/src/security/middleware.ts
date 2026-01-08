@@ -19,7 +19,7 @@ import type { Context } from 'hono';
 export const SECURITY_LIMITS = {
   // Rate limiting
   MAX_CONNECTIONS_PER_IP: 5,
-  MAX_MESSAGES_PER_MINUTE: 100,
+  MAX_MESSAGES_PER_MINUTE: 500, // Increased for real-time collaborative editing
 
   // Document limits
   MAX_BLOCKS_PER_DOC: 1000,
@@ -292,6 +292,7 @@ export function validateMessage(message: any): { valid: boolean; error?: string 
 
   // Validate message type
   const validTypes = [
+    'connect', // Initial connection message
     'auth',
     'subscribe',
     'unsubscribe',
@@ -302,6 +303,8 @@ export function validateMessage(message: any): { valid: boolean; error?: string 
     'awareness_update',
     'snapshot_request',
     'snapshot_upload',
+    'ping', // WebSocket keep-alive
+    'pong', // WebSocket keep-alive response
   ];
 
   if (!validTypes.includes(message.type)) {
@@ -311,10 +314,9 @@ export function validateMessage(message: any): { valid: boolean; error?: string 
     };
   }
 
-  // Validate payload exists
-  if (!message.payload) {
-    return { valid: false, error: 'Missing payload' };
-  }
+  // Note: We don't validate payload structure here because after binary parsing,
+  // message fields are spread directly into the message object (no 'payload' field).
+  // Specific field validation (documentId, delta, etc.) is done in message handlers.
 
   return { valid: true };
 }
@@ -462,6 +464,8 @@ export function canAccessDocument(documentId: string): boolean {
 
 /**
  * Get Content Security Policy headers for Hono
+ * Note: These are set on the WebSocket server but are primarily for any HTML endpoints.
+ * The demo frontend (nginx) should set its own CSP headers for the actual app.
  */
 export function getCSPHeaders(): Record<string, string> {
   return {
@@ -470,7 +474,7 @@ export function getCSPHeaders(): Record<string, string> {
       "script-src 'self' 'unsafe-inline' 'unsafe-eval'", // React needs unsafe-inline
       "style-src 'self' 'unsafe-inline'", // Tailwind needs unsafe-inline
       "img-src 'self' data: https:",
-      "connect-src 'self' wss://synckit-stress-test.fly.dev",
+      "connect-src 'self' wss://synckit-localwrite.fly.dev wss://synckit-stress-test.fly.dev",
       "font-src 'self' data:",
       "object-src 'none'",
       "base-uri 'self'",

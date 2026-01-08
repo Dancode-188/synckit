@@ -214,12 +214,8 @@ export class SyncWebSocketServer {
       // Rate limiting check (SECURITY)
       if (!securityManager.messageRateLimiter.canSendMessage(clientIP)) {
         console.warn(`[SECURITY] Rate limit exceeded for IP: ${clientIP}`);
-        connection.send({
-          type: MessageType.ERROR,
-          payload: {
-            error: 'Too many messages. Please slow down.',
-            code: 'RATE_LIMIT_EXCEEDED',
-          },
+        connection.sendError('Too many messages. Please slow down.', {
+          code: 'RATE_LIMIT_EXCEEDED',
         });
         return;
       }
@@ -231,12 +227,8 @@ export class SyncWebSocketServer {
       const validation = validateMessage(message);
       if (!validation.valid) {
         console.warn(`[SECURITY] Invalid message from ${clientIP}: ${validation.error}`);
-        connection.send({
-          type: MessageType.ERROR,
-          payload: {
-            error: validation.error,
-            code: 'INVALID_MESSAGE',
-          },
+        connection.sendError(validation.error || 'Invalid message format', {
+          code: 'INVALID_MESSAGE',
         });
         return;
       }
