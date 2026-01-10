@@ -18,14 +18,8 @@ public class ConnectionManager : IConnectionManager
     private readonly SyncKitConfig _config;
     private readonly SyncKit.Server.Awareness.IAwarenessStore _awarenessStore;
     private int _connectionCounter;
-
-    /// <summary>
-    /// Semaphore to throttle concurrent connection creation.
-    /// This helps prevent socket accept race conditions under burst traffic on macOS.
-    /// See: dotnet/runtime#47020
-    /// Reduced to 10 to spread out connection creation and avoid socket race.
-    /// </summary>
-    private readonly SemaphoreSlim _connectionSemaphore = new(10, 10);
+    private readonly SemaphoreSlim? _connectionSemaphore;
+    private readonly int _wsConnectionCreationConcurrency;
 
     /// <summary>
     /// Creates a new ConnectionManager instance.
@@ -43,6 +37,19 @@ public class ConnectionManager : IConnectionManager
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
         _config = options?.Value ?? throw new ArgumentNullException(nameof(options));
         _awarenessStore = awarenessStore ?? throw new ArgumentNullException(nameof(awarenessStore));
+
+        _wsConnectionCreationConcurrency = _config.WsConnectionCreationConcurrency;
+
+        // Only create semaphore if throttling is enabled (value > 0)
+        if (_wsConnectionCreationConcurrency > 0)
+        {
+            _connectionSemaphore = new SemaphoreSlim(_wsConnectionCreationConcurrency, _wsConnectionCreationConcurrency);
+            _logger.LogInformation("Connection creation throttling enabled: {Concurrency} concurrent creations", _wsConnectionCreationConcurrency);
+        }
+        else
+        {
+            _logger.LogInformation("Connection creation throttling disabled (unlimited concurrency)");
+        }
     }
 
     /// <inheritdoc />
@@ -51,9 +58,12 @@ public class ConnectionManager : IConnectionManager
     /// <inheritdoc />
     public async Task<IConnection> CreateConnectionAsync(WebSocket webSocket, CancellationToken cancellationToken = default)
     {
-        // Throttle concurrent connection creation to prevent socket accept race conditions
-        // on macOS under burst traffic (dotnet/runtime#47020)
-        await _connectionSemaphore.WaitAsync(cancellationToken);
+        // Throttle concurrent connection creation if throttling is enabled
+        // This helps prevent macOS socket race condition (dotnet/runtime#47020)
+        if (_connectionSemaphore is not null)
+        {
+            await _connectionSemaphore.WaitAsync(cancellationToken);
+        }
 
         try
         {
@@ -127,7 +137,7 @@ public class ConnectionManager : IConnectionManager
         }
         finally
         {
-            _connectionSemaphore.Release();
+            _connectionSemaphore?.Release();
         }
     }
 

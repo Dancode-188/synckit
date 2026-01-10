@@ -1,4 +1,6 @@
 using System.Net.WebSockets;
+using Microsoft.Extensions.Options;
+using SyncKit.Server.Configuration;
 
 namespace SyncKit.Server.WebSockets;
 
@@ -20,15 +22,8 @@ public class SyncWebSocketMiddleware
     private readonly IConnectionManager _connectionManager;
     private readonly Handlers.IMessageDispatcher _messageDispatcher;
     private readonly ILogger<SyncWebSocketMiddleware> _logger;
-
-    /// <summary>
-    /// Semaphore to throttle concurrent WebSocket accept operations.
-    /// This helps prevent socket accept race conditions under burst traffic on macOS.
-    /// See: dotnet/runtime#47020 - SocketAddress validation errors during high burst accepts
-    /// Reduced to 20 concurrent accepts to stay well below the ~180 connection threshold
-    /// where the race condition typically manifests.
-    /// </summary>
-    private static readonly SemaphoreSlim _acceptSemaphore = new(20, 20);
+    private readonly SemaphoreSlim? _acceptSemaphore;
+    private readonly int _wsAcceptConcurrency;
 
     /// <summary>
     /// Creates a new instance of the WebSocket middleware.
@@ -37,16 +32,32 @@ public class SyncWebSocketMiddleware
     /// <param name="connectionManager">The connection manager service.</param>
     /// <param name="messageDispatcher">The message dispatcher for handling messages.</param>
     /// <param name="logger">Logger instance.</param>
+    /// <param name="options">SyncKit configuration options.</param>
     public SyncWebSocketMiddleware(
         RequestDelegate next,
         IConnectionManager connectionManager,
         Handlers.IMessageDispatcher messageDispatcher,
-        ILogger<SyncWebSocketMiddleware> logger)
+        ILogger<SyncWebSocketMiddleware> logger,
+        IOptions<SyncKitConfig> options)
     {
         _next = next ?? throw new ArgumentNullException(nameof(next));
         _connectionManager = connectionManager ?? throw new ArgumentNullException(nameof(connectionManager));
         _messageDispatcher = messageDispatcher ?? throw new ArgumentNullException(nameof(messageDispatcher));
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
+
+        var config = options?.Value ?? throw new ArgumentNullException(nameof(options));
+        _wsAcceptConcurrency = config.WsAcceptConcurrency;
+
+        // Only create semaphore if throttling is enabled (value > 0)
+        if (_wsAcceptConcurrency > 0)
+        {
+            _acceptSemaphore = new SemaphoreSlim(_wsAcceptConcurrency, _wsAcceptConcurrency);
+            _logger.LogInformation("WebSocket accept throttling enabled: {Concurrency} concurrent accepts", _wsAcceptConcurrency);
+        }
+        else
+        {
+            _logger.LogInformation("WebSocket accept throttling disabled (unlimited concurrency)");
+        }
     }
 
     /// <summary>
@@ -82,9 +93,12 @@ public class SyncWebSocketMiddleware
     {
         WebSocket webSocket;
 
-        // Throttle concurrent WebSocket accepts to prevent macOS socket race condition
-        // This introduces a small delay under burst load but prevents crashes
-        await _acceptSemaphore.WaitAsync(context.RequestAborted);
+        // Throttle concurrent WebSocket accepts if throttling is enabled
+        // This helps prevent macOS socket race condition (dotnet/runtime#47020)
+        if (_acceptSemaphore is not null)
+        {
+            await _acceptSemaphore.WaitAsync(context.RequestAborted);
+        }
 
         try
         {
@@ -98,7 +112,7 @@ public class SyncWebSocketMiddleware
         }
         finally
         {
-            _acceptSemaphore.Release();
+            _acceptSemaphore?.Release();
         }
 
         IConnection? connection = null;

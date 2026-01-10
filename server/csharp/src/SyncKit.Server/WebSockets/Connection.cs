@@ -1,5 +1,6 @@
 using System.Buffers;
 using System.Net.WebSockets;
+using System.Threading.Channels;
 using SyncKit.Server.WebSockets.Protocol;
 
 namespace SyncKit.Server.WebSockets;
@@ -12,6 +13,7 @@ public class Connection : IConnection
 {
     private const int BufferSize = 8192; // Increased to 8KB per receive
     private const int MaxMessageSize = 10 * 1024 * 1024; // 10MB max message size
+    private const int SendQueueCapacity = 1000; // Maximum queued outgoing messages
 
     private readonly WebSocket _webSocket;
     private readonly IProtocolHandler _jsonHandler;
@@ -23,6 +25,8 @@ public class Connection : IConnection
     private Timer? _heartbeatTimer;
     private DateTime _lastPong;
     private readonly MemoryStream _messageBuffer = new(); // For accumulating fragmented messages
+    private readonly Channel<(IMessage message, WebSocketMessageType messageType, ReadOnlyMemory<byte> data)> _sendQueue;
+    private readonly Task _sendTask;
 
     /// <inheritdoc />
     public string Id { get; }
@@ -77,6 +81,17 @@ public class Connection : IConnection
         State = ConnectionState.Connecting;
         LastActivity = DateTime.UtcNow;
         _lastPong = DateTime.UtcNow;
+
+        // Create unbounded channel for send queue (handles bursts gracefully)
+        _sendQueue = Channel.CreateUnbounded<(IMessage, WebSocketMessageType, ReadOnlyMemory<byte>)>(
+            new UnboundedChannelOptions
+            {
+                SingleReader = true,
+                SingleWriter = false
+            });
+
+        // Start background send loop
+        _sendTask = ProcessSendQueueAsync(_cts.Token);
     }
 
     /// <inheritdoc />
@@ -258,27 +273,75 @@ public class Connection : IConnection
                 ? WebSocketMessageType.Text
                 : WebSocketMessageType.Binary;
 
-            // Send the message synchronously (WebSocket SendAsync is thread-safe)
-            _webSocket.SendAsync(data, messageType, true, CancellationToken.None)
-                .AsTask()
-                .GetAwaiter()
-                .GetResult();
-
-            _logger.LogDebug("Sent message {MessageType} {MessageId} to connection {ConnectionId} ({ByteCount} bytes)",
-                message.Type, message.Id, Id, data.Length);
-
-            return true;
-        }
-        catch (WebSocketException ex)
-        {
-            _logger.LogDebug(ex, "WebSocket exception sending message to connection {ConnectionId}", Id);
-            return false;
+            // Queue the message for async sending (non-blocking)
+            if (_sendQueue.Writer.TryWrite((message, messageType, data)))
+            {
+                _logger.LogTrace("Queued message {MessageType} {MessageId} for connection {ConnectionId} ({ByteCount} bytes)",
+                    message.Type, message.Id, Id, data.Length);
+                return true;
+            }
+            else
+            {
+                _logger.LogWarning("Send queue full for connection {ConnectionId}, dropping message {MessageId}",
+                    Id, message.Id);
+                return false;
+            }
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Unexpected error sending message to connection {ConnectionId}", Id);
+            _logger.LogError(ex, "Unexpected error queueing message for connection {ConnectionId}", Id);
             return false;
         }
+    }
+
+    /// <summary>
+    /// Background task that processes the send queue and sends messages over the WebSocket.
+    /// This ensures all sends are sequential and non-blocking to the caller.
+    /// </summary>
+    private async Task ProcessSendQueueAsync(CancellationToken cancellationToken)
+    {
+        _logger.LogDebug("Send queue processor started for connection {ConnectionId}", Id);
+
+        try
+        {
+            await foreach (var (message, messageType, data) in _sendQueue.Reader.ReadAllAsync(cancellationToken))
+            {
+                try
+                {
+                    if (_webSocket.State != WebSocketState.Open)
+                    {
+                        _logger.LogDebug("Stopping send queue - WebSocket not open for connection {ConnectionId}", Id);
+                        break;
+                    }
+
+                    await _webSocket.SendAsync(data, messageType, true, cancellationToken);
+
+                    _logger.LogTrace("Sent message {MessageType} {MessageId} to connection {ConnectionId} ({ByteCount} bytes)",
+                        message.Type, message.Id, Id, data.Length);
+                }
+                catch (WebSocketException ex)
+                {
+                    _logger.LogDebug(ex, "WebSocket exception sending message to connection {ConnectionId}", Id);
+                    break; // Stop processing on WebSocket error
+                }
+                catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+                {
+                    _logger.LogDebug("Send queue cancelled for connection {ConnectionId}", Id);
+                    break;
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogError(ex, "Unexpected error sending message to connection {ConnectionId}", Id);
+                    // Continue processing other messages
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Fatal error in send queue processor for connection {ConnectionId}", Id);
+        }
+
+        _logger.LogDebug("Send queue processor stopped for connection {ConnectionId}", Id);
     }
 
     /// <inheritdoc />
@@ -428,6 +491,25 @@ public class Connection : IConnection
     public async ValueTask DisposeAsync()
     {
         StopHeartbeat();
+
+        // Complete the send queue writer to signal no more messages
+        _sendQueue.Writer.Complete();
+
+        // Wait for send queue to drain (with timeout)
+        try
+        {
+            using var timeoutCts = new CancellationTokenSource(TimeSpan.FromSeconds(5));
+            await _sendTask.WaitAsync(timeoutCts.Token);
+        }
+        catch (TimeoutException)
+        {
+            _logger.LogWarning("Send queue did not drain within timeout for connection {ConnectionId}", Id);
+        }
+        catch (OperationCanceledException)
+        {
+            _logger.LogDebug("Send queue drain timed out for connection {ConnectionId}", Id);
+        }
+
         await _cts.CancelAsync();
         _cts.Dispose();
 

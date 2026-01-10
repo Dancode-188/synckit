@@ -129,6 +129,22 @@ public class SyncKitConfig
     [Range(0, int.MaxValue)]
     public int AwarenessTimeoutMs { get; set; } = 30000;
 
+    /// <summary>
+    /// Maximum concurrent WebSocket accept operations.
+    /// Set to 0 for unlimited (no throttling).
+    /// Environment variable: WS_ACCEPT_CONCURRENCY
+    /// </summary>
+    [Range(0, int.MaxValue)]
+    public int WsAcceptConcurrency { get; set; } = 100;
+
+    /// <summary>
+    /// Maximum concurrent connection creation operations.
+    /// Set to 0 for unlimited (no throttling).
+    /// Environment variable: WS_CONNECTION_CREATION_CONCURRENCY
+    /// </summary>
+    [Range(0, int.MaxValue)]
+    public int WsConnectionCreationConcurrency { get; set; } = 50;
+
     // Sync
     /// <summary>
     /// Number of operations to batch together for sync.

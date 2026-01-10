@@ -184,7 +184,11 @@ public class Document
     {
         lock (_lock)
         {
+            // Use Last-Write-Wins (LWW) based on StoredDelta.Timestamp to ensure
+            // deterministic convergence regardless of delta insertion order.
             var state = new Dictionary<string, object?>();
+            // Track last write timestamp and client id for deterministic tie-breaking
+            var lastWriteInfo = new Dictionary<string, (long Timestamp, string? ClientId)>();
 
             foreach (var delta in _deltas)
             {
@@ -194,17 +198,50 @@ public class Document
                 {
                     foreach (var property in delta.Data.EnumerateObject())
                     {
+                        var fieldName = property.Name;
+                        var deltaTs = delta.Timestamp;
+                        var clientId = delta.ClientId ?? string.Empty;
+
                         // Check for tombstone marker (delete operation)
                         // { fieldName: { __deleted: true } }
-                        if (IsTombstone(property.Value))
+                        var isTombstone = IsTombstone(property.Value);
+
+                        // Determine if we should apply this delta based on LWW with tie-break
+                        if (!lastWriteInfo.TryGetValue(fieldName, out var last))
                         {
-                            // Remove the field from state
-                            state.Remove(property.Name);
+                            // No prior write - apply
+                            if (isTombstone)
+                                state.Remove(fieldName);
+                            else
+                                state[fieldName] = ConvertJsonElement(property.Value);
+
+                            lastWriteInfo[fieldName] = (deltaTs, clientId);
                         }
                         else
                         {
-                            // Convert JsonElement to appropriate .NET type for JSON serialization
-                            state[property.Name] = ConvertJsonElement(property.Value);
+                            if (deltaTs > last.Timestamp)
+                            {
+                                if (isTombstone)
+                                    state.Remove(fieldName);
+                                else
+                                    state[fieldName] = ConvertJsonElement(property.Value);
+
+                                lastWriteInfo[fieldName] = (deltaTs, clientId);
+                            }
+                            else if (deltaTs == last.Timestamp)
+                            {
+                                // Deterministic tie-break: prefer lexicographically larger clientId
+                                if (string.Compare(clientId, last.ClientId, StringComparison.Ordinal) > 0)
+                                {
+                                    if (isTombstone)
+                                        state.Remove(fieldName);
+                                    else
+                                        state[fieldName] = ConvertJsonElement(property.Value);
+
+                                    lastWriteInfo[fieldName] = (deltaTs, clientId);
+                                }
+                            }
+                            // else older timestamp - ignore
                         }
                     }
                 }
