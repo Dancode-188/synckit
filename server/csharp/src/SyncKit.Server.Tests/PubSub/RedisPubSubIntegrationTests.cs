@@ -160,14 +160,44 @@ public class RedisPubSubIntegrationTests : IAsyncLifetime
             return;
         }
 
-        var conn = await ConnectionMultiplexer.ConnectAsync(new ConfigurationOptions { EndPoints = { endpoint }, AbortOnConnectFail = false, ConnectRetry = 3 });
+        var conn = await ConnectionMultiplexer.ConnectAsync(new ConfigurationOptions 
+        { 
+            EndPoints = { endpoint }, 
+            AbortOnConnectFail = false, 
+            ConnectRetry = 5,
+            ReconnectRetryPolicy = new ExponentialRetry(100, 1000),  // Start at 100ms, max 1s between retries
+            ConnectTimeout = 5000,
+            KeepAlive = 1  // Send keepalive every 1 second to detect disconnection quickly
+        });
 
         await using var provider = new RedisPubSubProvider(new NullLogger<RedisPubSubProvider>(), opts, conn);
 
+        // Subscribe to a document so the provider has active subscriptions during reconnection
+        var messageReceived = new TaskCompletionSource<bool>();
+        await provider.SubscribeAsync("test-doc", async (msg) =>
+        {
+            messageReceived.TrySetResult(true);
+            await Task.CompletedTask;
+        });
+
         // Trigger a restart
         await _redisContainer.StopAsync();
-        await Task.Delay(1000);
+        await Task.Delay(2000);  // Give Redis time to fully stop
         await _redisContainer.StartAsync();
+        await Task.Delay(2000);  // Give Redis time to fully start
+        
+        // Wait for the connection to actually reconnect to Redis
+        var connectSw = System.Diagnostics.Stopwatch.StartNew();
+        while (connectSw.Elapsed < TimeSpan.FromSeconds(15))
+        {
+            if (conn.IsConnected) break;
+            await Task.Delay(500);
+        }
+        
+        if (!conn.IsConnected)
+        {
+            Assert.Fail("Connection did not reconnect to Redis within timeout");
+        }
 
         // Wait until reconnection count increments or timeout
         var sw = System.Diagnostics.Stopwatch.StartNew();
