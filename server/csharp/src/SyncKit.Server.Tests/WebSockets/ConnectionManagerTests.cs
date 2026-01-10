@@ -448,6 +448,9 @@ public class ConnectionManagerTests
         // Act
         await _connectionManager.BroadcastToDocumentAsync("doc-1", message);
 
+        // Wait for async send queue to process (Connection uses background task to send)
+        await Task.Delay(50);
+
         // Assert - conn1 and conn2 should have received a message, conn3 should not
         // Note: WebSocket.SendAsync uses ReadOnlyMemory<byte> overload
         mockWebSocket1.Verify(
@@ -488,6 +491,9 @@ public class ConnectionManagerTests
 
         // Act - exclude conn1
         await _connectionManager.BroadcastToDocumentAsync("doc-1", message, excludeConnectionId: conn1.Id);
+
+        // Wait for async send queue to process (Connection uses background task to send)
+        await Task.Delay(50);
 
         // Assert - only conn2 should have received the message
         mockWebSocket1.Verify(
@@ -840,6 +846,9 @@ public class ConnectionDisconnectFlowTests
 
         // Act
         await _connectionManager.RemoveConnectionAsync(conn1.Id);
+
+        // Wait for async send queue to process (Connection uses background task to send)
+        await Task.Delay(50);
 
         // Assert
         _mockAwarenessStore.Verify(s => s.RemoveAsync("doc-1", conn1.Id), Times.Once);
