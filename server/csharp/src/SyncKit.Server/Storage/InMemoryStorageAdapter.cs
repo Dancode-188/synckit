@@ -130,7 +130,8 @@ public class InMemoryStorageAdapter : IStorageAdapter
         {
             Id = delta.Id ?? Guid.NewGuid().ToString(),
             ClientId = delta.ClientId,
-            Timestamp = delta.Timestamp.HasValue ? new DateTimeOffset(delta.Timestamp.Value).ToUnixTimeMilliseconds() : DateTimeOffset.UtcNow.ToUnixTimeMilliseconds(),
+            // Use server-assigned timestamp to ensure monotonic, authoritative ordering (ignore client clocks)
+            Timestamp = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds(),
             Data = delta.Value ?? JsonDocument.Parse("{}").RootElement,
             VectorClock = delta.VectorClock != null ? VectorClock.FromDict(delta.VectorClock) : new VectorClock()
         };
