@@ -160,10 +160,10 @@ public class RedisPubSubIntegrationTests : IAsyncLifetime
             return;
         }
 
-        var conn = await ConnectionMultiplexer.ConnectAsync(new ConfigurationOptions 
-        { 
-            EndPoints = { endpoint }, 
-            AbortOnConnectFail = false, 
+        var conn = await ConnectionMultiplexer.ConnectAsync(new ConfigurationOptions
+        {
+            EndPoints = { endpoint },
+            AbortOnConnectFail = false,
             ConnectRetry = 5,
             ReconnectRetryPolicy = new ExponentialRetry(100, 1000),  // Start at 100ms, max 1s between retries
             ConnectTimeout = 5000,
@@ -185,7 +185,7 @@ public class RedisPubSubIntegrationTests : IAsyncLifetime
         await Task.Delay(2000);  // Give Redis time to fully stop
         await _redisContainer.StartAsync();
         await Task.Delay(2000);  // Give Redis time to fully start
-        
+
         // Wait for the connection to actually reconnect to Redis
         var connectSw = System.Diagnostics.Stopwatch.StartNew();
         while (connectSw.Elapsed < TimeSpan.FromSeconds(15))
@@ -193,7 +193,7 @@ public class RedisPubSubIntegrationTests : IAsyncLifetime
             if (conn.IsConnected) break;
             await Task.Delay(500);
         }
-        
+
         if (!conn.IsConnected)
         {
             Assert.Fail("Connection did not reconnect to Redis within timeout");
