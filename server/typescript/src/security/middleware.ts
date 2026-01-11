@@ -298,6 +298,7 @@ export function validateMessage(message: any): { valid: boolean; error?: string 
     'unsubscribe',
     'sync_request',
     'delta',
+    'delta_batch',
     'ack',
     'awareness_subscribe',
     'awareness_update',

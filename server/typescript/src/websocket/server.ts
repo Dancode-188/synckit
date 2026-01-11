@@ -14,6 +14,8 @@ import {
   UnsubscribeMessage,
   SyncRequestMessage,
   SyncResponseMessage,
+  SyncStep1Message,
+  SyncStep2Message,
   DeltaMessage,
   AckMessage,
   AwarenessSubscribeMessage,
@@ -179,6 +181,7 @@ export class SyncWebSocketServer {
       // Auto-authenticate for public playground (SECURITY: No admin privileges!)
       connection.state = ConnectionState.AUTHENTICATED;
       connection.userId = `anonymous-${clientIP}`;
+      console.log(`[AUTH] Auto-authenticated ${connection.id} as ${connection.userId}`);
       connection.tokenPayload = {
         userId: `anonymous-${clientIP}`,
         permissions: {
@@ -211,26 +214,42 @@ export class SyncWebSocketServer {
       // Get client IP from connection
       const clientIP = (connection as any).clientIP || 'unknown';
 
-      // Rate limiting check (SECURITY)
-      if (!securityManager.messageRateLimiter.canSendMessage(clientIP)) {
-        console.warn(`[SECURITY] Rate limit exceeded for IP: ${clientIP}`);
-        connection.sendError('Too many messages. Please slow down.', {
-          code: 'RATE_LIMIT_EXCEEDED',
-        });
-        return;
-      }
+      // Rate limiting check (SECURITY) - TEMPORARILY DISABLED
+      // Issue: Multiple clients from same IP hit rate limit, causing retry storm
+      // TODO: Fix by changing to per-connection limit or increasing significantly
+      // if (!securityManager.messageRateLimiter.canSendMessage(clientIP)) {
+      //   console.warn(`[SECURITY] Rate limit exceeded for IP: ${clientIP}`);
+      //   connection.sendError('Too many messages. Please slow down.', {
+      //     code: 'RATE_LIMIT_EXCEEDED',
+      //   });
+      //   return;
+      // }
 
-      // Record message (SECURITY)
-      securityManager.messageRateLimiter.recordMessage(clientIP);
+      // Record message (SECURITY) - DISABLED WITH RATE LIMITER
+      // securityManager.messageRateLimiter.recordMessage(clientIP);
+
+      // CRITICAL DEBUG: Log ALL messages before validation
+      console.log(`[PRE-VALIDATION] Message received:`, {
+        type: message.type,
+        hasId: !!message.id,
+        hasTimestamp: !!message.timestamp,
+        hasDocumentId: !!(message as any).documentId,
+        keys: Object.keys(message).slice(0, 15)
+      });
 
       // Validate message format (SECURITY)
       const validation = validateMessage(message);
       if (!validation.valid) {
-        console.warn(`[SECURITY] Invalid message from ${clientIP}: ${validation.error}`);
+        console.error(`[VALIDATION FAILED] Type: ${message.type}, Error: ${validation.error}, Keys: ${Object.keys(message).join(',')}`);
         connection.sendError(validation.error || 'Invalid message format', {
           code: 'INVALID_MESSAGE',
         });
         return;
+      }
+
+      // Debug: Log message types being received
+      if (message.type !== 'ping' && message.type !== 'pong') {
+        console.log(`[MSG] ✅ ${connection.id} sent: ${message.type} (validated)`);
       }
 
       switch (message.type) {
@@ -262,8 +281,16 @@ export class SyncWebSocketServer {
           await this.handleSyncRequest(connection, message as SyncRequestMessage);
           break;
 
+        case MessageType.SYNC_STEP1:
+          await this.handleSyncStep1(connection, message as any);
+          break;
+
         case MessageType.DELTA:
           await this.handleDelta(connection, message as DeltaMessage);
+          break;
+
+        case MessageType.DELTA_BATCH:
+          await this.handleDeltaBatch(connection, message as any);
           break;
 
         case MessageType.ACK:
@@ -361,7 +388,7 @@ export class SyncWebSocketServer {
   private async handleSubscribe(connection: Connection, message: SubscribeMessage) {
     const { documentId } = message;
 
-    // console.log(`[handleSubscribe] ${connection.id} subscribing to ${documentId}`);
+    console.log(`[SUBSCRIBE] ${connection.id} requesting subscription to ${documentId}`);
 
     // Check authentication
     if (connection.state !== ConnectionState.AUTHENTICATED || !connection.tokenPayload) {
@@ -418,7 +445,7 @@ export class SyncWebSocketServer {
 
       connection.send(response);
 
-      // console.log(`[handleSubscribe] ${connection.id} subscribed to ${documentId}`);
+      console.log(`[SUBSCRIBE] ✓ ${connection.id} subscribed to ${documentId}, total subscribers: ${this.coordinator.getSubscribers(documentId).length}`);
     } catch (error) {
       console.error('[handleSubscribe] Error:', error);
       connection.sendError('Subscribe failed', { documentId });
@@ -499,11 +526,56 @@ export class SyncWebSocketServer {
   }
 
   /**
+   * Handle SyncStep1 - client sends state vector for initial sync
+   * Yjs-style protocol: client tells us what operations it has, we respond with what it's missing
+   */
+  private async handleSyncStep1(connection: Connection, message: SyncStep1Message) {
+    const { documentId, stateVector } = message;
+
+    // Check authentication
+    if (connection.state !== ConnectionState.AUTHENTICATED || !connection.tokenPayload) {
+      connection.sendError('Not authenticated');
+      return;
+    }
+
+    // Check read permission
+    if (!canReadDocument(connection.tokenPayload, documentId)) {
+      connection.sendError('Permission denied', { documentId });
+      return;
+    }
+
+    try {
+      console.log(`[SYNC_STEP1] Client ${connection.id} requesting initial sync for ${documentId}`);
+      console.log(`[SYNC_STEP1] Client state vector:`, stateVector);
+
+      // TODO: Compute missing operations based on state vector
+      // For now, respond with empty array (client is up to date)
+      // In future: compare stateVector with server's operation history
+      // and send operations client is missing
+
+      const response: SyncStep2Message = {
+        type: MessageType.SYNC_STEP2,
+        id: createMessageId(),
+        timestamp: Date.now(),
+        documentId,
+        operations: [], // Empty for now - assume client is up to date
+      };
+
+      connection.send(response);
+      console.log(`[SYNC_STEP2] Sent response to ${connection.id} (0 operations)`);
+    } catch (error) {
+      console.error('Error handling SyncStep1:', error);
+      connection.sendError('SyncStep1 failed', { documentId });
+    }
+  }
+
+  /**
    * Handle delta - client sending changes
    * Supports both SDK field/value format and server delta format
    */
   private async handleDelta(connection: Connection, message: DeltaMessage) {
     const { documentId } = message;
+    console.log(`[DELTA] Received from ${connection.id}, state=${connection.state}, auth=${!!connection.tokenPayload}`);
 
     // Normalize payload to handle both SDK and server formats
     let delta = (message as any).delta;
@@ -609,6 +681,75 @@ export class SyncWebSocketServer {
   }
 
   /**
+   * Handle batch of delta operations
+   */
+  private async handleDeltaBatch(connection: Connection, message: any) {
+    const { documentId, deltas } = message;
+    console.log(`[DELTA_BATCH] Received ${deltas?.length || 0} deltas from ${connection.id} for ${documentId}`);
+
+    if (!deltas || !Array.isArray(deltas) || deltas.length === 0) {
+      connection.sendError('Invalid delta batch: missing or empty deltas array');
+      return;
+    }
+
+    if (connection.state !== ConnectionState.AUTHENTICATED || !connection.tokenPayload) {
+      connection.sendError('Not authenticated');
+      return;
+    }
+
+    if (!canWriteDocument(connection.tokenPayload, documentId)) {
+      connection.sendError('Permission denied', { documentId });
+      return;
+    }
+
+    try {
+      await this.coordinator.getDocument(documentId);
+      this.coordinator.subscribe(documentId, connection.id);
+      connection.addSubscription(documentId);
+
+      const clientId = connection.clientId || connection.id;
+      const authoritativeDelta: Record<string, any> = {};
+
+      for (const operation of deltas) {
+        const field = operation.field;
+        const value = operation.value;
+        const timestamp = operation.timestamp || message.timestamp;
+
+        const isTombstone = value !== null && typeof value === 'object' &&
+                           '__deleted' in value && value.__deleted === true;
+
+        if (isTombstone) {
+          const authoritativeValue = await this.coordinator.deleteField(documentId, field, clientId, timestamp);
+          authoritativeDelta[field] = authoritativeValue === null ? { __deleted: true } : authoritativeValue;
+        } else {
+          const authoritativeValue = await this.coordinator.setField(documentId, field, value, clientId, timestamp);
+          authoritativeDelta[field] = authoritativeValue;
+        }
+
+        if (operation.clock) {
+          this.coordinator.mergeVectorClock(documentId, operation.clock);
+        }
+      }
+
+      this.addToBatch(documentId, authoritativeDelta);
+
+      const originalMessageId = message.messageId || message.id;
+      const ack: AckMessage = {
+        type: MessageType.ACK,
+        id: createMessageId(),
+        timestamp: Date.now(),
+        messageId: originalMessageId,
+      };
+
+      connection.send(ack);
+      console.log(`[DELTA_BATCH] ✓ Processed ${deltas.length} deltas for ${documentId}`);
+    } catch (error) {
+      console.error('Error handling delta batch:', error);
+      connection.sendError('Delta batch application failed', { documentId });
+    }
+  }
+
+  /**
    * Handle ACK - client acknowledging delta receipt
    */
   private handleAck(connection: Connection, message: AckMessage) {
@@ -676,6 +817,7 @@ export class SyncWebSocketServer {
       // Send individual field updates (SDK format)
       for (const [field, value] of Object.entries(batch.delta)) {
         const subscribers = this.coordinator.getSubscribers(documentId);
+        console.log(`[BROADCAST] ${documentId} field=${field}, broadcasting to ${subscribers.length} subscribers:`, subscribers);
 
         for (const connectionId of subscribers) {
           const connection = this.registry.get(connectionId);

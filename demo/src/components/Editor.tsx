@@ -104,6 +104,22 @@ export function Editor({ pageId }: EditorProps) {
 
       // Get document
       const doc = synckit.document<PageDocument>(pageId);
+      console.log('[CLIENT] Created document instance for:', pageId);
+      console.log('[CLIENT] SyncManager exists:', !!(synckit as any).syncManager);
+      console.log('[CLIENT] Network status:', synckit.getNetworkStatus());
+
+      // CRITICAL DEBUG: Show sync status on screen
+      const debugDiv = document.getElementById('sync-debug') || document.createElement('div');
+      debugDiv.id = 'sync-debug';
+      debugDiv.style.cssText = 'position:fixed;top:10px;right:10px;background:black;color:lime;padding:10px;z-index:99999;font-family:monospace;font-size:12px;';
+      debugDiv.innerHTML = `
+        <div>SyncManager: ${!!(synckit as any).syncManager ? 'EXISTS ✓' : 'MISSING ✗'}</div>
+        <div>WebSocket: ${synckit.getNetworkStatus()}</div>
+        <div>Doc ID: ${pageId}</div>
+      `;
+      if (!document.getElementById('sync-debug')) {
+        document.body.appendChild(debugDiv);
+      }
 
       // Initialize document (loads from storage)
       // For playground, check storage first to avoid sync timeout on fresh load
@@ -131,6 +147,8 @@ export function Editor({ pageId }: EditorProps) {
         console.log('🚪 Initializing room/page document:', pageId);
         await doc.init();
       }
+
+      console.log('[CLIENT] Document initialized successfully for:', pageId);
 
       if (!mounted) return;
 
@@ -385,6 +403,9 @@ export function Editor({ pageId }: EditorProps) {
       const block = (pageData as any)?.[getBlockKey(blockId)];
       if (!block) return;
 
+      // DEBUG: Log content changes
+      console.log(`[CLIENT] Block ${blockId} content changed:`, content.substring(0, 50));
+
       // Check for slash command
       if (content.startsWith('/')) {
         const query = content.slice(1); // Remove the '/'
@@ -417,7 +438,9 @@ export function Editor({ pageId }: EditorProps) {
         updatedAt: Date.now(),
       };
 
+      console.log(`[CLIENT] Calling pageDoc.set() for block ${blockId}`);
       await pageDoc.set(getBlockKey(blockId) as any, updatedBlock);
+      console.log(`[CLIENT] pageDoc.set() completed for block ${blockId}`);
 
       // Record operation for snapshot scheduler
       if (snapshotScheduler) {
