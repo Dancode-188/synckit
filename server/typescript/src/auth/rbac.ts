@@ -18,7 +18,12 @@ export function canReadDocument(payload: TokenPayload, documentId: string): bool
   if (payload.permissions.isAdmin) {
     return true;
   }
-  
+
+  // Check for wildcard permission (all documents)
+  if (payload.permissions.canRead.includes('*')) {
+    return true;
+  }
+
   // Check explicit read permission
   return payload.permissions.canRead.includes(documentId);
 }
@@ -31,7 +36,12 @@ export function canWriteDocument(payload: TokenPayload, documentId: string): boo
   if (payload.permissions.isAdmin) {
     return true;
   }
-  
+
+  // Check for wildcard permission (all documents)
+  if (payload.permissions.canWrite.includes('*')) {
+    return true;
+  }
+
   // Check explicit write permission
   return payload.permissions.canWrite.includes(documentId);
 }

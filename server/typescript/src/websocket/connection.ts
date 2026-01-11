@@ -1,4 +1,5 @@
 import type { WebSocket } from 'ws';
+import { EventEmitter } from 'events';
 import { 
   Message, 
   MessageType, 
@@ -29,7 +30,7 @@ export enum ConnectionState {
  * - Message routing
  * - State tracking
  */
-export class Connection {
+export class Connection extends EventEmitter {
   public readonly id: string;
   public state: ConnectionState;
   public userId?: string;
@@ -43,6 +44,7 @@ export class Connection {
   private subscribedDocuments: Set<string> = new Set();
 
   constructor(ws: WebSocket, connectionId: string) {
+    super();
     this.id = connectionId;
     this.ws = ws;
     this.state = ConnectionState.CONNECTING;
@@ -54,10 +56,21 @@ export class Connection {
    * Setup WebSocket event handlers
    */
   private setupHandlers() {
-    this.ws.on('message', this.handleMessage.bind(this));
+    console.log(`[Connection ${this.id}] Setting up WebSocket event handlers...`);
+
+    this.ws.on('message', (data: Buffer | string) => {
+      console.log(`[Connection ${this.id}] 🔴 WS 'message' EVENT FIRED! Size: ${data.length}, Type: ${typeof data}`);
+      this.handleMessage(data);
+    });
+
     this.ws.on('close', this.handleClose.bind(this));
     this.ws.on('error', this.handleError.bind(this));
     this.ws.on('pong', this.handlePong.bind(this));
+
+    this.ws.on('ping', () => console.log(`[Connection ${this.id}] 🔵 WS 'ping' event`));
+    this.ws.on('unexpected-response', () => console.log(`[Connection ${this.id}] ⚠️  WS 'unexpected-response' event`));
+
+    console.log(`[Connection ${this.id}] ✅ WebSocket event handlers registered`);
   }
 
   /**
@@ -65,6 +78,14 @@ export class Connection {
    */
   private handleMessage(data: Buffer | string) {
     try {
+      // CRITICAL DEBUG: Log ALL incoming messages
+      console.log(`[Connection ${this.id}] RAW MESSAGE RECEIVED:`, {
+        type: typeof data,
+        size: data.length,
+        preview: typeof data === 'string' ? data.substring(0, 150) : `Buffer[${data.length}]`,
+        firstChar: typeof data === 'string' ? data[0] : data[0]
+      });
+
       // Detect protocol type from first message
       if (typeof data === 'string' && this.protocolType === 'binary') {
         this.protocolType = 'json';
@@ -74,12 +95,27 @@ export class Connection {
       const message = parseMessage(data);
 
       if (!message) {
+        console.error(`[Connection ${this.id}] parseMessage returned null. Data type: ${typeof data}, size: ${data.length}`);
+        if (typeof data === 'string') {
+          console.error(`[Connection ${this.id}] Raw JSON data:`, data.substring(0, 200));
+        } else {
+          console.error(`[Connection ${this.id}] Buffer first bytes:`, data.subarray(0, Math.min(50, data.length)));
+        }
         this.sendError('Invalid message format');
         return;
       }
 
+      // CRITICAL DEBUG: Log message before emitting
+      console.log(`[Connection ${this.id}] About to emit message event:`, {
+        type: message.type,
+        hasDocumentId: !!(message as any).documentId,
+        keys: Object.keys(message).slice(0, 10)
+      });
+
       // Emit event for message handlers
       this.emit('message', message);
+
+      console.log(`[Connection ${this.id}] ✅ Message event emitted successfully for type: ${message.type}`);
 
       // Handle ping internally
       if (message.type === MessageType.PING) {

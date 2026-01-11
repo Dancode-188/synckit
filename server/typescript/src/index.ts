@@ -8,6 +8,7 @@ import { auth } from './routes/auth';
 import { createSnapshotRoutes } from './routes/snapshots';
 import { PostgresAdapter } from './storage/postgres';
 import { RedisPubSub } from './storage/redis';
+import { getCSPHeaders } from './security/middleware';
 
 /**
  * SyncKit TypeScript Reference Server
@@ -26,6 +27,16 @@ app.use('*', cors({
   origin: '*', // TODO: Configure in production
   credentials: true,
 }));
+
+// Security headers (CSP, XSS protection, etc.)
+app.use('*', async (c, next) => {
+  // Add security headers
+  const headers = getCSPHeaders();
+  Object.entries(headers).forEach(([key, value]) => {
+    c.header(key, value);
+  });
+  await next();
+});
 
 // Mount routes
 app.route('/auth', auth);

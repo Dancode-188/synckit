@@ -1,7 +1,7 @@
 # SyncKit Server - Fly.io Configuration
 # Deploy with: fly deploy
 
-app = "synckit-stress-test"
+app = "synckit-localwrite"
 primary_region = "sjc"  # San Jose, CA (change to your preferred region)
 
 # Build configuration
@@ -13,6 +13,7 @@ primary_region = "sjc"  # San Jose, CA (change to your preferred region)
   NODE_ENV = "production"
   HOST = "0.0.0.0"
   PORT = "8080"
+  SYNCKIT_AUTH_REQUIRED = "false"  # Disable auth for public playground
 
 # HTTP service configuration
 [[services]]

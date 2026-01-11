@@ -85,12 +85,15 @@ export class SyncManager {
   // Buffer for operations that arrive before documents are registered
   private bufferedOperations = new Map<string, Operation[]>()
 
-  // ACK tracking
-  private pendingAcks = new Map<string, { operation: Operation; timeout: NodeJS.Timeout }>()
-  private readonly ACK_TIMEOUT = 5000 // 5 seconds
 
   // Listeners
   private stateChangeListeners = new Map<string, Set<(state: DocumentSyncState) => void>>()
+
+  // Delta batching (temporarily disabled)
+  private deltaBatchQueue = new Map<string, Operation[]>()
+  private deltaBatchTimers = new Map<string, NodeJS.Timeout>()
+  private readonly DELTA_BATCH_DELAY = 50
+  private readonly DELTA_BATCH_MAX_SIZE = 50
 
   constructor(config: SyncManagerConfig) {
     this.websocket = config.websocket
@@ -233,47 +236,65 @@ export class SyncManager {
    * Push local operation to server
    * Queues operation if offline
    */
-  async pushOperation(operation: Operation, forceSend = false): Promise<void> {
+  async pushOperation(operation: Operation): Promise<void> {
     const { documentId } = operation
 
-    // Increment pending count
-    this.incrementPendingOperations(documentId)
+    console.log(`[SDK] pushOperation called for ${documentId}, field: ${operation.field}`)
 
-    try {
-      if (forceSend || this.websocket.isConnected()) {
-        // Send immediately
-        // console.log(`[SyncManager] 📤 Sending operation ${forceSend ? '(FORCED)' : 'online'}:`, documentId, operation.field, operation.value)
-        const messageId = this.generateMessageId()
-
-        this.websocket.send({
-          type: 'delta',
-          payload: { ...operation, messageId },
-          timestamp: Date.now(),
-        })
-
-        // Wait for ACK
-        await this.waitForAck(messageId, operation)
-
-        // Decrement pending count
-        this.decrementPendingOperations(documentId)
-        this.updateSyncState(documentId, { lastSyncedAt: Date.now() })
-      } else {
-        // Queue for offline replay
-        // console.log(`[SyncManager] 💾 Queuing operation (OFFLINE):`, documentId, operation.field, operation.value)
-        await this.offlineQueue.enqueue(operation)
-        // const stats = this.offlineQueue.getStats()
-        // console.log(`[SyncManager] 💾 Queue stats:`, stats)
-        this.updateSyncState(documentId, { state: 'offline' })
-        this.decrementPendingOperations(documentId)
-      }
-    } catch (error) {
-      // On error, also queue for retry
-      // console.log(`[SyncManager] ❌ Error sending operation, queuing:`, documentId, error)
-      await this.offlineQueue.enqueue(operation)
-      this.decrementPendingOperations(documentId)
-      throw error
+    if (!this.deltaBatchQueue.has(documentId)) {
+      this.deltaBatchQueue.set(documentId, [])
     }
+    this.deltaBatchQueue.get(documentId)!.push(operation)
+
+    const existingTimer = this.deltaBatchTimers.get(documentId)
+    if (existingTimer) clearTimeout(existingTimer)
+
+    const queueSize = this.deltaBatchQueue.get(documentId)!.length
+    console.log(`[SDK] Batch queue size: ${queueSize}`)
+
+    if (queueSize >= this.DELTA_BATCH_MAX_SIZE) {
+      console.log(`[SDK] Max batch size reached, flushing immediately`)
+      this.flushDeltaBatch(documentId)
+      return
+    }
+
+    console.log(`[SDK] Setting timer to flush in ${this.DELTA_BATCH_DELAY}ms`)
+    const timer = setTimeout(() => this.flushDeltaBatch(documentId), this.DELTA_BATCH_DELAY)
+    this.deltaBatchTimers.set(documentId, timer)
   }
+
+  private flushDeltaBatch(documentId: string): void {
+    console.log(`[SDK] flushDeltaBatch called for ${documentId}`)
+    const batch = this.deltaBatchQueue.get(documentId)
+    if (!batch || batch.length === 0) {
+      console.log(`[SDK] No batch to flush (empty or missing)`)
+      return
+    }
+
+    console.log(`[SDK] Flushing batch with ${batch.length} deltas`)
+
+    const timer = this.deltaBatchTimers.get(documentId)
+    if (timer) {
+      clearTimeout(timer)
+      this.deltaBatchTimers.delete(documentId)
+    }
+
+    const messageId = this.generateMessageId()
+    console.log(`[SDK] Sending delta_batch message:`, { documentId, deltaCount: batch.length, messageId })
+
+    this.websocket.send({
+      type: 'delta_batch',
+      payload: { documentId, deltas: batch, messageId },
+      timestamp: Date.now(),
+      id: messageId,
+    })
+
+    this.deltaBatchQueue.set(documentId, [])
+    this.updateSyncState(documentId, { lastSyncedAt: Date.now() })
+
+    console.log(`[SDK] ✓ Delta batch sent (${batch.length} deltas)`)
+  }
+
 
   /**
    * Get sync state for document
@@ -346,11 +367,6 @@ export class SyncManager {
       this.unsubscribeDocument(documentId)
     }
 
-    // Clear all pending ACKs
-    for (const [, { timeout }] of this.pendingAcks) {
-      clearTimeout(timeout)
-    }
-    this.pendingAcks.clear()
 
     // Clear listeners
     this.stateChangeListeners.clear()
@@ -374,10 +390,6 @@ export class SyncManager {
       this.handleRemoteOperation(payload)
     })
 
-    // Handle ACK messages
-    this.websocket.on('ack', (payload) => {
-      this.handleAck(payload)
-    })
 
     // Handle errors
     this.websocket.on('error', (payload) => {
@@ -433,7 +445,7 @@ export class SyncManager {
     this.offlineQueue
       .replay((op) => {
         // console.log(`[SyncManager] 🔄 Replaying operation:`, op.documentId, op.field, op.value)
-        return this.pushOperation(op, true) // Force send, bypassing offline check
+        return this.pushOperation(op) // Force send, bypassing offline check
       })
       .then((_count) => {
         // console.log(`[SyncManager] ✅ Replay complete! Sent ${_count} operations`)
@@ -548,16 +560,6 @@ export class SyncManager {
   /**
    * Handle ACK message
    */
-  private handleAck(payload: any): void {
-    const { messageId } = payload
-
-    const pending = this.pendingAcks.get(messageId)
-    if (pending) {
-      clearTimeout(pending.timeout)
-      this.pendingAcks.delete(messageId)
-    }
-  }
-
   /**
    * Detect conflict between local and remote operations
    */
@@ -681,26 +683,6 @@ export class SyncManager {
   /**
    * Wait for ACK with timeout
    */
-  private waitForAck(messageId: string, operation: Operation): Promise<void> {
-    return new Promise((resolve, reject) => {
-      const timeout = setTimeout(() => {
-        this.pendingAcks.delete(messageId)
-        reject(new Error('ACK timeout'))
-      }, this.ACK_TIMEOUT)
-
-      this.pendingAcks.set(messageId, { operation, timeout })
-
-      // Listen for ACK
-      const checkAck = () => {
-        if (!this.pendingAcks.has(messageId)) {
-          resolve()
-        } else {
-          setTimeout(checkAck, 100)
-        }
-      }
-      checkAck()
-    })
-  }
 
   /**
    * Update sync state
@@ -730,22 +712,6 @@ export class SyncManager {
   /**
    * Increment pending operations count
    */
-  private incrementPendingOperations(documentId: string): void {
-    const state = this.getSyncState(documentId)
-    this.updateSyncState(documentId, {
-      pendingOperations: state.pendingOperations + 1,
-    })
-  }
-
-  /**
-   * Decrement pending operations count
-   */
-  private decrementPendingOperations(documentId: string): void {
-    const state = this.getSyncState(documentId)
-    this.updateSyncState(documentId, {
-      pendingOperations: Math.max(0, state.pendingOperations - 1),
-    })
-  }
 
   /**
    * Generate unique message ID
