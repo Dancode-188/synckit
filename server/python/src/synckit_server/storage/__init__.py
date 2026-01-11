@@ -1,0 +1,1 @@
+"""Storage adapters for persistence"""
