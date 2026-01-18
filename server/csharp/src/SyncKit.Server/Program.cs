@@ -60,9 +60,10 @@ try
         });
 
         // Limit concurrent connections to prevent overwhelming socket accept
-        // Lower values help avoid the macOS SocketAddress race condition
-        serverOptions.Limits.MaxConcurrentConnections = 1000;
-        serverOptions.Limits.MaxConcurrentUpgradedConnections = 1000;
+        // Higher values for performance testing; macOS may hit socket race condition
+        // See: dotnet/runtime#47020
+        serverOptions.Limits.MaxConcurrentConnections = 50000; // TODO: An environment variable should take precedence over this hardcoded limit
+        serverOptions.Limits.MaxConcurrentUpgradedConnections = 50000; // TODO: An environment variable should take precedence over this hardcoded limit
 
         // Set reasonable request timeouts
         serverOptions.Limits.RequestHeadersTimeout = TimeSpan.FromSeconds(30);
