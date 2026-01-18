@@ -160,4 +160,10 @@ public interface IConnection : IAsyncDisposable
     /// Event raised when a message is received from the client.
     /// </summary>
     event EventHandler<Protocol.IMessage>? MessageReceived;
+
+    /// <summary>
+    /// Event raised when a document subscription changes.
+    /// Parameters: documentId, isSubscribed (true=subscribed, false=unsubscribed)
+    /// </summary>
+    event Action<string, bool>? SubscriptionChanged;
 }

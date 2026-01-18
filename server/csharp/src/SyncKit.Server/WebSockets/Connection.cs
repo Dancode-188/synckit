@@ -1,4 +1,7 @@
+using System;
 using System.Buffers;
+using System.Collections.Concurrent;
+using System.Linq;
 using System.Net.WebSockets;
 using System.Threading.Channels;
 using SyncKit.Server.WebSockets.Protocol;
@@ -13,14 +16,18 @@ public class Connection : IConnection
 {
     private const int BufferSize = 8192; // Increased to 8KB per receive
     private const int MaxMessageSize = 10 * 1024 * 1024; // 10MB max message size
-    private const int SendQueueCapacity = 1000; // Maximum queued outgoing messages
+    private const int SendQueueCapacity = 10000; // Maximum queued outgoing messages (bounded to prevent memory exhaustion)
 
     private readonly WebSocket _webSocket;
     private readonly IProtocolHandler _jsonHandler;
     private readonly IProtocolHandler _binaryHandler;
     private readonly ILogger<Connection> _logger;
     private readonly CancellationTokenSource _cts = new();
-    private readonly HashSet<string> _subscribedDocuments = new();
+    private readonly ConcurrentDictionary<string, byte> _subscribedDocuments = new();
+
+    /// <inheritdoc />
+    public event Action<string, bool>? SubscriptionChanged;
+
     private byte[]? _rentedBuffer;
     private Timer? _heartbeatTimer;
     private DateTime _lastPong;
@@ -82,12 +89,14 @@ public class Connection : IConnection
         LastActivity = DateTime.UtcNow;
         _lastPong = DateTime.UtcNow;
 
-        // Create unbounded channel for send queue (handles bursts gracefully)
-        _sendQueue = Channel.CreateUnbounded<(IMessage, WebSocketMessageType, ReadOnlyMemory<byte>)>(
-            new UnboundedChannelOptions
+        // Create bounded channel for send queue to prevent memory exhaustion under load
+        // DropOldest ensures newest messages are prioritized when queue is full
+        _sendQueue = Channel.CreateBounded<(IMessage, WebSocketMessageType, ReadOnlyMemory<byte>)>(
+            new BoundedChannelOptions(SendQueueCapacity)
             {
                 SingleReader = true,
-                SingleWriter = false
+                SingleWriter = false,
+                FullMode = BoundedChannelFullMode.DropOldest
             });
 
         // Start background send loop
@@ -372,17 +381,23 @@ public class Connection : IConnection
     /// <inheritdoc />
     public void AddSubscription(string documentId)
     {
-        _subscribedDocuments.Add(documentId);
+        if (_subscribedDocuments.TryAdd(documentId, 0))
+        {
+            SubscriptionChanged?.Invoke(documentId, true);
+        }
     }
 
     /// <inheritdoc />
     public void RemoveSubscription(string documentId)
     {
-        _subscribedDocuments.Remove(documentId);
+        if (_subscribedDocuments.TryRemove(documentId, out _))
+        {
+            SubscriptionChanged?.Invoke(documentId, false);
+        }
     }
 
     /// <inheritdoc />
-    public IReadOnlySet<string> GetSubscriptions() => _subscribedDocuments;
+    public IReadOnlySet<string> GetSubscriptions() => _subscribedDocuments.Keys.ToHashSet();
 
     /// <summary>
     /// Start the heartbeat timer to monitor connection health.

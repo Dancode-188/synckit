@@ -1,6 +1,7 @@
 using System.Text;
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using System.Text.Json.Serialization.Metadata;
 using SyncKit.Server.WebSockets.Protocol.Messages;
 
 namespace SyncKit.Server.WebSockets.Protocol;
@@ -8,24 +9,31 @@ namespace SyncKit.Server.WebSockets.Protocol;
 /// <summary>
 /// JSON protocol handler for test suite compatibility.
 /// Parses and serializes messages as JSON text with camelCase properties and snake_case enum values.
+/// Uses source-generated JSON serializers for simple message types, with fallback for complex types.
 /// </summary>
 public class JsonProtocolHandler : IProtocolHandler
 {
     private readonly ILogger<JsonProtocolHandler> _logger;
-    private static readonly JsonSerializerOptions Options;
+
+    /// <summary>
+    /// Fallback options with reflection (for types with 'object' properties like Delta, Permissions).
+    /// </summary>
+    private static readonly JsonSerializerOptions FallbackOptions;
+
+    /// <summary>
+    /// Message types that require runtime serialization (have 'object' typed properties).
+    /// </summary>
+    private static readonly HashSet<MessageType> ComplexMessageTypes = new()
+    {
+        MessageType.Delta,           // Delta property is 'object'
+        MessageType.AuthSuccess,     // Permissions property is 'object'
+        MessageType.Error,           // Details property is 'object'
+        MessageType.SyncResponse     // State property is 'object'
+    };
 
     static JsonProtocolHandler()
     {
-        Options = new JsonSerializerOptions
-        {
-            PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
-            PropertyNameCaseInsensitive = true,
-            DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull,
-            Converters =
-            {
-                new JsonStringEnumConverter(new SnakeCaseNamingPolicy())
-            }
-        };
+        FallbackOptions = SyncKitJsonOptions.RuntimeOptions;
     }
 
     public JsonProtocolHandler(ILogger<JsonProtocolHandler> logger)
@@ -67,24 +75,25 @@ public class JsonProtocolHandler : IProtocolHandler
             }
 
             // Deserialize to specific message type
+            // Use runtime serialization for all types to ensure proper handling of 'object' properties
             IMessage? message = messageType switch
             {
-                MessageType.Connect => JsonSerializer.Deserialize<ConnectMessage>(json, Options),
-                MessageType.Ping => JsonSerializer.Deserialize<PingMessage>(json, Options),
-                MessageType.Pong => JsonSerializer.Deserialize<PongMessage>(json, Options),
-                MessageType.Auth => JsonSerializer.Deserialize<AuthMessage>(json, Options),
-                MessageType.AuthSuccess => JsonSerializer.Deserialize<AuthSuccessMessage>(json, Options),
-                MessageType.AuthError => JsonSerializer.Deserialize<AuthErrorMessage>(json, Options),
-                MessageType.Subscribe => JsonSerializer.Deserialize<SubscribeMessage>(json, Options),
-                MessageType.Unsubscribe => JsonSerializer.Deserialize<UnsubscribeMessage>(json, Options),
-                MessageType.SyncRequest => JsonSerializer.Deserialize<SyncRequestMessage>(json, Options),
-                MessageType.SyncResponse => JsonSerializer.Deserialize<SyncResponseMessage>(json, Options),
-                MessageType.Delta => JsonSerializer.Deserialize<DeltaMessage>(json, Options),
-                MessageType.Ack => JsonSerializer.Deserialize<AckMessage>(json, Options),
-                MessageType.AwarenessUpdate => JsonSerializer.Deserialize<AwarenessUpdateMessage>(json, Options),
-                MessageType.AwarenessSubscribe => JsonSerializer.Deserialize<AwarenessSubscribeMessage>(json, Options),
-                MessageType.AwarenessState => JsonSerializer.Deserialize<AwarenessStateMessage>(json, Options),
-                MessageType.Error => JsonSerializer.Deserialize<ErrorMessage>(json, Options),
+                MessageType.Connect => JsonSerializer.Deserialize<ConnectMessage>(json, FallbackOptions),
+                MessageType.Ping => JsonSerializer.Deserialize<PingMessage>(json, FallbackOptions),
+                MessageType.Pong => JsonSerializer.Deserialize<PongMessage>(json, FallbackOptions),
+                MessageType.Auth => JsonSerializer.Deserialize<AuthMessage>(json, FallbackOptions),
+                MessageType.AuthSuccess => JsonSerializer.Deserialize<AuthSuccessMessage>(json, FallbackOptions),
+                MessageType.AuthError => JsonSerializer.Deserialize<AuthErrorMessage>(json, FallbackOptions),
+                MessageType.Subscribe => JsonSerializer.Deserialize<SubscribeMessage>(json, FallbackOptions),
+                MessageType.Unsubscribe => JsonSerializer.Deserialize<UnsubscribeMessage>(json, FallbackOptions),
+                MessageType.SyncRequest => JsonSerializer.Deserialize<SyncRequestMessage>(json, FallbackOptions),
+                MessageType.SyncResponse => JsonSerializer.Deserialize<SyncResponseMessage>(json, FallbackOptions),
+                MessageType.Delta => JsonSerializer.Deserialize<DeltaMessage>(json, FallbackOptions),
+                MessageType.Ack => JsonSerializer.Deserialize<AckMessage>(json, FallbackOptions),
+                MessageType.AwarenessUpdate => JsonSerializer.Deserialize<AwarenessUpdateMessage>(json, FallbackOptions),
+                MessageType.AwarenessSubscribe => JsonSerializer.Deserialize<AwarenessSubscribeMessage>(json, FallbackOptions),
+                MessageType.AwarenessState => JsonSerializer.Deserialize<AwarenessStateMessage>(json, FallbackOptions),
+                MessageType.Error => JsonSerializer.Deserialize<ErrorMessage>(json, FallbackOptions),
                 _ => null
             };
 
@@ -116,7 +125,8 @@ public class JsonProtocolHandler : IProtocolHandler
         {
             _logger.LogTrace("[JSON] Serializing {Type} message with ID {Id}", message.Type, message.Id);
 
-            var json = JsonSerializer.Serialize(message, message.GetType(), Options);
+            // Use runtime serialization to properly handle 'object' typed properties
+            var json = JsonSerializer.Serialize(message, message.GetType(), FallbackOptions);
             var bytes = Encoding.UTF8.GetBytes(json);
 
             _logger.LogTrace("[JSON] Serialized to {ByteCount} bytes: {Json}", bytes.Length, json);

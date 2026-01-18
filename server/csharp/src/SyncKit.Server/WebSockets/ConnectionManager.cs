@@ -1,5 +1,7 @@
+using System;
 using System.Collections.Concurrent;
 using System.Net.WebSockets;
+using System.Threading;
 using Microsoft.Extensions.Options;
 using SyncKit.Server.Configuration;
 using SyncKit.Server.WebSockets.Protocol;
@@ -20,6 +22,8 @@ public class ConnectionManager : IConnectionManager
     private int _connectionCounter;
     private readonly SemaphoreSlim? _connectionSemaphore;
     private readonly int _wsConnectionCreationConcurrency;
+    private readonly ConcurrentDictionary<string, ConcurrentDictionary<string, IConnection>> _documentSubscriptions = new();
+    private readonly ConcurrentDictionary<string, Action<string, bool>> _subscriptionHandlers = new();
 
     /// <summary>
     /// Creates a new ConnectionManager instance.
@@ -130,6 +134,8 @@ public class ConnectionManager : IConnectionManager
                 _logger.LogInformation("Connection {ConnectionId} auto-authenticated (auth disabled)", connectionId);
             }
 
+            TrackConnectionSubscriptions(connection);
+
             _logger.LogDebug("Connection created: {ConnectionId} (Total: {ConnectionCount})",
                 connectionId, _connections.Count);
 
@@ -157,9 +163,12 @@ public class ConnectionManager : IConnectionManager
     /// <inheritdoc />
     public IReadOnlyList<IConnection> GetConnectionsByDocument(string documentId)
     {
-        return _connections.Values
-            .Where(c => c.GetSubscriptions().Contains(documentId))
-            .ToList();
+        if (_documentSubscriptions.TryGetValue(documentId, out var connections))
+        {
+            return connections.Values.ToList();
+        }
+
+        return Array.Empty<IConnection>();
     }
 
     /// <inheritdoc />
@@ -178,20 +187,20 @@ public class ConnectionManager : IConnectionManager
             _logger.LogDebug("Connection removed: {ConnectionId} (Total: {ConnectionCount})",
                 connectionId, _connections.Count);
 
-            // Capture subscribed documents before disposing the connection so we know which documents to notify
+            if (_subscriptionHandlers.TryRemove(connectionId, out var handler))
+            {
+                connection.SubscriptionChanged -= handler;
+            }
+
             var subscribedDocs = connection.GetSubscriptions().ToList();
 
-            // Remove awareness entries and notify remaining subscribers for each subscribed document
             foreach (var docId in subscribedDocs)
             {
-                // Attempt to fetch existing awareness entry to compute a leave clock
                 var existing = await _awarenessStore.GetAsync(docId, connectionId);
                 var leaveClock = existing?.Clock + 1 ?? 1;
 
-                // Remove the awareness entry from the store
                 await _awarenessStore.RemoveAsync(docId, connectionId);
 
-                // Broadcast a leave (null state) to remaining subscribers
                 var leaveMsg = new Protocol.Messages.AwarenessUpdateMessage
                 {
                     Id = Guid.NewGuid().ToString(),
@@ -204,6 +213,7 @@ public class ConnectionManager : IConnectionManager
                 };
 
                 await BroadcastToDocumentAsync(docId, leaveMsg, excludeConnectionId: connectionId);
+                RemoveConnectionFromDocument(docId, connectionId);
             }
 
             await connection.DisposeAsync();
@@ -213,30 +223,35 @@ public class ConnectionManager : IConnectionManager
     /// <inheritdoc />
     public Task BroadcastToDocumentAsync(string documentId, Protocol.IMessage message, string? excludeConnectionId = null)
     {
-        var connections = GetConnectionsByDocument(documentId);
+        if (!_documentSubscriptions.TryGetValue(documentId, out var connections))
+        {
+            return Task.CompletedTask;
+        }
 
         var sendCount = 0;
         var failCount = 0;
 
-        foreach (var connection in connections)
+        // Use parallel sends for better throughput with multiple connections
+        // Connection.Send() is non-blocking (queues to async send loop)
+        Parallel.ForEach(connections.Values, connection =>
         {
             if (excludeConnectionId != null && connection.Id == excludeConnectionId)
-                continue;
+                return;
 
             _logger.LogDebug("Attempting to send to connection {ConnectionId} (State: {State})",
                 connection.Id, connection.State);
 
             if (connection.Send(message))
             {
-                sendCount++;
+                Interlocked.Increment(ref sendCount);
             }
             else
             {
-                failCount++;
+                Interlocked.Increment(ref failCount);
                 _logger.LogWarning("Failed to send to connection {ConnectionId} (State: {State})",
                     connection.Id, connection.State);
             }
-        }
+        });
 
         if (failCount > 0)
         {
@@ -278,6 +293,45 @@ public class ConnectionManager : IConnectionManager
             if (_connections.TryRemove(kvp.Key, out var connection))
             {
                 await connection.DisposeAsync();
+            }
+        }
+    }
+
+    private void TrackConnectionSubscriptions(IConnection connection)
+    {
+        void Handler(string documentId, bool subscribed)
+        {
+            if (subscribed)
+            {
+                AddConnectionToDocument(documentId, connection);
+            }
+            else
+            {
+                RemoveConnectionFromDocument(documentId, connection.Id);
+            }
+        }
+
+        if (_subscriptionHandlers.TryAdd(connection.Id, Handler))
+        {
+            connection.SubscriptionChanged += Handler;
+        }
+    }
+
+    private void AddConnectionToDocument(string documentId, IConnection connection)
+    {
+        var bucket = _documentSubscriptions.GetOrAdd(documentId, _ => new ConcurrentDictionary<string, IConnection>());
+        bucket[connection.Id] = connection;
+    }
+
+    private void RemoveConnectionFromDocument(string documentId, string connectionId)
+    {
+        if (_documentSubscriptions.TryGetValue(documentId, out var bucket))
+        {
+            bucket.TryRemove(connectionId, out _);
+
+            if (bucket.IsEmpty)
+            {
+                _documentSubscriptions.TryRemove(documentId, out _);
             }
         }
     }

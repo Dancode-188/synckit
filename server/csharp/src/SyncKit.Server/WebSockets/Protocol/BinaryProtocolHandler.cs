@@ -1,3 +1,4 @@
+using System.Buffers;
 using System.Buffers.Binary;
 using System.Text;
 using System.Text.Json;
@@ -9,6 +10,7 @@ namespace SyncKit.Server.WebSockets.Protocol;
 /// <summary>
 /// Binary protocol handler for SDK client compatibility.
 /// Implements the binary wire format with big-endian byte order.
+/// Uses ArrayPool for buffer allocations to reduce GC pressure in hot paths.
 ///
 /// Wire Format:
 /// ┌─────────────┬──────────────┬───────────────┬──────────────┐
@@ -21,6 +23,11 @@ public class BinaryProtocolHandler : IProtocolHandler
 {
     private readonly ILogger<BinaryProtocolHandler> _logger;
     private const int HeaderSize = 13; // 1 + 8 + 4 bytes
+    private const int MaxPayloadSize = 10 * 1024 * 1024; // 10MB max payload
+
+    /// <summary>
+    /// JSON options with proper converters for runtime serialization.
+    /// </summary>
     private static readonly JsonSerializerOptions JsonOptions;
 
     // Type code to MessageType mapping
@@ -65,16 +72,7 @@ public class BinaryProtocolHandler : IProtocolHandler
 
     static BinaryProtocolHandler()
     {
-        JsonOptions = new JsonSerializerOptions
-        {
-            PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
-            PropertyNameCaseInsensitive = true,
-            DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull,
-            Converters =
-            {
-                new JsonStringEnumConverter(new SnakeCaseNamingPolicy())
-            }
-        };
+        JsonOptions = SyncKitJsonOptions.RuntimeOptions;
     }
 
     public BinaryProtocolHandler(ILogger<BinaryProtocolHandler> logger)
@@ -174,6 +172,8 @@ public class BinaryProtocolHandler : IProtocolHandler
     /// <inheritdoc />
     public ReadOnlyMemory<byte> Serialize(IMessage message)
     {
+        byte[]? rentedBuffer = null;
+
         try
         {
             // Get type code
@@ -185,33 +185,47 @@ public class BinaryProtocolHandler : IProtocolHandler
 
             // Serialize payload as JSON
             var json = JsonSerializer.Serialize(message, message.GetType(), JsonOptions);
-            var payloadBytes = Encoding.UTF8.GetBytes(json);
+            var payloadByteCount = Encoding.UTF8.GetByteCount(json);
 
             _logger.LogTrace("[Binary] Serializing {MessageType} (code=0x{TypeCode:X2}): {Json}",
                 message.Type, (byte)typeCode, json);
 
-            // Build binary message
-            var buffer = new byte[HeaderSize + payloadBytes.Length];
-            var span = buffer.AsSpan();
+            // Rent a buffer from the pool (header + payload)
+            var totalSize = HeaderSize + payloadByteCount;
+            rentedBuffer = ArrayPool<byte>.Shared.Rent(totalSize);
+            var span = rentedBuffer.AsSpan(0, totalSize);
 
             // Write header (big-endian)
             span[0] = (byte)typeCode;
             BinaryPrimitives.WriteInt64BigEndian(span.Slice(1, 8), message.Timestamp);
-            BinaryPrimitives.WriteUInt32BigEndian(span.Slice(9, 4), (uint)payloadBytes.Length);
+            BinaryPrimitives.WriteUInt32BigEndian(span.Slice(9, 4), (uint)payloadByteCount);
 
-            // Write payload
-            payloadBytes.CopyTo(span.Slice(HeaderSize));
+            // Write payload directly to span (avoids extra allocation)
+            Encoding.UTF8.GetBytes(json, span.Slice(HeaderSize));
 
             _logger.LogTrace("[Binary] Serialized to {ByteCount} bytes (header={HeaderSize}, payload={PayloadSize})",
-                buffer.Length, HeaderSize, payloadBytes.Length);
+                totalSize, HeaderSize, payloadByteCount);
 
-            return buffer;
+            // Copy to a new array since we need to return the rented buffer
+            // Note: For even better performance, we could use IMemoryOwner<byte> pattern
+            var result = span.ToArray();
+            ArrayPool<byte>.Shared.Return(rentedBuffer);
+            rentedBuffer = null;
+
+            return result;
         }
         catch (Exception ex)
         {
             _logger.LogError(ex, "[Binary] Failed to serialize message {MessageId} of type {MessageType}",
                 message.Id, message.Type);
             return ReadOnlyMemory<byte>.Empty;
+        }
+        finally
+        {
+            if (rentedBuffer is not null)
+            {
+                ArrayPool<byte>.Shared.Return(rentedBuffer);
+            }
         }
     }
 }

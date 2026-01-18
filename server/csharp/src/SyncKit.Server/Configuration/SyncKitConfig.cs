@@ -135,7 +135,7 @@ public class SyncKitConfig
     /// Environment variable: WS_ACCEPT_CONCURRENCY
     /// </summary>
     [Range(0, int.MaxValue)]
-    public int WsAcceptConcurrency { get; set; } = 100;
+    public int WsAcceptConcurrency { get; set; } = 5000;
 
     /// <summary>
     /// Maximum concurrent connection creation operations.
@@ -143,7 +143,7 @@ public class SyncKitConfig
     /// Environment variable: WS_CONNECTION_CREATION_CONCURRENCY
     /// </summary>
     [Range(0, int.MaxValue)]
-    public int WsConnectionCreationConcurrency { get; set; } = 50;
+    public int WsConnectionCreationConcurrency { get; set; } = 0;
 
     // Sync
     /// <summary>

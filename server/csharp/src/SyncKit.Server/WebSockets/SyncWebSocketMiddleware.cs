@@ -1,4 +1,5 @@
 using System.Net.WebSockets;
+using System.Threading.Channels;
 using Microsoft.Extensions.Options;
 using SyncKit.Server.Configuration;
 
@@ -24,6 +25,7 @@ public class SyncWebSocketMiddleware
     private readonly ILogger<SyncWebSocketMiddleware> _logger;
     private readonly SemaphoreSlim? _acceptSemaphore;
     private readonly int _wsAcceptConcurrency;
+    private const int MessageDispatchQueueCapacity = 1024;
 
     /// <summary>
     /// Creates a new instance of the WebSocket middleware.
@@ -116,6 +118,9 @@ public class SyncWebSocketMiddleware
         }
 
         IConnection? connection = null;
+        Channel<(IConnection connection, Protocol.IMessage message)>? messageChannel = null;
+        Task? dispatchTask = null;
+        EventHandler<Protocol.IMessage>? messageHandler = null;
 
         try
         {
@@ -126,12 +131,26 @@ public class SyncWebSocketMiddleware
                 context.Connection.RemoteIpAddress);
 
             // Subscribe to message events to handle ping/pong
-            connection.MessageReceived += (sender, message) =>
+            messageChannel = Channel.CreateBounded<(IConnection connection, Protocol.IMessage message)>(new BoundedChannelOptions(MessageDispatchQueueCapacity)
             {
-                HandleMessage(connection, message);
+                SingleReader = true,
+                SingleWriter = false,
+                FullMode = BoundedChannelFullMode.Wait
+            });
+
+            dispatchTask = ProcessMessageChannelAsync(messageChannel.Reader, context.RequestAborted);
+
+            messageHandler = (sender, message) =>
+            {
+                _ = EnqueueMessageAsync(messageChannel.Writer, connection, message, context.RequestAborted);
             };
 
+            connection.MessageReceived += messageHandler;
+
             await connection.ProcessMessagesAsync(context.RequestAborted);
+
+            messageChannel.Writer.TryComplete();
+            await dispatchTask.ConfigureAwait(false);
         }
         catch (OperationCanceledException) when (context.RequestAborted.IsCancellationRequested)
         {
@@ -162,19 +181,64 @@ public class SyncWebSocketMiddleware
         {
             if (connection is not null)
             {
+                if (messageHandler is not null)
+                {
+                    connection.MessageReceived -= messageHandler;
+                }
+
+                messageChannel?.Writer.TryComplete();
+                if (dispatchTask is not null)
+                {
+                    await dispatchTask.ConfigureAwait(false);
+                }
+
                 await _connectionManager.RemoveConnectionAsync(connection.Id);
                 _logger.LogInformation("WebSocket connection closed: {ConnectionId}", connection.Id);
             }
         }
     }
 
-    /// <summary>
-    /// Handles messages received from a connection.
-    /// Routes messages to the appropriate handler via MessageDispatcher.
-    /// </summary>
-    private async void HandleMessage(IConnection connection, Protocol.IMessage message)
+    private async Task ProcessMessageChannelAsync(ChannelReader<(IConnection connection, Protocol.IMessage message)> reader, CancellationToken cancellationToken)
     {
-        // Dispatch to appropriate handler (including Ping/Pong)
-        await _messageDispatcher.DispatchAsync(connection, message);
+        try
+        {
+            await foreach (var (connection, message) in reader.ReadAllAsync(cancellationToken))
+            {
+                try
+                {
+                    await _messageDispatcher.DispatchAsync(connection, message);
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogError(ex, "Failed to dispatch message {MessageId} for connection {ConnectionId}",
+                        message.Id, connection.Id);
+                }
+            }
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            _logger.LogDebug("Message dispatch loop canceled");
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Message dispatch loop failed unexpectedly");
+        }
+    }
+
+    private async Task EnqueueMessageAsync(ChannelWriter<(IConnection connection, Protocol.IMessage message)> writer, IConnection connection, Protocol.IMessage message, CancellationToken cancellationToken)
+    {
+        try
+        {
+            await writer.WriteAsync((connection, message), cancellationToken);
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            _logger.LogTrace("Message enqueue canceled for connection {ConnectionId}", connection.Id);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to enqueue message {MessageId} for connection {ConnectionId}",
+                message.Id, connection.Id);
+        }
     }
 }

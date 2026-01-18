@@ -1,4 +1,8 @@
+using System.Collections.Concurrent;
+using System.Collections.Generic;
+using System.Linq;
 using System.Text.Json;
+using System.Threading;
 
 namespace SyncKit.Server.Sync;
 
@@ -8,9 +12,9 @@ namespace SyncKit.Server.Sync;
 /// </summary>
 public class Document
 {
-    private readonly object _lock = new();
+    private readonly ReaderWriterLockSlim _stateLock = new(LockRecursionPolicy.NoRecursion);
     private readonly List<StoredDelta> _deltas = new();
-    private readonly HashSet<string> _subscribedConnections = new();
+    private readonly ConcurrentDictionary<string, byte> _subscribedConnections = new();
 
     /// <summary>
     /// Unique identifier for the document.
@@ -66,11 +70,16 @@ public class Document
     /// <param name="delta">Delta to add</param>
     public void AddDelta(StoredDelta delta)
     {
-        lock (_lock)
+        _stateLock.EnterWriteLock();
+        try
         {
             _deltas.Add(delta);
             VectorClock = VectorClock.Merge(delta.VectorClock);
             UpdatedAt = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
+        }
+        finally
+        {
+            _stateLock.ExitWriteLock();
         }
     }
 
@@ -82,21 +91,22 @@ public class Document
     /// <returns>List of deltas the client needs</returns>
     public IReadOnlyList<StoredDelta> GetDeltasSince(VectorClock? since)
     {
-        lock (_lock)
+        _stateLock.EnterReadLock();
+        try
         {
             if (since == null)
             {
                 return _deltas.ToList();
             }
 
-            // Return deltas that the client hasn't seen
-            // A delta should be included if:
-            // 1. It doesn't happen-before the client's state (not already seen)
-            // 2. It's not equal to the client's state (not the exact same state)
             return _deltas
                 .Where(d => !d.VectorClock.HappensBefore(since) &&
                            !d.VectorClock.Equals(since))
                 .ToList();
+        }
+        finally
+        {
+            _stateLock.ExitReadLock();
         }
     }
 
@@ -106,10 +116,7 @@ public class Document
     /// <param name="connectionId">Connection identifier</param>
     public void Subscribe(string connectionId)
     {
-        lock (_lock)
-        {
-            _subscribedConnections.Add(connectionId);
-        }
+        _subscribedConnections.TryAdd(connectionId, 0);
     }
 
     /// <summary>
@@ -118,10 +125,7 @@ public class Document
     /// <param name="connectionId">Connection identifier</param>
     public void Unsubscribe(string connectionId)
     {
-        lock (_lock)
-        {
-            _subscribedConnections.Remove(connectionId);
-        }
+        _subscribedConnections.TryRemove(connectionId, out _);
     }
 
     /// <summary>
@@ -130,34 +134,27 @@ public class Document
     /// <returns>Read-only set of connection IDs</returns>
     public IReadOnlySet<string> GetSubscribers()
     {
-        lock (_lock)
-        {
-            return _subscribedConnections.ToHashSet();
-        }
+        return _subscribedConnections.Keys.ToHashSet();
     }
 
     /// <summary>
     /// Get the number of subscribers.
     /// </summary>
-    public int SubscriberCount
-    {
-        get
-        {
-            lock (_lock)
-            {
-                return _subscribedConnections.Count;
-            }
-        }
-    }
+    public int SubscriberCount => _subscribedConnections.Count;
 
     /// <summary>
     /// Get all deltas (for debugging/inspection).
     /// </summary>
     public IReadOnlyList<StoredDelta> GetAllDeltas()
     {
-        lock (_lock)
+        _stateLock.EnterReadLock();
+        try
         {
             return _deltas.ToList();
+        }
+        finally
+        {
+            _stateLock.ExitReadLock();
         }
     }
 
@@ -168,9 +165,14 @@ public class Document
     {
         get
         {
-            lock (_lock)
+            _stateLock.EnterReadLock();
+            try
             {
                 return _deltas.Count;
+            }
+            finally
+            {
+                _stateLock.ExitReadLock();
             }
         }
     }
@@ -182,18 +184,14 @@ public class Document
     /// <returns>Document state as a dictionary</returns>
     public Dictionary<string, object?> BuildState()
     {
-        lock (_lock)
+        _stateLock.EnterReadLock();
+        try
         {
-            // Use Last-Write-Wins (LWW) based on StoredDelta.Timestamp to ensure
-            // deterministic convergence regardless of delta insertion order.
             var state = new Dictionary<string, object?>();
-            // Track last write timestamp and client id for deterministic tie-breaking
             var lastWriteInfo = new Dictionary<string, (long Timestamp, string? ClientId)>();
 
             foreach (var delta in _deltas)
             {
-                // Each delta's Data should be an object with field/value pairs
-                // e.g., { "counter": 42 } or { "name": "test" }
                 if (delta.Data.ValueKind == JsonValueKind.Object)
                 {
                     foreach (var property in delta.Data.EnumerateObject())
@@ -202,14 +200,10 @@ public class Document
                         var deltaTs = delta.Timestamp;
                         var clientId = delta.ClientId ?? string.Empty;
 
-                        // Check for tombstone marker (delete operation)
-                        // { fieldName: { __deleted: true } }
                         var isTombstone = IsTombstone(property.Value);
 
-                        // Determine if we should apply this delta based on LWW with tie-break
                         if (!lastWriteInfo.TryGetValue(fieldName, out var last))
                         {
-                            // No prior write - apply
                             if (isTombstone)
                                 state.Remove(fieldName);
                             else
@@ -217,31 +211,16 @@ public class Document
 
                             lastWriteInfo[fieldName] = (deltaTs, clientId);
                         }
-                        else
+                        else if (deltaTs > last.Timestamp ||
+                                 (deltaTs == last.Timestamp &&
+                                  string.Compare(clientId, last.ClientId, StringComparison.Ordinal) > 0))
                         {
-                            if (deltaTs > last.Timestamp)
-                            {
-                                if (isTombstone)
-                                    state.Remove(fieldName);
-                                else
-                                    state[fieldName] = ConvertJsonElement(property.Value);
+                            if (isTombstone)
+                                state.Remove(fieldName);
+                            else
+                                state[fieldName] = ConvertJsonElement(property.Value);
 
-                                lastWriteInfo[fieldName] = (deltaTs, clientId);
-                            }
-                            else if (deltaTs == last.Timestamp)
-                            {
-                                // Deterministic tie-break: prefer lexicographically larger clientId
-                                if (string.Compare(clientId, last.ClientId, StringComparison.Ordinal) > 0)
-                                {
-                                    if (isTombstone)
-                                        state.Remove(fieldName);
-                                    else
-                                        state[fieldName] = ConvertJsonElement(property.Value);
-
-                                    lastWriteInfo[fieldName] = (deltaTs, clientId);
-                                }
-                            }
-                            // else older timestamp - ignore
+                            lastWriteInfo[fieldName] = (deltaTs, clientId);
                         }
                     }
                 }
@@ -249,12 +228,12 @@ public class Document
 
             return state;
         }
+        finally
+        {
+            _stateLock.ExitReadLock();
+        }
     }
 
-    /// <summary>
-    /// Check if a value is a tombstone marker (delete operation).
-    /// Tombstones are objects with { __deleted: true }
-    /// </summary>
     private static bool IsTombstone(JsonElement element)
     {
         if (element.ValueKind != JsonValueKind.Object)
@@ -268,9 +247,6 @@ public class Document
         return false;
     }
 
-    /// <summary>
-    /// Convert a JsonElement to an appropriate .NET object.
-    /// </summary>
     private static object? ConvertJsonElement(JsonElement element)
     {
         return element.ValueKind switch
