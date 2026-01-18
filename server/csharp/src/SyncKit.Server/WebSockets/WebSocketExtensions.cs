@@ -58,7 +58,7 @@ public static class WebSocketExtensions
         // Sync handlers
         services.AddSingleton<Handlers.IMessageHandler, Handlers.SubscribeMessageHandler>();
         services.AddSingleton<Handlers.IMessageHandler, Handlers.UnsubscribeMessageHandler>();
-        
+
         // DeltaMessageHandler with explicit dependencies including batching service
         services.AddSingleton<Handlers.IMessageHandler>(sp =>
         {
@@ -68,7 +68,7 @@ public static class WebSocketExtensions
             var batchingService = sp.GetRequiredService<DeltaBatchingService>();
             var redis = sp.GetService<PubSub.IRedisPubSub>();
             var logger = sp.GetRequiredService<ILogger<Handlers.DeltaMessageHandler>>();
-            
+
             return new Handlers.DeltaMessageHandler(
                 authGuard,
                 storage,
@@ -77,7 +77,7 @@ public static class WebSocketExtensions
                 redis,
                 logger);
         });
-        
+
         services.AddSingleton<Handlers.IMessageHandler, Handlers.SyncRequestMessageHandler>();
         services.AddSingleton<Handlers.IMessageHandler, Handlers.AckMessageHandler>();
 

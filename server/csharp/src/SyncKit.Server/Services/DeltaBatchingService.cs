@@ -28,22 +28,22 @@ public class DeltaBatchingService : IHostedService, IDisposable
         /// Coalesced delta fields. Later writes for the same field overwrite earlier ones.
         /// </summary>
         public ConcurrentDictionary<string, object?> Delta { get; } = new();
-        
+
         /// <summary>
         /// Timer that fires to flush the batch after the interval.
         /// </summary>
         public Timer? Timer { get; set; }
-        
+
         /// <summary>
         /// The document ID this batch belongs to.
         /// </summary>
         public string DocumentId { get; set; } = string.Empty;
-        
+
         /// <summary>
         /// The merged vector clock from all deltas in this batch.
         /// </summary>
         public ConcurrentDictionary<string, long> MergedVectorClock { get; } = new();
-        
+
         /// <summary>
         /// Lock object for thread-safe batch operations.
         /// </summary>
@@ -80,14 +80,14 @@ public class DeltaBatchingService : IHostedService, IDisposable
         var batch = _pendingBatches.GetOrAdd(documentId, docId =>
         {
             var newBatch = new DeltaBatch { DocumentId = docId };
-            
+
             // Schedule the flush after the batch interval
             newBatch.Timer = new Timer(
                 _ => FlushBatch(docId),
                 null,
                 _batchInterval,
                 Timeout.InfiniteTimeSpan);
-            
+
             _logger.LogDebug("Created new batch for document {DocumentId}", docId);
             return newBatch;
         });
@@ -186,7 +186,7 @@ public class DeltaBatchingService : IHostedService, IDisposable
                 }
                 catch (Exception ex)
                 {
-                    _logger.LogWarning(ex, 
+                    _logger.LogWarning(ex,
                         "Failed to publish batched delta to Redis for document {DocumentId}",
                         documentId);
                 }
@@ -211,7 +211,7 @@ public class DeltaBatchingService : IHostedService, IDisposable
     public async Task FlushAllAsync()
     {
         var documentIds = _pendingBatches.Keys.ToList();
-        
+
         foreach (var documentId in documentIds)
         {
             FlushBatch(documentId);
@@ -232,10 +232,10 @@ public class DeltaBatchingService : IHostedService, IDisposable
     public async Task StopAsync(CancellationToken cancellationToken)
     {
         _logger.LogInformation("Delta batching service stopping, flushing pending batches...");
-        
+
         // Flush all pending batches before shutdown
         await FlushAllAsync();
-        
+
         _logger.LogInformation("Delta batching service stopped");
     }
 

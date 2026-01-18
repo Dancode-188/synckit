@@ -197,7 +197,7 @@ public class DeltaMessageHandler : IMessageHandler
         {
             // Batch the delta for efficient broadcast (50ms coalescing window)
             _batchingService.AddToBatch(delta.DocumentId, authoritativeDelta, delta.VectorClock);
-            
+
             _logger.LogDebug(
                 "Queued authoritative delta for batched broadcast to document {DocumentId}: {Delta}",
                 delta.DocumentId, JsonSerializer.Serialize(authoritativeDelta));

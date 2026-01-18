@@ -9,12 +9,27 @@ namespace SyncKit.Server.Sync;
 /// <summary>
 /// Represents a document with its state, deltas, and subscriptions.
 /// Thread-safe document state management for sync operations.
+///
+/// Performance optimization: LWW resolution is applied at write-time rather than read-time.
+/// This makes BuildState() O(fields) instead of O(deltas), dramatically improving performance
+/// for documents with many historical deltas.
 /// </summary>
 public class Document
 {
     private readonly ReaderWriterLockSlim _stateLock = new(LockRecursionPolicy.NoRecursion);
     private readonly List<StoredDelta> _deltas = new();
     private readonly ConcurrentDictionary<string, byte> _subscribedConnections = new();
+
+    /// <summary>
+    /// Cached resolved state - LWW applied at write-time for O(1) reads.
+    /// Maps field name to (Value, Timestamp, ClockCounter, ClientId).
+    /// </summary>
+    private readonly Dictionary<string, FieldEntry> _resolvedFields = new();
+
+    /// <summary>
+    /// Tracks a field's resolved value and metadata for LWW comparison.
+    /// </summary>
+    private record FieldEntry(object? Value, long Timestamp, long ClockCounter, string ClientId, bool IsTombstone);
 
     /// <summary>
     /// Unique identifier for the document.
@@ -50,6 +65,7 @@ public class Document
 
     /// <summary>
     /// Create a document from existing state (e.g., loaded from storage).
+    /// Rebuilds the resolved state cache by applying LWW to all deltas.
     /// </summary>
     /// <param name="id">Document identifier</param>
     /// <param name="vectorClock">Existing vector clock</param>
@@ -61,11 +77,18 @@ public class Document
         _deltas = deltas.ToList();
         CreatedAt = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
         UpdatedAt = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
+
+        // Rebuild the resolved state cache from existing deltas
+        foreach (var delta in _deltas)
+        {
+            ApplyDeltaToResolvedStateInternal(delta);
+        }
     }
 
     /// <summary>
     /// Add a delta to the document.
     /// Merges the delta's vector clock and updates the timestamp.
+    /// Also applies LWW resolution at write-time for O(1) state reads.
     /// </summary>
     /// <param name="delta">Delta to add</param>
     public void AddDelta(StoredDelta delta)
@@ -76,6 +99,9 @@ public class Document
             _deltas.Add(delta);
             VectorClock = VectorClock.Merge(delta.VectorClock);
             UpdatedAt = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
+
+            // Apply LWW resolution at write-time
+            ApplyDeltaToResolvedState(delta);
         }
         finally
         {
@@ -86,6 +112,7 @@ public class Document
     /// <summary>
     /// Atomically increment the vector clock for a client and add a delta.
     /// This ensures proper ordering when multiple deltas arrive concurrently from the same client.
+    /// Also applies LWW resolution at write-time for O(1) state reads.
     /// </summary>
     /// <param name="clientId">Client ID to increment clock for</param>
     /// <param name="data">Delta data (JSON payload)</param>
@@ -111,6 +138,9 @@ public class Document
             _deltas.Add(stored);
             VectorClock = incrementedClock;
             UpdatedAt = stored.Timestamp;
+
+            // Apply LWW resolution at write-time
+            ApplyDeltaToResolvedState(stored);
 
             return stored;
         }
@@ -215,8 +245,8 @@ public class Document
     }
 
     /// <summary>
-    /// Build the current document state by applying all deltas.
-    /// Returns a dictionary representing field name to value mappings.
+    /// Build the current document state from the cached resolved fields.
+    /// This is O(fields) instead of O(deltas) because LWW is applied at write-time.
     ///
     /// Uses multi-level LWW conflict resolution (matching TypeScript server):
     /// 1. Timestamp (wall-clock) - later writes win
@@ -230,62 +260,13 @@ public class Document
         try
         {
             var state = new Dictionary<string, object?>();
-            // Track: (Timestamp, ClockCounter, ClientId) for LWW resolution
-            var lastWriteInfo = new Dictionary<string, (long Timestamp, long ClockCounter, string ClientId)>();
 
-            foreach (var delta in _deltas)
+            foreach (var (fieldName, entry) in _resolvedFields)
             {
-                if (delta.Data.ValueKind == JsonValueKind.Object)
+                // Skip tombstoned fields - they represent deleted fields
+                if (!entry.IsTombstone)
                 {
-                    foreach (var property in delta.Data.EnumerateObject())
-                    {
-                        var fieldName = property.Name;
-                        var deltaTs = delta.Timestamp;
-                        var clientId = delta.ClientId ?? string.Empty;
-                        // Get the vector clock counter for this client
-                        var clockCounter = delta.VectorClock.Get(clientId);
-
-                        var isTombstone = IsTombstone(property.Value);
-
-                        if (!lastWriteInfo.TryGetValue(fieldName, out var last))
-                        {
-                            // First write for this field
-                            if (isTombstone)
-                                state.Remove(fieldName);
-                            else
-                                state[fieldName] = ConvertJsonElement(property.Value);
-
-                            lastWriteInfo[fieldName] = (deltaTs, clockCounter, clientId);
-                        }
-                        else
-                        {
-                            // Multi-level LWW comparison (matches TypeScript server):
-                            // 1. Timestamp wins
-                            var timestampWins = deltaTs > last.Timestamp;
-                            var timestampTie = deltaTs == last.Timestamp;
-
-                            // 2. Clock counter wins (for same timestamp)
-                            var clockWins = clockCounter > last.ClockCounter;
-                            var clockTie = clockCounter == last.ClockCounter;
-
-                            // 3. Client ID wins (lexicographic, for same timestamp & clock)
-                            var clientIdWins = string.Compare(clientId, last.ClientId, StringComparison.Ordinal) > 0;
-
-                            var thisWins = timestampWins ||
-                                          (timestampTie && clockWins) ||
-                                          (timestampTie && clockTie && clientIdWins);
-
-                            if (thisWins)
-                            {
-                                if (isTombstone)
-                                    state.Remove(fieldName);
-                                else
-                                    state[fieldName] = ConvertJsonElement(property.Value);
-
-                                lastWriteInfo[fieldName] = (deltaTs, clockCounter, clientId);
-                            }
-                        }
-                    }
+                    state[fieldName] = entry.Value;
                 }
             }
 
@@ -294,6 +275,67 @@ public class Document
         finally
         {
             _stateLock.ExitReadLock();
+        }
+    }
+
+    /// <summary>
+    /// Apply a delta to the resolved state cache using LWW resolution.
+    /// Must be called within a write lock.
+    /// </summary>
+    private void ApplyDeltaToResolvedState(StoredDelta delta)
+    {
+        ApplyDeltaToResolvedStateInternal(delta);
+    }
+
+    /// <summary>
+    /// Internal implementation of LWW state resolution.
+    /// Shared by AddDelta, AddDeltaWithIncrementedClock, and constructor.
+    /// </summary>
+    private void ApplyDeltaToResolvedStateInternal(StoredDelta delta)
+    {
+        if (delta.Data.ValueKind != JsonValueKind.Object)
+            return;
+
+        var deltaTs = delta.Timestamp;
+        var clientId = delta.ClientId ?? string.Empty;
+        var clockCounter = delta.VectorClock.Get(clientId);
+
+        foreach (var property in delta.Data.EnumerateObject())
+        {
+            var fieldName = property.Name;
+            var isTombstone = IsTombstone(property.Value);
+            var value = isTombstone ? null : ConvertJsonElement(property.Value);
+
+            var newEntry = new FieldEntry(value, deltaTs, clockCounter, clientId, isTombstone);
+
+            if (!_resolvedFields.TryGetValue(fieldName, out var existing))
+            {
+                // First write for this field
+                _resolvedFields[fieldName] = newEntry;
+            }
+            else
+            {
+                // Multi-level LWW comparison (matches TypeScript server):
+                // 1. Timestamp wins
+                var timestampWins = deltaTs > existing.Timestamp;
+                var timestampTie = deltaTs == existing.Timestamp;
+
+                // 2. Clock counter wins (for same timestamp)
+                var clockWins = clockCounter > existing.ClockCounter;
+                var clockTie = clockCounter == existing.ClockCounter;
+
+                // 3. Client ID wins (lexicographic, for same timestamp & clock)
+                var clientIdWins = string.Compare(clientId, existing.ClientId, StringComparison.Ordinal) > 0;
+
+                var thisWins = timestampWins ||
+                              (timestampTie && clockWins) ||
+                              (timestampTie && clockTie && clientIdWins);
+
+                if (thisWins)
+                {
+                    _resolvedFields[fieldName] = newEntry;
+                }
+            }
         }
     }
 
