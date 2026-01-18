@@ -129,13 +129,33 @@ public class InMemoryStorageAdapter : IStorageAdapter
         // Get or create the document
         var document = _documents.GetOrAdd(delta.DocumentId, id => new Document(id));
 
-        // Use atomic increment-and-add to ensure proper ordering for concurrent deltas
-        // This prevents race conditions where two deltas from the same client get the same clock counter
-        var stored = document.AddDeltaWithIncrementedClock(
-            delta.ClientId,
-            delta.Value ?? JsonDocument.Parse("{}").RootElement,
-            delta.Id
-        );
+        StoredDelta stored;
+
+        // If a vector clock is provided in the delta, use it directly (for testing scenarios)
+        // Otherwise, use atomic increment-and-add for proper ordering of concurrent deltas
+        if (delta.VectorClock != null && delta.VectorClock.Count > 0)
+        {
+            // Use provided vector clock (test scenario)
+            stored = new StoredDelta
+            {
+                Id = delta.Id ?? Guid.NewGuid().ToString(),
+                ClientId = delta.ClientId,
+                Timestamp = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds(),
+                Data = delta.Value ?? JsonDocument.Parse("{}").RootElement,
+                VectorClock = VectorClock.FromDict(delta.VectorClock)
+            };
+            document.AddDelta(stored);
+        }
+        else
+        {
+            // Use atomic increment-and-add to ensure proper ordering for concurrent deltas
+            // This prevents race conditions where two deltas from the same client get the same clock counter
+            stored = document.AddDeltaWithIncrementedClock(
+                delta.ClientId,
+                delta.Value ?? JsonDocument.Parse("{}").RootElement,
+                delta.Id
+            );
+        }
 
         var clockValueForClient = stored.VectorClock.Get(delta.ClientId);
 
