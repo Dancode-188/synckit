@@ -129,34 +129,25 @@ public class InMemoryStorageAdapter : IStorageAdapter
         // Get or create the document
         var document = _documents.GetOrAdd(delta.DocumentId, id => new Document(id));
 
-        // Get current server vector clock for this document and increment for this client
-        // This ensures proper ordering even when clients send empty vector clocks
-        var currentClock = document.VectorClock;
-        var incrementedClock = currentClock.Increment(delta.ClientId);
-        var clockValueForClient = incrementedClock.Get(delta.ClientId);
+        // Use atomic increment-and-add to ensure proper ordering for concurrent deltas
+        // This prevents race conditions where two deltas from the same client get the same clock counter
+        var stored = document.AddDeltaWithIncrementedClock(
+            delta.ClientId,
+            delta.Value ?? JsonDocument.Parse("{}").RootElement,
+            delta.Id
+        );
 
-        var stored = new StoredDelta
-        {
-            Id = delta.Id ?? Guid.NewGuid().ToString(),
-            ClientId = delta.ClientId,
-            // Use server-assigned timestamp to ensure monotonic, authoritative ordering (ignore client clocks)
-            Timestamp = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds(),
-            Data = delta.Value ?? JsonDocument.Parse("{}").RootElement,
-            // Use server-incremented vector clock (not client-provided) for proper LWW ordering
-            VectorClock = incrementedClock
-        };
-
-        document.AddDelta(stored);
+        var clockValueForClient = stored.VectorClock.Get(delta.ClientId);
 
         // Return with the server-assigned clock value
         var result = delta with {
             Id = stored.Id,
-            Timestamp = DateTime.UtcNow,
+            Timestamp = DateTimeOffset.FromUnixTimeMilliseconds(stored.Timestamp).UtcDateTime,
             MaxClockValue = clockValueForClient,
             ClockValue = clockValueForClient,
             OperationType = delta.OperationType ?? "set",
             FieldPath = delta.FieldPath ?? string.Empty,
-            VectorClock = incrementedClock.ToDict()
+            VectorClock = stored.VectorClock.ToDict()
         };
 
         return Task.FromResult(result);

@@ -84,6 +84,43 @@ public class Document
     }
 
     /// <summary>
+    /// Atomically increment the vector clock for a client and add a delta.
+    /// This ensures proper ordering when multiple deltas arrive concurrently from the same client.
+    /// </summary>
+    /// <param name="clientId">Client ID to increment clock for</param>
+    /// <param name="data">Delta data (JSON payload)</param>
+    /// <param name="deltaId">Optional delta ID (generated if not provided)</param>
+    /// <returns>The stored delta with the assigned vector clock</returns>
+    public StoredDelta AddDeltaWithIncrementedClock(string clientId, JsonElement data, string? deltaId = null)
+    {
+        _stateLock.EnterWriteLock();
+        try
+        {
+            // Atomically increment and capture the new clock value
+            var incrementedClock = VectorClock.Increment(clientId);
+
+            var stored = new StoredDelta
+            {
+                Id = deltaId ?? Guid.NewGuid().ToString(),
+                ClientId = clientId,
+                Timestamp = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds(),
+                Data = data,
+                VectorClock = incrementedClock
+            };
+
+            _deltas.Add(stored);
+            VectorClock = incrementedClock;
+            UpdatedAt = stored.Timestamp;
+
+            return stored;
+        }
+        finally
+        {
+            _stateLock.ExitWriteLock();
+        }
+    }
+
+    /// <summary>
     /// Get all deltas that occurred after the given vector clock.
     /// Returns deltas that the client hasn't seen yet.
     /// </summary>

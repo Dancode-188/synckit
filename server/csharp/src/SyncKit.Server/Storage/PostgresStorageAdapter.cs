@@ -458,7 +458,7 @@ RETURNING version, created_at, updated_at";
     {
         await using var conn = new NpgsqlConnection(_connectionString);
         await conn.OpenAsync(ct);
-        await using var cmd = conn.CreateCommand();
+        await using NpgsqlCommand cmd = conn.CreateCommand();
         // Use TRUNCATE for faster deletion in test scenarios
         cmd.CommandText = @"
             TRUNCATE TABLE deltas CASCADE;
