@@ -180,6 +180,11 @@ public class Document
     /// <summary>
     /// Build the current document state by applying all deltas.
     /// Returns a dictionary representing field name to value mappings.
+    ///
+    /// Uses multi-level LWW conflict resolution (matching TypeScript server):
+    /// 1. Timestamp (wall-clock) - later writes win
+    /// 2. Vector clock counter - higher counter wins (for same timestamp)
+    /// 3. ClientId (lexicographic) - deterministic tiebreaker for concurrent updates
     /// </summary>
     /// <returns>Document state as a dictionary</returns>
     public Dictionary<string, object?> BuildState()
@@ -188,7 +193,8 @@ public class Document
         try
         {
             var state = new Dictionary<string, object?>();
-            var lastWriteInfo = new Dictionary<string, (long Timestamp, string? ClientId)>();
+            // Track: (Timestamp, ClockCounter, ClientId) for LWW resolution
+            var lastWriteInfo = new Dictionary<string, (long Timestamp, long ClockCounter, string ClientId)>();
 
             foreach (var delta in _deltas)
             {
@@ -199,28 +205,48 @@ public class Document
                         var fieldName = property.Name;
                         var deltaTs = delta.Timestamp;
                         var clientId = delta.ClientId ?? string.Empty;
+                        // Get the vector clock counter for this client
+                        var clockCounter = delta.VectorClock.Get(clientId);
 
                         var isTombstone = IsTombstone(property.Value);
 
                         if (!lastWriteInfo.TryGetValue(fieldName, out var last))
                         {
+                            // First write for this field
                             if (isTombstone)
                                 state.Remove(fieldName);
                             else
                                 state[fieldName] = ConvertJsonElement(property.Value);
 
-                            lastWriteInfo[fieldName] = (deltaTs, clientId);
+                            lastWriteInfo[fieldName] = (deltaTs, clockCounter, clientId);
                         }
-                        else if (deltaTs > last.Timestamp ||
-                                 (deltaTs == last.Timestamp &&
-                                  string.Compare(clientId, last.ClientId, StringComparison.Ordinal) > 0))
+                        else
                         {
-                            if (isTombstone)
-                                state.Remove(fieldName);
-                            else
-                                state[fieldName] = ConvertJsonElement(property.Value);
+                            // Multi-level LWW comparison (matches TypeScript server):
+                            // 1. Timestamp wins
+                            var timestampWins = deltaTs > last.Timestamp;
+                            var timestampTie = deltaTs == last.Timestamp;
 
-                            lastWriteInfo[fieldName] = (deltaTs, clientId);
+                            // 2. Clock counter wins (for same timestamp)
+                            var clockWins = clockCounter > last.ClockCounter;
+                            var clockTie = clockCounter == last.ClockCounter;
+
+                            // 3. Client ID wins (lexicographic, for same timestamp & clock)
+                            var clientIdWins = string.Compare(clientId, last.ClientId, StringComparison.Ordinal) > 0;
+
+                            var thisWins = timestampWins ||
+                                          (timestampTie && clockWins) ||
+                                          (timestampTie && clockTie && clientIdWins);
+
+                            if (thisWins)
+                            {
+                                if (isTombstone)
+                                    state.Remove(fieldName);
+                                else
+                                    state[fieldName] = ConvertJsonElement(property.Value);
+
+                                lastWriteInfo[fieldName] = (deltaTs, clockCounter, clientId);
+                            }
                         }
                     }
                 }

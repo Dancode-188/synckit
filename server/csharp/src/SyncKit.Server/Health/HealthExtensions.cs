@@ -62,7 +62,7 @@ public static class HealthExtensions
         {
             var response = new HealthResponse
             {
-                Status = "ok",
+                Status = "healthy",
                 Version = "1.0.0",
                 Timestamp = DateTime.UtcNow.ToString("o"),
                 Uptime = statsService.GetUptimeSeconds(),

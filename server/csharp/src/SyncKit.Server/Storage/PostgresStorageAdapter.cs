@@ -449,4 +449,21 @@ RETURNING version, created_at, updated_at";
         var deltasDeleted = reader.GetFieldValue<int>(1);
         return new CleanupResult(sessionsDeleted, deltasDeleted);
     }
+
+    /// <summary>
+    /// Clear all storage (test/development mode only).
+    /// WARNING: This deletes all data! Only use in development/test environments.
+    /// </summary>
+    public async Task ClearAllAsync(CancellationToken ct = default)
+    {
+        await using var conn = new NpgsqlConnection(_connectionString);
+        await conn.OpenAsync(ct);
+        await using var cmd = conn.CreateCommand();
+        // Use TRUNCATE for faster deletion in test scenarios
+        cmd.CommandText = @"
+            TRUNCATE TABLE deltas CASCADE;
+            TRUNCATE TABLE sessions CASCADE;
+            TRUNCATE TABLE documents CASCADE;";
+        await cmd.ExecuteNonQueryAsync(ct);
+    }
 }

@@ -46,4 +46,10 @@ public interface IStorageAdapter
 
     // === Maintenance (matches TS) ===
     Task<CleanupResult> CleanupAsync(CleanupOptions? options = null, CancellationToken ct = default);
+
+    /// <summary>
+    /// Clear all storage (test/development mode only).
+    /// Used for test isolation between test runs.
+    /// </summary>
+    Task ClearAllAsync(CancellationToken ct = default);
 }

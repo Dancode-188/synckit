@@ -126,6 +126,15 @@ public class InMemoryStorageAdapter : IStorageAdapter
     // === Delta operations ===
     public Task<DeltaEntry> SaveDeltaAsync(DeltaEntry delta, CancellationToken ct = default)
     {
+        // Get or create the document
+        var document = _documents.GetOrAdd(delta.DocumentId, id => new Document(id));
+
+        // Get current server vector clock for this document and increment for this client
+        // This ensures proper ordering even when clients send empty vector clocks
+        var currentClock = document.VectorClock;
+        var incrementedClock = currentClock.Increment(delta.ClientId);
+        var clockValueForClient = incrementedClock.Get(delta.ClientId);
+
         var stored = new StoredDelta
         {
             Id = delta.Id ?? Guid.NewGuid().ToString(),
@@ -133,15 +142,22 @@ public class InMemoryStorageAdapter : IStorageAdapter
             // Use server-assigned timestamp to ensure monotonic, authoritative ordering (ignore client clocks)
             Timestamp = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds(),
             Data = delta.Value ?? JsonDocument.Parse("{}").RootElement,
-            VectorClock = delta.VectorClock != null ? VectorClock.FromDict(delta.VectorClock) : new VectorClock()
+            // Use server-incremented vector clock (not client-provided) for proper LWW ordering
+            VectorClock = incrementedClock
         };
 
-        var document = _documents.GetOrAdd(delta.DocumentId, id => new Document(id));
         document.AddDelta(stored);
 
-        // compute MaxClockValue as maximum of vector clock values
-        var max = delta.VectorClock?.Values.DefaultIfEmpty(0).Max() ?? stored.VectorClock.Entries.DefaultIfEmpty().Max(kv => kv.Value);
-        var result = delta with { Id = stored.Id, Timestamp = DateTime.UtcNow, MaxClockValue = max, OperationType = delta.OperationType ?? "set", FieldPath = delta.FieldPath ?? string.Empty };
+        // Return with the server-assigned clock value
+        var result = delta with {
+            Id = stored.Id,
+            Timestamp = DateTime.UtcNow,
+            MaxClockValue = clockValueForClient,
+            ClockValue = clockValueForClient,
+            OperationType = delta.OperationType ?? "set",
+            FieldPath = delta.FieldPath ?? string.Empty,
+            VectorClock = incrementedClock.ToDict()
+        };
 
         return Task.FromResult(result);
     }
@@ -237,6 +253,18 @@ public class InMemoryStorageAdapter : IStorageAdapter
 
         // Deltas cleanup not implemented in-memory (could filter by timestamp)
         return Task.FromResult(new CleanupResult(removedSessions.Count, 0));
+    }
+
+    /// <summary>
+    /// Clear all storage (test/development mode only).
+    /// Used for test isolation between test runs.
+    /// </summary>
+    public Task ClearAllAsync(CancellationToken ct = default)
+    {
+        _documents.Clear();
+        _sessions.Clear();
+        _logger.LogInformation("In-memory storage cleared");
+        return Task.CompletedTask;
     }
 
 }

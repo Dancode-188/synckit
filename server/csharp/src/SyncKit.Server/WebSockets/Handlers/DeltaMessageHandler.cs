@@ -120,6 +120,7 @@ public class DeltaMessageHandler : IMessageHandler
             delta.Id, delta.DocumentId, connection.ClientId ?? connection.Id);
 
         // Get current document state to determine authoritative values (LWW)
+        // IMPORTANT: This is AFTER saving the delta, so it reflects LWW resolution
         var currentState = await _storage.GetDocumentStateAsync(delta.DocumentId);
 
         // Build authoritative delta by checking current state
@@ -137,33 +138,38 @@ public class DeltaMessageHandler : IMessageHandler
                                   property.Value.TryGetProperty("__deleted", out var deletedProp) &&
                                   deletedProp.ValueKind == JsonValueKind.True;
 
+                // After LWW resolution, check what the authoritative state is
+                var fieldExistsInCurrentState = currentState?.ContainsKey(fieldName) == true;
+
                 if (isTombstone)
                 {
-                    // For deletes, if the field exists in current state, the delete wins (LWW)
-                    // If field doesn't exist, the delete already won
-                    if (currentState?.ContainsKey(fieldName) != true)
+                    // For deletes: check if delete WON in LWW resolution
+                    // If field doesn't exist in current state, delete won → send tombstone
+                    // If field exists in current state, a concurrent write WON → send the value
+                    if (!fieldExistsInCurrentState)
                     {
-                        // Field is deleted, include tombstone
+                        // Delete won - send tombstone
                         authoritativeDelta[fieldName] = new Dictionary<string, object> { { "__deleted", true } };
                     }
                     else
                     {
-                        // Field exists in current state - check if delete should win
-                        // Since we just stored this delta, the delete wins
-                        authoritativeDelta[fieldName] = new Dictionary<string, object> { { "__deleted", true } };
+                        // A concurrent write won - send the authoritative value
+                        authoritativeDelta[fieldName] = currentState![fieldName];
                     }
                 }
                 else
                 {
-                    // For sets, use the current state value (which is authoritative after our save)
-                    if (currentState?.TryGetValue(fieldName, out var currentValue) == true)
+                    // For sets: check if this write WON in LWW resolution
+                    if (fieldExistsInCurrentState)
                     {
-                        authoritativeDelta[fieldName] = currentValue;
+                        // Use the authoritative value from current state (may be our value or a concurrent write's value)
+                        authoritativeDelta[fieldName] = currentState![fieldName];
                     }
                     else
                     {
-                        // Field doesn't exist yet, use the incoming value
-                        authoritativeDelta[fieldName] = ConvertJsonElement(property.Value);
+                        // Field was deleted by a concurrent operation that won
+                        // Send tombstone to ensure all clients converge
+                        authoritativeDelta[fieldName] = new Dictionary<string, object> { { "__deleted", true } };
                     }
                 }
             }
