@@ -1,6 +1,7 @@
 using System.Text.Json;
 using SyncKit.Server.Sync;
 using SyncKit.Server.Storage;
+using SyncKit.Server.Services;
 using SyncKit.Server.WebSockets.Protocol;
 using SyncKit.Server.WebSockets.Protocol.Messages;
 
@@ -11,6 +12,7 @@ namespace SyncKit.Server.WebSockets.Handlers;
 /// Implements Last-Write-Wins (LWW) conflict resolution:
 /// - Applies delta to server state
 /// - Resolves conflicts based on timestamps
+/// - Batches rapid updates (50ms window) before broadcast for efficiency
 /// - Broadcasts authoritative state to ALL subscribers (including sender)
 /// </summary>
 public class DeltaMessageHandler : IMessageHandler
@@ -20,18 +22,19 @@ public class DeltaMessageHandler : IMessageHandler
     private readonly AuthGuard _authGuard;
     private readonly Storage.IStorageAdapter _storage;
     private readonly IConnectionManager _connectionManager;
+    private readonly DeltaBatchingService? _batchingService;
     private readonly PubSub.IRedisPubSub? _redis;
     private readonly ILogger<DeltaMessageHandler> _logger;
 
     public MessageType[] HandledTypes => _handledTypes;
 
-    // Backwards-compatible constructor for existing tests (no redis parameter)
+    // Backwards-compatible constructor for existing tests (no redis or batching parameters)
     public DeltaMessageHandler(
         AuthGuard authGuard,
         Storage.IStorageAdapter storage,
         IConnectionManager connectionManager,
         ILogger<DeltaMessageHandler> logger)
-        : this(authGuard, storage, connectionManager, null, logger)
+        : this(authGuard, storage, connectionManager, null, null, logger)
     {
     }
 
@@ -41,10 +44,22 @@ public class DeltaMessageHandler : IMessageHandler
         IConnectionManager connectionManager,
         PubSub.IRedisPubSub? redis,
         ILogger<DeltaMessageHandler> logger)
+        : this(authGuard, storage, connectionManager, null, redis, logger)
+    {
+    }
+
+    public DeltaMessageHandler(
+        AuthGuard authGuard,
+        Storage.IStorageAdapter storage,
+        IConnectionManager connectionManager,
+        DeltaBatchingService? batchingService,
+        PubSub.IRedisPubSub? redis,
+        ILogger<DeltaMessageHandler> logger)
     {
         _authGuard = authGuard ?? throw new ArgumentNullException(nameof(authGuard));
         _storage = storage ?? throw new ArgumentNullException(nameof(storage));
         _connectionManager = connectionManager ?? throw new ArgumentNullException(nameof(connectionManager));
+        _batchingService = batchingService;
         _redis = redis;
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
     }
@@ -177,35 +192,49 @@ public class DeltaMessageHandler : IMessageHandler
 
         // Broadcast authoritative delta to ALL subscribers (including the sender!)
         // This ensures everyone converges to the same state
-        var broadcastMessage = new DeltaMessage
+        // Use batching service if available to coalesce rapid updates
+        if (_batchingService != null)
         {
-            Id = Guid.NewGuid().ToString(),
-            Timestamp = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds(),
-            DocumentId = delta.DocumentId,
-            Delta = authoritativeDelta,
-            VectorClock = delta.VectorClock
-        };
-
-        _logger.LogDebug(
-            "Broadcasting authoritative delta to document {DocumentId}: {Delta}",
-            delta.DocumentId, JsonSerializer.Serialize(authoritativeDelta));
-
-        // Broadcast to ALL subscribers (including sender for convergence)
-        await _connectionManager.BroadcastToDocumentAsync(
-            delta.DocumentId,
-            broadcastMessage,
-            excludeConnectionId: null); // Don't exclude anyone!
-
-        // Publish to Redis for other instances
-        if (_redis != null)
+            // Batch the delta for efficient broadcast (50ms coalescing window)
+            _batchingService.AddToBatch(delta.DocumentId, authoritativeDelta, delta.VectorClock);
+            
+            _logger.LogDebug(
+                "Queued authoritative delta for batched broadcast to document {DocumentId}: {Delta}",
+                delta.DocumentId, JsonSerializer.Serialize(authoritativeDelta));
+        }
+        else
         {
-            try
+            // Fallback: direct broadcast (for backwards compatibility/testing)
+            var broadcastMessage = new DeltaMessage
             {
-                await _redis.PublishDeltaAsync(delta.DocumentId, broadcastMessage);
-            }
-            catch (Exception ex)
+                Id = Guid.NewGuid().ToString(),
+                Timestamp = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds(),
+                DocumentId = delta.DocumentId,
+                Delta = authoritativeDelta,
+                VectorClock = delta.VectorClock
+            };
+
+            _logger.LogDebug(
+                "Broadcasting authoritative delta to document {DocumentId}: {Delta}",
+                delta.DocumentId, JsonSerializer.Serialize(authoritativeDelta));
+
+            // Broadcast to ALL subscribers (including sender for convergence)
+            await _connectionManager.BroadcastToDocumentAsync(
+                delta.DocumentId,
+                broadcastMessage,
+                excludeConnectionId: null); // Don't exclude anyone!
+
+            // Publish to Redis for other instances
+            if (_redis != null)
             {
-                _logger.LogWarning(ex, "Failed to publish delta to Redis for document {DocumentId}", delta.DocumentId);
+                try
+                {
+                    await _redis.PublishDeltaAsync(delta.DocumentId, broadcastMessage);
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogWarning(ex, "Failed to publish delta to Redis for document {DocumentId}", delta.DocumentId);
+                }
             }
         }
 

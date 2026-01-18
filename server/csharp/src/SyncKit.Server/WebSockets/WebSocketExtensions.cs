@@ -2,6 +2,7 @@ using Microsoft.Extensions.Options;
 using SyncKit.Server.Configuration;
 using SyncKit.Server.Sync;
 using SyncKit.Server.Awareness;
+using SyncKit.Server.Services;
 using SyncKit.Server.WebSockets.Protocol.Messages;
 
 namespace SyncKit.Server.WebSockets;
@@ -41,6 +42,11 @@ public static class WebSocketExtensions
         // Register AuthGuard for permission enforcement
         services.AddSingleton<AuthGuard>();
 
+        // Register delta batching service for efficient broadcast coalescing
+        // This batches rapid delta updates within a 50ms window before broadcasting
+        services.AddSingleton<DeltaBatchingService>();
+        services.AddHostedService(sp => sp.GetRequiredService<DeltaBatchingService>());
+
         // Register message handlers
         // Heartbeat handlers
         services.AddSingleton<Handlers.IMessageHandler, Handlers.PingMessageHandler>();
@@ -52,7 +58,26 @@ public static class WebSocketExtensions
         // Sync handlers
         services.AddSingleton<Handlers.IMessageHandler, Handlers.SubscribeMessageHandler>();
         services.AddSingleton<Handlers.IMessageHandler, Handlers.UnsubscribeMessageHandler>();
-        services.AddSingleton<Handlers.IMessageHandler, Handlers.DeltaMessageHandler>();
+        
+        // DeltaMessageHandler with explicit dependencies including batching service
+        services.AddSingleton<Handlers.IMessageHandler>(sp =>
+        {
+            var authGuard = sp.GetRequiredService<AuthGuard>();
+            var storage = sp.GetRequiredService<Storage.IStorageAdapter>();
+            var connectionManager = sp.GetRequiredService<IConnectionManager>();
+            var batchingService = sp.GetRequiredService<DeltaBatchingService>();
+            var redis = sp.GetService<PubSub.IRedisPubSub>();
+            var logger = sp.GetRequiredService<ILogger<Handlers.DeltaMessageHandler>>();
+            
+            return new Handlers.DeltaMessageHandler(
+                authGuard,
+                storage,
+                connectionManager,
+                batchingService,
+                redis,
+                logger);
+        });
+        
         services.AddSingleton<Handlers.IMessageHandler, Handlers.SyncRequestMessageHandler>();
         services.AddSingleton<Handlers.IMessageHandler, Handlers.AckMessageHandler>();
 
