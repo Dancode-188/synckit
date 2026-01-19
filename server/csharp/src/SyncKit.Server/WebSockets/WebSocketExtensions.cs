@@ -43,6 +43,9 @@ public static class WebSocketExtensions
         // Register AuthGuard for permission enforcement
         services.AddSingleton<AuthGuard>();
 
+        // Register message pool for object reuse (reduces GC pressure)
+        services.AddSingleton<MessagePool>();
+
         // Register delta batching service for efficient broadcast coalescing
         // This batches rapid delta updates within a 50ms window before broadcasting
         services.AddSingleton<DeltaBatchingService>();
@@ -55,8 +58,13 @@ public static class WebSocketExtensions
         services.AddHostedService(sp => sp.GetRequiredService<AckTracker>());
 
         // Register message handlers
-        // Heartbeat handlers
-        services.AddSingleton<Handlers.IMessageHandler, Handlers.PingMessageHandler>();
+        // Heartbeat handlers (PingMessageHandler with pooling for efficient PONG responses)
+        services.AddSingleton<Handlers.IMessageHandler>(sp =>
+        {
+            var logger = sp.GetRequiredService<ILogger<Handlers.PingMessageHandler>>();
+            var messagePool = sp.GetRequiredService<MessagePool>();
+            return new Handlers.PingMessageHandler(logger, messagePool);
+        });
         services.AddSingleton<Handlers.IMessageHandler, Handlers.PongMessageHandler>();
 
         // Auth handler
@@ -66,13 +74,14 @@ public static class WebSocketExtensions
         services.AddSingleton<Handlers.IMessageHandler, Handlers.SubscribeMessageHandler>();
         services.AddSingleton<Handlers.IMessageHandler, Handlers.UnsubscribeMessageHandler>();
 
-        // DeltaMessageHandler with explicit dependencies including batching service
+        // DeltaMessageHandler with explicit dependencies including batching service and message pool
         services.AddSingleton<Handlers.IMessageHandler>(sp =>
         {
             var authGuard = sp.GetRequiredService<AuthGuard>();
             var storage = sp.GetRequiredService<Storage.IStorageAdapter>();
             var connectionManager = sp.GetRequiredService<IConnectionManager>();
             var batchingService = sp.GetRequiredService<DeltaBatchingService>();
+            var messagePool = sp.GetRequiredService<MessagePool>();
             var redis = sp.GetService<PubSub.IRedisPubSub>();
             var logger = sp.GetRequiredService<ILogger<Handlers.DeltaMessageHandler>>();
 
@@ -81,6 +90,7 @@ public static class WebSocketExtensions
                 storage,
                 connectionManager,
                 batchingService,
+                messagePool,
                 redis,
                 logger);
         });

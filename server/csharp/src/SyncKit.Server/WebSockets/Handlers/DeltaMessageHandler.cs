@@ -14,6 +14,7 @@ namespace SyncKit.Server.WebSockets.Handlers;
 /// - Resolves conflicts based on timestamps
 /// - Batches rapid updates (50ms window) before broadcast for efficiency
 /// - Broadcasts authoritative state to ALL subscribers (including sender)
+/// Uses object pooling to reduce allocations during high-throughput scenarios.
 /// </summary>
 public class DeltaMessageHandler : IMessageHandler
 {
@@ -23,6 +24,7 @@ public class DeltaMessageHandler : IMessageHandler
     private readonly Storage.IStorageAdapter _storage;
     private readonly IConnectionManager _connectionManager;
     private readonly DeltaBatchingService? _batchingService;
+    private readonly MessagePool? _messagePool;
     private readonly PubSub.IRedisPubSub? _redis;
     private readonly ILogger<DeltaMessageHandler> _logger;
 
@@ -34,7 +36,7 @@ public class DeltaMessageHandler : IMessageHandler
         Storage.IStorageAdapter storage,
         IConnectionManager connectionManager,
         ILogger<DeltaMessageHandler> logger)
-        : this(authGuard, storage, connectionManager, null, null, logger)
+        : this(authGuard, storage, connectionManager, null, null, null, logger)
     {
     }
 
@@ -44,7 +46,7 @@ public class DeltaMessageHandler : IMessageHandler
         IConnectionManager connectionManager,
         PubSub.IRedisPubSub? redis,
         ILogger<DeltaMessageHandler> logger)
-        : this(authGuard, storage, connectionManager, null, redis, logger)
+        : this(authGuard, storage, connectionManager, null, null, redis, logger)
     {
     }
 
@@ -55,11 +57,24 @@ public class DeltaMessageHandler : IMessageHandler
         DeltaBatchingService? batchingService,
         PubSub.IRedisPubSub? redis,
         ILogger<DeltaMessageHandler> logger)
+        : this(authGuard, storage, connectionManager, batchingService, null, redis, logger)
+    {
+    }
+
+    public DeltaMessageHandler(
+        AuthGuard authGuard,
+        Storage.IStorageAdapter storage,
+        IConnectionManager connectionManager,
+        DeltaBatchingService? batchingService,
+        MessagePool? messagePool,
+        PubSub.IRedisPubSub? redis,
+        ILogger<DeltaMessageHandler> logger)
     {
         _authGuard = authGuard ?? throw new ArgumentNullException(nameof(authGuard));
         _storage = storage ?? throw new ArgumentNullException(nameof(storage));
         _connectionManager = connectionManager ?? throw new ArgumentNullException(nameof(connectionManager));
         _batchingService = batchingService;
+        _messagePool = messagePool;
         _redis = redis;
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
     }
@@ -241,13 +256,21 @@ public class DeltaMessageHandler : IMessageHandler
             }
         }
 
-        // Send ACK to the sender
-        var ackMessage = new AckMessage
+        // Send ACK to the sender (use pooled message if available)
+        AckMessage ackMessage;
+        if (_messagePool != null)
         {
-            Id = Guid.NewGuid().ToString(),
-            Timestamp = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds(),
-            MessageId = delta.Id
-        };
+            ackMessage = _messagePool.RentAckMessage(delta.Id);
+        }
+        else
+        {
+            ackMessage = new AckMessage
+            {
+                Id = Guid.NewGuid().ToString(),
+                Timestamp = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds(),
+                MessageId = delta.Id
+            };
+        }
 
         connection.Send(ackMessage);
 
