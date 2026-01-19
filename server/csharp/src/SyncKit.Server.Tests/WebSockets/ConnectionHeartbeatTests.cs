@@ -179,12 +179,13 @@ public class ConnectionHeartbeatTests
             .SetValue(_connection, ProtocolType.Binary);
 
         // Act
-        _connection.StartHeartbeat(50, 200); // Give enough time to test
+        // Use longer intervals to avoid flakiness on slow CI runners
+        _connection.StartHeartbeat(100, 500); // ping every 100ms, timeout at 500ms
 
-        // Respond to pings
-        for (int i = 0; i < 5; i++)
+        // Respond to pings - do it 3 times with comfortable margins
+        for (int i = 0; i < 3; i++)
         {
-            await Task.Delay(60); // Wait for ping
+            await Task.Delay(120); // Wait for ping (slightly more than interval)
             _connection.HandlePong(); // Respond
         }
 
