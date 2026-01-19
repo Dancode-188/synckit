@@ -1,3 +1,4 @@
+using System.Text.Json;
 using SyncKit.Server.Sync;
 using SyncKit.Server.Storage;
 using SyncKit.Server.WebSockets.Protocol;
@@ -73,7 +74,7 @@ public class SyncRequestMessageHandler : IMessageHandler
                 Timestamp = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds(),
                 RequestId = request.Id,
                 DocumentId = request.DocumentId,
-                State = new Dictionary<string, long>(),
+                State = JsonSerializer.SerializeToElement(new Dictionary<string, long>()),
                 Deltas = new List<DeltaPayload>()
             };
 
@@ -107,6 +108,9 @@ public class SyncRequestMessageHandler : IMessageHandler
         _logger.LogInformation("DBG: Sync response for {DocumentId}: state has {FieldCount} fields",
             request.DocumentId, documentState.Count);
 
+        // Convert state to JsonElement for source-generated serialization
+        var stateJson = JsonSerializer.SerializeToElement(documentState);
+
         // Send SYNC_RESPONSE with current document state and missed deltas
         var response = new SyncResponseMessage
         {
@@ -114,7 +118,7 @@ public class SyncRequestMessageHandler : IMessageHandler
             Timestamp = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds(),
             RequestId = request.Id,
             DocumentId = request.DocumentId,
-            State = documentState,
+            State = stateJson,
             Deltas = deltaPayloads
         };
 

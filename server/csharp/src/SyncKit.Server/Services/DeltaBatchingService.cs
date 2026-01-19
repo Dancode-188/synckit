@@ -145,13 +145,16 @@ public class DeltaBatchingService : IHostedService, IDisposable
             return;
         }
 
+        // Convert dictionary to JsonElement for source-generated serialization
+        var deltaJson = JsonSerializer.SerializeToElement(deltaToSend);
+
         // Build the broadcast message
         var broadcastMessage = new DeltaMessage
         {
             Id = Guid.NewGuid().ToString(),
             Timestamp = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds(),
             DocumentId = documentId,
-            Delta = deltaToSend,
+            Delta = deltaJson,
             VectorClock = vectorClockToSend
         };
 

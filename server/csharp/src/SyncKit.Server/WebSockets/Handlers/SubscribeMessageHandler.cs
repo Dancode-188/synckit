@@ -1,3 +1,4 @@
+using System.Text.Json;
 using SyncKit.Server.Sync;
 using SyncKit.Server.Storage;
 using SyncKit.Server.WebSockets.Protocol;
@@ -97,6 +98,10 @@ public class SubscribeMessageHandler : IMessageHandler
             VectorClock = d.VectorClock?.ToDict() ?? new Dictionary<string, long>()
         }).ToList();
 
+        // Get document state and convert to JsonElement for source-generated serialization
+        var state = await _storage.GetDocumentStateAsync(subscribe.DocumentId);
+        var stateJson = state != null ? JsonSerializer.SerializeToElement(state) : (JsonElement?)null;
+
         // Send SYNC_RESPONSE with current document state
         var response = new SyncResponseMessage
         {
@@ -104,7 +109,7 @@ public class SubscribeMessageHandler : IMessageHandler
             Timestamp = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds(),
             RequestId = subscribe.Id,
             DocumentId = subscribe.DocumentId,
-            State = await _storage.GetDocumentStateAsync(subscribe.DocumentId),
+            State = stateJson,
             Deltas = deltaPayloads
         };
 

@@ -72,7 +72,8 @@ public class BinaryProtocolHandler : IProtocolHandler
 
     static BinaryProtocolHandler()
     {
-        JsonOptions = SyncKitJsonOptions.RuntimeOptions;
+        // Use source-generated options for better performance (no reflection)
+        JsonOptions = SyncKitJsonOptions.SourceGenOptions;
     }
 
     public BinaryProtocolHandler(ILogger<BinaryProtocolHandler> logger)

@@ -26,6 +26,31 @@ public static class TestHelpers
     }
 
     /// <summary>
+    /// Gets a boolean property from a JsonElement.
+    /// </summary>
+    public static bool GetBool(JsonElement element, string propertyName)
+    {
+        return element.GetProperty(propertyName).GetBoolean();
+    }
+
+    /// <summary>
+    /// Gets a string array property from a JsonElement.
+    /// </summary>
+    public static string[] GetStringArray(JsonElement element, string propertyName)
+    {
+        var prop = element.GetProperty(propertyName);
+        return prop.EnumerateArray().Select(e => e.GetString()!).ToArray();
+    }
+
+    /// <summary>
+    /// Checks if a JsonElement has a property.
+    /// </summary>
+    public static bool HasProperty(JsonElement element, string propertyName)
+    {
+        return element.TryGetProperty(propertyName, out _);
+    }
+
+    /// <summary>
     /// Converts a generic object to a Dictionary for assertions.
     /// Useful when testing protocol messages that use object for flexibility.
     /// </summary>
@@ -54,5 +79,31 @@ public static class TestHelpers
             return property;
 
         return null;
+    }
+
+    /// <summary>
+    /// Gets a long value from a JsonElement by property name.
+    /// </summary>
+    public static long GetLong(JsonElement element, string propertyName)
+    {
+        return element.GetProperty(propertyName).GetInt64();
+    }
+
+    /// <summary>
+    /// Gets a long value from a nullable JsonElement by property name.
+    /// </summary>
+    public static long GetLong(JsonElement? element, string propertyName)
+    {
+        if (!element.HasValue)
+            throw new InvalidOperationException("JsonElement is null");
+        return element.Value.GetProperty(propertyName).GetInt64();
+    }
+
+    /// <summary>
+    /// Gets a string value from a JsonElement by property name.
+    /// </summary>
+    public static string? GetString(JsonElement element, string propertyName)
+    {
+        return element.GetProperty(propertyName).GetString();
     }
 }

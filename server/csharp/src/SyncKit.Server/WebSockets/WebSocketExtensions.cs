@@ -1,3 +1,4 @@
+using System.Text.Json;
 using Microsoft.Extensions.Options;
 using SyncKit.Server.Configuration;
 using SyncKit.Server.Sync;
@@ -124,12 +125,17 @@ public static class WebSocketExtensions
     /// <param name="details">Optional error details.</param>
     public static void SendError(this IConnection connection, string error, object? details = null)
     {
+        // Convert details to JsonElement if provided, for source-generated serialization
+        JsonElement? detailsJson = details != null
+            ? JsonSerializer.SerializeToElement(details)
+            : null;
+
         var errorMessage = new ErrorMessage
         {
             Id = Guid.NewGuid().ToString(),
             Timestamp = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds(),
             Error = error,
-            Details = details
+            Details = detailsJson
         };
 
         connection.Send(errorMessage);

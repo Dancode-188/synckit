@@ -1,3 +1,4 @@
+using System.Text.Json;
 using System.Text.Json.Serialization;
 
 namespace SyncKit.Server.WebSockets.Protocol.Messages;
@@ -24,10 +25,10 @@ public class SyncResponseMessage : BaseMessage
 
     /// <summary>
     /// Full document state (for initial sync).
-    /// Can be any JSON-serializable object representing the document's current state.
+    /// Uses JsonElement to preserve the exact JSON structure and enable source-generated serialization.
     /// </summary>
     [JsonPropertyName("state")]
-    public object? State { get; set; }
+    public JsonElement? State { get; set; }
 
     /// <summary>
     /// Delta updates (for incremental sync).

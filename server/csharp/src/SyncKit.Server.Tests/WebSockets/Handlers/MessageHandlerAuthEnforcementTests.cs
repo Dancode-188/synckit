@@ -235,7 +235,7 @@ public class MessageHandlerAuthEnforcementTests
             Id = "msg-1",
             Timestamp = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds(),
             DocumentId = "doc-1",
-            Delta = new { },
+            Delta = TestHelpers.ToJsonElement(new { }),
             VectorClock = new Dictionary<string, long>()
         };
 
@@ -280,7 +280,7 @@ public class MessageHandlerAuthEnforcementTests
             Id = "msg-1",
             Timestamp = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds(),
             DocumentId = "doc-1",
-            Delta = new { },
+            Delta = TestHelpers.ToJsonElement(new { }),
             VectorClock = new Dictionary<string, long>()
         };
 
@@ -328,7 +328,7 @@ public class MessageHandlerAuthEnforcementTests
             Id = "msg-1",
             Timestamp = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds(),
             DocumentId = "doc-1",
-            Delta = new { change = "test" },
+            Delta = TestHelpers.ToJsonElement(new { change = "test" }),
             VectorClock = new Dictionary<string, long>()
         };
 
@@ -373,7 +373,7 @@ public class MessageHandlerAuthEnforcementTests
             Id = "msg-1",
             Timestamp = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds(),
             DocumentId = "doc-1",
-            Delta = null!,
+            Delta = default,  // Uninitialized JsonElement (simulates missing/null delta)
             VectorClock = new Dictionary<string, long>()
         };
 

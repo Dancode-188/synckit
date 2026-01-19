@@ -192,7 +192,7 @@ public class DeltaMessageHandlerTests
             Id = "msg-1",
             Timestamp = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds(),
             DocumentId = "doc-123",
-            Delta = null!,
+            Delta = default,  // Uninitialized JsonElement (simulates missing/null delta)
             VectorClock = new Dictionary<string, long>()
         };
 
@@ -549,7 +549,7 @@ public class DeltaMessageHandlerTests
             Id = "msg-1",
             Timestamp = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds(),
             DocumentId = documentId,
-            Delta = new { operation = "set", path = "title", value = "Test" },
+            Delta = TestHelpers.ToJsonElement(new { operation = "set", path = "title", value = "Test" }),
             VectorClock = new Dictionary<string, long> { { "client-1", 1 } }
         };
 

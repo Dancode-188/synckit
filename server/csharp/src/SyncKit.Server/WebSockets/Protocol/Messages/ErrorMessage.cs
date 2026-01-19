@@ -1,3 +1,4 @@
+using System.Text.Json;
 using System.Text.Json.Serialization;
 
 namespace SyncKit.Server.WebSockets.Protocol.Messages;
@@ -18,7 +19,8 @@ public class ErrorMessage : BaseMessage
 
     /// <summary>
     /// Optional additional error details.
+    /// Uses JsonElement to preserve the exact JSON structure and enable source-generated serialization.
     /// </summary>
     [JsonPropertyName("details")]
-    public object? Details { get; set; }
+    public JsonElement? Details { get; set; }
 }

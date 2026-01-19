@@ -77,8 +77,8 @@ public class DeltaMessageHandler : IMessageHandler
         _logger.LogDebug("Connection {ConnectionId} sending delta for document {DocumentId}",
             connection.Id, delta.DocumentId);
 
-        // Validate delta (Delta is an object, so we just check for null)
-        if (delta.Delta == null)
+        // Validate delta (check for undefined/null ValueKind since JsonElement is a struct)
+        if (delta.Delta.ValueKind == JsonValueKind.Undefined)
         {
             connection.SendError("Invalid delta message: missing or empty delta");
             return;
@@ -205,12 +205,15 @@ public class DeltaMessageHandler : IMessageHandler
         else
         {
             // Fallback: direct broadcast (for backwards compatibility/testing)
+            // Convert dictionary to JsonElement for source-generated serialization
+            var authoritativeDeltaJson = JsonSerializer.SerializeToElement(authoritativeDelta);
+
             var broadcastMessage = new DeltaMessage
             {
                 Id = Guid.NewGuid().ToString(),
                 Timestamp = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds(),
                 DocumentId = delta.DocumentId,
-                Delta = authoritativeDelta,
+                Delta = authoritativeDeltaJson,
                 VectorClock = delta.VectorClock
             };
 

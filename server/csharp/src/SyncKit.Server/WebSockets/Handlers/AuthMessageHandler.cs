@@ -1,4 +1,5 @@
 using System.Net.WebSockets;
+using System.Text.Json;
 using Microsoft.Extensions.Options;
 using SyncKit.Server.Auth;
 using SyncKit.Server.Configuration;
@@ -148,12 +149,15 @@ public class AuthMessageHandler : IMessageHandler
             ["isAdmin"] = connection.TokenPayload?.Permissions.IsAdmin ?? false
         };
 
+        // Convert permissions to JsonElement for source-generated serialization
+        var permissionsJson = JsonSerializer.SerializeToElement(permissionsDict);
+
         var successMessage = new AuthSuccessMessage
         {
             Id = Guid.NewGuid().ToString(),
             Timestamp = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds(),
             UserId = connection.UserId ?? "anonymous",
-            Permissions = permissionsDict
+            Permissions = permissionsJson
         };
 
         connection.Send(successMessage);

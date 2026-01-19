@@ -234,7 +234,7 @@ public class JsonProtocolHandlerTests
         // Assert
         var message = Assert.IsType<AuthSuccessMessage>(result);
         Assert.Equal("user-1", message.UserId);
-        Assert.NotNull(message.Permissions);
+        // Permissions is a JsonElement value type - verify it has expected content
         var perms = TestHelpers.AsDictionary(message.Permissions)!;
         Assert.True(((System.Text.Json.JsonElement)perms["read"]).GetBoolean());
     }
@@ -492,7 +492,7 @@ public class JsonProtocolHandlerTests
             Id = "auth-success-1",
             Timestamp = 1702900002000,
             UserId = "user-123",
-            Permissions = new Dictionary<string, object> { { "read", true } }
+            Permissions = TestHelpers.ToJsonElement(new Dictionary<string, object> { { "read", true } })
         };
 
         // Act
@@ -514,7 +514,7 @@ public class JsonProtocolHandlerTests
             Id = "delta-1",
             Timestamp = 1702900003000,
             DocumentId = "doc-1",
-            Delta = new { field = "value" },
+            Delta = TestHelpers.ToJsonElement(new { field = "value" }),
             VectorClock = new Dictionary<string, long> { { "client-1", 5 } }
         };
 
@@ -639,7 +639,7 @@ public class JsonProtocolHandlerTests
             Timestamp = 1702900008000,
             RequestId = "sync-req-1",
             DocumentId = "doc-6",
-            State = new Dictionary<string, long> { ["client1"] = 5 },
+            State = TestHelpers.ToNullableJsonElement(new Dictionary<string, long> { ["client1"] = 5 }),
             Deltas = new List<DeltaPayload>
             {
                 new DeltaPayload
@@ -736,7 +736,7 @@ public class JsonProtocolHandlerTests
             Id = "delta-1",
             Timestamp = 1702900001000,
             DocumentId = "doc-1",
-            Delta = new { field = "value" },
+            Delta = TestHelpers.ToJsonElement(new { field = "value" }),
             VectorClock = new Dictionary<string, long> { { "client-1", 5 } }
         };
 
@@ -762,18 +762,18 @@ public class JsonProtocolHandlerTests
             new PingMessage { Id = "ping", Timestamp = 1 },
             new PongMessage { Id = "pong", Timestamp = 2 },
             new AuthMessage { Id = "auth", Timestamp = 3, Token = "token" },
-            new AuthSuccessMessage { Id = "auth-success", Timestamp = 4, UserId = "user", Permissions = new Dictionary<string, object>() },
+            new AuthSuccessMessage { Id = "auth-success", Timestamp = 4, UserId = "user", Permissions = TestHelpers.ToJsonElement(new Dictionary<string, object>()) },
             new AuthErrorMessage { Id = "auth-error", Timestamp = 5, Error = "oops", Details = new Dictionary<string, object>() },
             new SubscribeMessage { Id = "sub", Timestamp = 6, DocumentId = "doc" },
             new UnsubscribeMessage { Id = "unsub", Timestamp = 7, DocumentId = "doc" },
             new SyncRequestMessage { Id = "sync-req", Timestamp = 8, DocumentId = "doc", VectorClock = new Dictionary<string, long> { { "c1", 1 } } },
-            new SyncResponseMessage { Id = "sync-resp", Timestamp = 9, RequestId = "sync-req", DocumentId = "doc", State = new Dictionary<string, long> { ["c1"] = 1 }, Deltas = new List<DeltaPayload>() },
-            new DeltaMessage { Id = "delta", Timestamp = 10, DocumentId = "doc", Delta = new { field = "value" }, VectorClock = new Dictionary<string, long> { { "c1", 2 } } },
+            new SyncResponseMessage { Id = "sync-resp", Timestamp = 9, RequestId = "sync-req", DocumentId = "doc", State = TestHelpers.ToNullableJsonElement(new Dictionary<string, long> { ["c1"] = 1 }), Deltas = new List<DeltaPayload>() },
+            new DeltaMessage { Id = "delta", Timestamp = 10, DocumentId = "doc", Delta = TestHelpers.ToJsonElement(new { field = "value" }), VectorClock = new Dictionary<string, long> { { "c1", 2 } } },
             new AckMessage { Id = "ack", Timestamp = 11, MessageId = "delta" },
             new AwarenessUpdateMessage { Id = "au", Timestamp = 12, DocumentId = "doc", ClientId = "client", State = TestHelpers.ToNullableJsonElement(new Dictionary<string, object> { { "cursor", new { x = 1, y = 2 } } }), Clock = 3 },
             new AwarenessSubscribeMessage { Id = "asub", Timestamp = 13, DocumentId = "doc" },
             new AwarenessStateMessage { Id = "astate", Timestamp = 14, DocumentId = "doc", States = new List<AwarenessClientState> { new AwarenessClientState { ClientId = "client", Clock = 1, State = TestHelpers.ToJsonElement(new Dictionary<string, object> { { "cursor", new { x = 1, y = 2 } } }) } } },
-            new ErrorMessage { Id = "err", Timestamp = 15, Error = "error", Details = new Dictionary<string, object>() }
+            new ErrorMessage { Id = "err", Timestamp = 15, Error = "error", Details = TestHelpers.ToNullableJsonElement(new Dictionary<string, object>()) }
         };
 
         foreach (var original in messages)

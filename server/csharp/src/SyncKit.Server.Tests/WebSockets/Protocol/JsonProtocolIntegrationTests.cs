@@ -111,7 +111,7 @@ public class JsonProtocolIntegrationTests
                     Id = "test",
                     Timestamp = 0,
                     UserId = "user-1",
-                    Permissions = new Dictionary<string, object>()
+                    Permissions = TestHelpers.ToJsonElement(new Dictionary<string, object>())
                 },
                 MessageType.AuthError => new AuthErrorMessage
                 {

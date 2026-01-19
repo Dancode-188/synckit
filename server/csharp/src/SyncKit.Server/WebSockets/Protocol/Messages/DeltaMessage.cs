@@ -1,3 +1,4 @@
+using System.Text.Json;
 using System.Text.Json.Serialization;
 
 namespace SyncKit.Server.WebSockets.Protocol.Messages;
@@ -18,9 +19,10 @@ public class DeltaMessage : BaseMessage
 
     /// <summary>
     /// The delta/change to apply.
+    /// Uses JsonElement to preserve the exact JSON structure and enable source-generated serialization.
     /// </summary>
     [JsonPropertyName("delta")]
-    public required object Delta { get; set; }
+    public required JsonElement Delta { get; set; }
 
     /// <summary>
     /// Vector clock representing the state after this delta.

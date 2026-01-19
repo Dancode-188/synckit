@@ -1,3 +1,4 @@
+using System.Text.Json;
 using System.Text.Json.Serialization;
 
 namespace SyncKit.Server.WebSockets.Protocol.Messages;
@@ -18,8 +19,8 @@ public class AuthSuccessMessage : BaseMessage
 
     /// <summary>
     /// User permissions (document access, roles, etc.).
-    /// Can be any JSON-serializable object representing the user's permissions.
+    /// Uses JsonElement to preserve the exact JSON structure and enable source-generated serialization.
     /// </summary>
     [JsonPropertyName("permissions")]
-    public required object Permissions { get; set; }
+    public required JsonElement Permissions { get; set; }
 }

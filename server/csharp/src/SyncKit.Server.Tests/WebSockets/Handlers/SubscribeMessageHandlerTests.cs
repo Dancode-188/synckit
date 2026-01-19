@@ -415,9 +415,8 @@ public class SubscribeMessageHandlerTests
         // Assert - State sent contains expected field values
         Assert.NotNull(sentResponse);
         Assert.NotNull(sentResponse!.State);
-        var stateDict = TestHelpers.AsDictionary(sentResponse.State)!;
-        Assert.Equal(5L, stateDict["client-1"]);
-        Assert.Equal(3L, stateDict["client-2"]);
+        Assert.Equal(5L, TestHelpers.GetLong(sentResponse.State, "client-1"));
+        Assert.Equal(3L, TestHelpers.GetLong(sentResponse.State, "client-2"));
     }
 
     [Fact]

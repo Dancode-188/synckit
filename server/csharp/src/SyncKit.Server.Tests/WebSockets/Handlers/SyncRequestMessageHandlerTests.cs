@@ -214,8 +214,7 @@ public class SyncRequestMessageHandlerTests
 
         // State should reflect merged vector clock
         Assert.NotNull(response.State);
-        var stateDict = TestHelpers.AsDictionary(response.State)!;
-        Assert.Equal(2L, Convert.ToInt64(stateDict["client-1"]));
+        Assert.Equal(2L, TestHelpers.GetLong(response.State, "client-1"));
     }
 
     [Fact]
@@ -289,8 +288,7 @@ public class SyncRequestMessageHandlerTests
 
         // State should be current server state
         Assert.NotNull(response.State);
-        var stateDict = TestHelpers.AsDictionary(response.State)!;
-        Assert.Equal(3L, Convert.ToInt64(stateDict["client-1"]));
+        Assert.Equal(3L, TestHelpers.GetLong(response.State, "client-1"));
     }
 
     [Fact]
@@ -650,8 +648,7 @@ public class SyncRequestMessageHandlerTests
 
         // State should still be returned
         Assert.NotNull(response.State);
-        var stateDict = TestHelpers.AsDictionary(response.State)!;
-        Assert.Equal(5L, Convert.ToInt64(stateDict["client-1"]));
+        Assert.Equal(5L, TestHelpers.GetLong(response.State, "client-1"));
     }
 
     [Fact]

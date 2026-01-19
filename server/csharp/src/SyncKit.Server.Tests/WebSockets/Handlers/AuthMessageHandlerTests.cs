@@ -150,8 +150,8 @@ public class AuthMessageHandlerTests
         // Assert
         connection.Verify(c => c.Send(It.Is<AuthSuccessMessage>(m =>
             m.UserId == "user-123" &&
-            TestHelpers.AsDictionary(m.Permissions)!.ContainsKey("isAdmin") &&
-            (bool)TestHelpers.AsDictionary(m.Permissions)!["isAdmin"] == true)), Times.Once);
+            TestHelpers.HasProperty(m.Permissions, "isAdmin") &&
+            TestHelpers.GetBool(m.Permissions, "isAdmin") == true)), Times.Once);
         connection.VerifySet(c => c.UserId = "user-123");
         connection.VerifySet(c => c.TokenPayload = validPayload);
         connection.VerifySet(c => c.State = ConnectionState.Authenticated);
@@ -187,10 +187,10 @@ public class AuthMessageHandlerTests
         // Assert
         connection.Verify(c => c.Send(It.Is<AuthSuccessMessage>(m =>
             m.UserId == "user-456" &&
-            TestHelpers.AsDictionary(m.Permissions)!.ContainsKey("canRead") &&
-            ((string[])TestHelpers.AsDictionary(m.Permissions)!["canRead"]).Length == 2 &&
-            ((string[])TestHelpers.AsDictionary(m.Permissions)!["canWrite"]).Length == 1 &&
-            (bool)TestHelpers.AsDictionary(m.Permissions)!["isAdmin"] == false)), Times.Once);
+            TestHelpers.HasProperty(m.Permissions, "canRead") &&
+            TestHelpers.GetStringArray(m.Permissions, "canRead").Length == 2 &&
+            TestHelpers.GetStringArray(m.Permissions, "canWrite").Length == 1 &&
+            TestHelpers.GetBool(m.Permissions, "isAdmin") == false)), Times.Once);
     }
 
     [Fact]
@@ -286,7 +286,7 @@ public class AuthMessageHandlerTests
 
         // Assert
         connection.Verify(c => c.Send(It.Is<AuthSuccessMessage>(m =>
-            (bool)TestHelpers.AsDictionary(m.Permissions)!["isAdmin"] == true)), Times.Once);
+            TestHelpers.GetBool(m.Permissions, "isAdmin") == true)), Times.Once);
     }
 
     #endregion
@@ -622,8 +622,8 @@ public class AuthMessageHandlerTests
 
         // Assert - Anonymous should have admin permissions for dev/test mode
         connection.Verify(c => c.Send(It.Is<AuthSuccessMessage>(m =>
-            TestHelpers.AsDictionary(m.Permissions) != null &&
-            (bool)TestHelpers.AsDictionary(m.Permissions)!["isAdmin"] == true)), Times.Once);
+            m.Permissions.ValueKind != System.Text.Json.JsonValueKind.Undefined &&
+            TestHelpers.GetBool(m.Permissions, "isAdmin") == true)), Times.Once);
     }
 
     #endregion
@@ -659,12 +659,12 @@ public class AuthMessageHandlerTests
 
         // Assert
         connection.Verify(c => c.Send(It.Is<AuthSuccessMessage>(m =>
-            TestHelpers.AsDictionary(m.Permissions)!.ContainsKey("canRead") &&
-            TestHelpers.AsDictionary(m.Permissions)!.ContainsKey("canWrite") &&
-            TestHelpers.AsDictionary(m.Permissions)!.ContainsKey("isAdmin") &&
-            ((string[])TestHelpers.AsDictionary(m.Permissions)!["canRead"]).Length == 2 &&
-            ((string[])TestHelpers.AsDictionary(m.Permissions)!["canWrite"]).Length == 1 &&
-            (bool)TestHelpers.AsDictionary(m.Permissions)!["isAdmin"] == false)), Times.Once);
+            TestHelpers.HasProperty(m.Permissions, "canRead") &&
+            TestHelpers.HasProperty(m.Permissions, "canWrite") &&
+            TestHelpers.HasProperty(m.Permissions, "isAdmin") &&
+            TestHelpers.GetStringArray(m.Permissions, "canRead").Length == 2 &&
+            TestHelpers.GetStringArray(m.Permissions, "canWrite").Length == 1 &&
+            TestHelpers.GetBool(m.Permissions, "isAdmin") == false)), Times.Once);
     }
 
     [Fact]

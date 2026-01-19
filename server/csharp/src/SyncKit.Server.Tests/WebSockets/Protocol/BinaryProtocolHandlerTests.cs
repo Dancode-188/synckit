@@ -537,7 +537,7 @@ public class BinaryProtocolHandlerTests
             Id = "delta-1",
             Timestamp = 1702900002000L,
             DocumentId = "doc-1",
-            Delta = new { field = "value" },
+            Delta = TestHelpers.ToJsonElement(new { field = "value" }),
             VectorClock = new Dictionary<string, long> { { "client-1", 5 } }
         };
 
@@ -561,13 +561,13 @@ public class BinaryProtocolHandlerTests
         var messages = new (IMessage message, MessageTypeCode expectedCode)[]
         {
             (new AuthMessage { Token = "token" }, MessageTypeCode.AUTH),
-            (new AuthSuccessMessage { UserId = "user", Permissions = new Dictionary<string, object>() }, MessageTypeCode.AUTH_SUCCESS),
+            (new AuthSuccessMessage { UserId = "user", Permissions = TestHelpers.ToJsonElement(new Dictionary<string, object>()) }, MessageTypeCode.AUTH_SUCCESS),
             (new AuthErrorMessage { Error = "error" }, MessageTypeCode.AUTH_ERROR),
             (new SubscribeMessage { DocumentId = "doc" }, MessageTypeCode.SUBSCRIBE),
             (new UnsubscribeMessage { DocumentId = "doc" }, MessageTypeCode.UNSUBSCRIBE),
             (new SyncRequestMessage { DocumentId = "doc" }, MessageTypeCode.SYNC_REQUEST),
             (new SyncResponseMessage { RequestId = "req", DocumentId = "doc" }, MessageTypeCode.SYNC_RESPONSE),
-            (new DeltaMessage { DocumentId = "doc", Delta = new {}, VectorClock = new Dictionary<string, long>() }, MessageTypeCode.DELTA),
+            (new DeltaMessage { DocumentId = "doc", Delta = TestHelpers.ToJsonElement(new {}), VectorClock = new Dictionary<string, long>() }, MessageTypeCode.DELTA),
             (new AckMessage { MessageId = "msg" }, MessageTypeCode.ACK),
             (new PingMessage(), MessageTypeCode.PING),
             (new PongMessage(), MessageTypeCode.PONG),
@@ -688,7 +688,7 @@ public class BinaryProtocolHandlerTests
             Id = "delta-1",
             Timestamp = 1702900001000L,
             DocumentId = "doc-1",
-            Delta = new { field = "value", nested = new { prop = 123 } },
+            Delta = TestHelpers.ToJsonElement(new { field = "value", nested = new { prop = 123 } }),
             VectorClock = new Dictionary<string, long>
             {
                 { "client-1", 5 },
@@ -753,11 +753,11 @@ public class BinaryProtocolHandlerTests
         var messages = new IMessage[]
         {
             new AuthMessage { Token = "token" },
-            new AuthSuccessMessage { UserId = "user", Permissions = new Dictionary<string, object>() },
+            new AuthSuccessMessage { UserId = "user", Permissions = TestHelpers.ToJsonElement(new Dictionary<string, object>()) },
             new PingMessage(),
             new PongMessage(),
             new SubscribeMessage { DocumentId = "doc" },
-            new DeltaMessage { DocumentId = "doc", Delta = new {}, VectorClock = new Dictionary<string, long>() },
+            new DeltaMessage { DocumentId = "doc", Delta = TestHelpers.ToJsonElement(new {}), VectorClock = new Dictionary<string, long>() },
             new AwarenessUpdateMessage { DocumentId = "doc", ClientId = "c", State = TestHelpers.ToNullableJsonElement(new Dictionary<string, object>()), Clock = 1 }
         };
 
@@ -780,20 +780,20 @@ public class BinaryProtocolHandlerTests
         var messages = new IMessage[]
         {
             new AuthMessage { Id = "auth", Timestamp = 1, Token = "token" },
-            new AuthSuccessMessage { Id = "auth-success", Timestamp = 2, UserId = "user", Permissions = new Dictionary<string, object>() },
+            new AuthSuccessMessage { Id = "auth-success", Timestamp = 2, UserId = "user", Permissions = TestHelpers.ToJsonElement(new Dictionary<string, object>()) },
             new AuthErrorMessage { Id = "auth-error", Timestamp = 3, Error = "bad" },
             new SubscribeMessage { Id = "sub", Timestamp = 4, DocumentId = "doc" },
             new UnsubscribeMessage { Id = "unsub", Timestamp = 5, DocumentId = "doc" },
             new SyncRequestMessage { Id = "sync-req", Timestamp = 6, DocumentId = "doc", VectorClock = new Dictionary<string, long> { { "c1", 1 } } },
-            new SyncResponseMessage { Id = "sync-resp", Timestamp = 7, RequestId = "sync-req", DocumentId = "doc", State = new Dictionary<string, long> { ["c1"] = 1 }, Deltas = new List<DeltaPayload>() },
-            new DeltaMessage { Id = "delta", Timestamp = 8, DocumentId = "doc", Delta = new { field = "value" }, VectorClock = new Dictionary<string, long> { { "c1", 2 } } },
+            new SyncResponseMessage { Id = "sync-resp", Timestamp = 7, RequestId = "sync-req", DocumentId = "doc", State = TestHelpers.ToNullableJsonElement(new Dictionary<string, long> { ["c1"] = 1 }), Deltas = new List<DeltaPayload>() },
+            new DeltaMessage { Id = "delta", Timestamp = 8, DocumentId = "doc", Delta = TestHelpers.ToJsonElement(new { field = "value" }), VectorClock = new Dictionary<string, long> { { "c1", 2 } } },
             new AckMessage { Id = "ack", Timestamp = 9, MessageId = "delta" },
             new PingMessage { Id = "ping", Timestamp = 10 },
             new PongMessage { Id = "pong", Timestamp = 11 },
             new AwarenessUpdateMessage { Id = "au", Timestamp = 12, DocumentId = "doc", ClientId = "client", State = TestHelpers.ToNullableJsonElement(new Dictionary<string, object> { { "cursor", new { x = 1, y = 2 } } }), Clock = 3 },
             new AwarenessSubscribeMessage { Id = "asub", Timestamp = 13, DocumentId = "doc" },
             new AwarenessStateMessage { Id = "astate", Timestamp = 14, DocumentId = "doc", States = new List<AwarenessClientState> { new AwarenessClientState { ClientId = "client", Clock = 1, State = TestHelpers.ToJsonElement(new Dictionary<string, object> { { "cursor", new { x = 1, y = 2 } } }) } } },
-            new ErrorMessage { Id = "err", Timestamp = 15, Error = "error", Details = new Dictionary<string, object>() }
+            new ErrorMessage { Id = "err", Timestamp = 15, Error = "error", Details = TestHelpers.ToNullableJsonElement(new Dictionary<string, object>()) }
         };
 
         foreach (var original in messages)
