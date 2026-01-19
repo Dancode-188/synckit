@@ -2,6 +2,7 @@ using System.Net.WebSockets;
 using System.Threading.Channels;
 using Microsoft.Extensions.Options;
 using SyncKit.Server.Configuration;
+using SyncKit.Server.Services;
 
 namespace SyncKit.Server.WebSockets;
 
@@ -22,6 +23,7 @@ public class SyncWebSocketMiddleware
     private readonly RequestDelegate _next;
     private readonly IConnectionManager _connectionManager;
     private readonly Handlers.IMessageDispatcher _messageDispatcher;
+    private readonly AckTracker? _ackTracker;
     private readonly ILogger<SyncWebSocketMiddleware> _logger;
     private readonly SemaphoreSlim? _acceptSemaphore;
     private readonly int _wsAcceptConcurrency;
@@ -35,17 +37,20 @@ public class SyncWebSocketMiddleware
     /// <param name="messageDispatcher">The message dispatcher for handling messages.</param>
     /// <param name="logger">Logger instance.</param>
     /// <param name="options">SyncKit configuration options.</param>
+    /// <param name="ackTracker">Optional ACK tracker for cleaning up pending ACKs on disconnect.</param>
     public SyncWebSocketMiddleware(
         RequestDelegate next,
         IConnectionManager connectionManager,
         Handlers.IMessageDispatcher messageDispatcher,
         ILogger<SyncWebSocketMiddleware> logger,
-        IOptions<SyncKitConfig> options)
+        IOptions<SyncKitConfig> options,
+        AckTracker? ackTracker = null)
     {
         _next = next ?? throw new ArgumentNullException(nameof(next));
         _connectionManager = connectionManager ?? throw new ArgumentNullException(nameof(connectionManager));
         _messageDispatcher = messageDispatcher ?? throw new ArgumentNullException(nameof(messageDispatcher));
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
+        _ackTracker = ackTracker;
 
         var config = options?.Value ?? throw new ArgumentNullException(nameof(options));
         _wsAcceptConcurrency = config.WsAcceptConcurrency;
@@ -190,6 +195,17 @@ public class SyncWebSocketMiddleware
                 if (dispatchTask is not null)
                 {
                     await dispatchTask.ConfigureAwait(false);
+                }
+
+                // Clean up any pending ACKs for this connection
+                if (_ackTracker is not null)
+                {
+                    var removedAcks = _ackTracker.RemovePendingAcksForConnection(connection.Id);
+                    if (removedAcks > 0)
+                    {
+                        _logger.LogDebug("Cleaned up {Count} pending ACKs for disconnected connection {ConnectionId}",
+                            removedAcks, connection.Id);
+                    }
                 }
 
                 await _connectionManager.RemoveConnectionAsync(connection.Id);

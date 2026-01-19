@@ -48,6 +48,12 @@ public static class WebSocketExtensions
         services.AddSingleton<DeltaBatchingService>();
         services.AddHostedService(sp => sp.GetRequiredService<DeltaBatchingService>());
 
+        // Register ACK tracker service for message delivery tracking and retry
+        // This tracks pending acknowledgments and retries unacknowledged messages
+        services.AddSingleton<AckTracker.AckTrackerOptions>();
+        services.AddSingleton<AckTracker>();
+        services.AddHostedService(sp => sp.GetRequiredService<AckTracker>());
+
         // Register message handlers
         // Heartbeat handlers
         services.AddSingleton<Handlers.IMessageHandler, Handlers.PingMessageHandler>();
@@ -80,7 +86,14 @@ public static class WebSocketExtensions
         });
 
         services.AddSingleton<Handlers.IMessageHandler, Handlers.SyncRequestMessageHandler>();
-        services.AddSingleton<Handlers.IMessageHandler, Handlers.AckMessageHandler>();
+
+        // AckMessageHandler with ACK tracker for delivery tracking and retry
+        services.AddSingleton<Handlers.IMessageHandler>(sp =>
+        {
+            var logger = sp.GetRequiredService<ILogger<Handlers.AckMessageHandler>>();
+            var ackTracker = sp.GetRequiredService<AckTracker>();
+            return new Handlers.AckMessageHandler(logger, ackTracker);
+        });
 
         // Awareness handlers
         services.AddSingleton<Handlers.IMessageHandler, Handlers.AwarenessSubscribeMessageHandler>();
