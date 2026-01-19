@@ -338,12 +338,11 @@ public class ConnectionManager : IConnectionManager
 
     /// <summary>
     /// Generates a unique connection ID.
-    /// Format: "conn_{counter}_{timestamp}"
+    /// Format: "conn-{counter}" (matches TypeScript server format)
     /// </summary>
     private string GenerateConnectionId()
     {
         var counter = Interlocked.Increment(ref _connectionCounter);
-        var timestamp = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
-        return $"conn_{counter}_{timestamp}";
+        return $"conn-{counter}";
     }
 }
