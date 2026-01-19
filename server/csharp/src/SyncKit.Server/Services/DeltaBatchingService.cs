@@ -1,4 +1,5 @@
 using System.Collections.Concurrent;
+using System.Diagnostics;
 using System.Text.Json;
 using SyncKit.Server.WebSockets;
 using SyncKit.Server.WebSockets.Protocol.Messages;
@@ -48,6 +49,16 @@ public class DeltaBatchingService : IHostedService, IDisposable
         /// Lock object for thread-safe batch operations.
         /// </summary>
         public readonly object Lock = new();
+
+        /// <summary>
+        /// Timestamp when this batch was created (for latency tracking).
+        /// </summary>
+        public long CreatedAtMs { get; set; }
+
+        /// <summary>
+        /// Timestamp of the first delta added to this batch.
+        /// </summary>
+        public long FirstDeltaAtMs { get; set; }
     }
 
     public DeltaBatchingService(
@@ -77,9 +88,16 @@ public class DeltaBatchingService : IHostedService, IDisposable
             return;
         }
 
+        var nowMs = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
+
         var batch = _pendingBatches.GetOrAdd(documentId, docId =>
         {
-            var newBatch = new DeltaBatch { DocumentId = docId };
+            var newBatch = new DeltaBatch
+            {
+                DocumentId = docId,
+                CreatedAtMs = nowMs,
+                FirstDeltaAtMs = nowMs
+            };
 
             // Schedule the flush after the batch interval
             newBatch.Timer = new Timer(
@@ -88,12 +106,18 @@ public class DeltaBatchingService : IHostedService, IDisposable
                 _batchInterval,
                 Timeout.InfiniteTimeSpan);
 
-            _logger.LogDebug("Created new batch for document {DocumentId}", docId);
+            _logger.LogDebug("Created new batch for document {DocumentId} at {Timestamp}ms", docId, nowMs);
             return newBatch;
         });
 
         lock (batch.Lock)
         {
+            // Track first delta time if this is the first one
+            if (batch.Delta.IsEmpty)
+            {
+                batch.FirstDeltaAtMs = nowMs;
+            }
+
             // Coalesce delta fields (later writes win for same field)
             foreach (var (key, value) in authoritativeDelta)
             {
@@ -116,10 +140,14 @@ public class DeltaBatchingService : IHostedService, IDisposable
     }
 
     /// <summary>
-    /// Flushes a pending batch and broadcasts the coalesced delta to all subscribers.
+    /// Flushes a pending batch and broadcasts individual field messages (matching TypeScript behavior).
+    /// Each field is sent as a separate delta message for lower per-field latency.
     /// </summary>
     private void FlushBatch(string documentId)
     {
+        var flushStartMs = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
+        var sw = Stopwatch.StartNew();
+
         if (!_pendingBatches.TryRemove(documentId, out var batch))
         {
             return;
@@ -127,6 +155,8 @@ public class DeltaBatchingService : IHostedService, IDisposable
 
         Dictionary<string, object?> deltaToSend;
         Dictionary<string, long> vectorClockToSend;
+        long batchCreatedAtMs;
+        long firstDeltaAtMs;
 
         lock (batch.Lock)
         {
@@ -137,7 +167,11 @@ public class DeltaBatchingService : IHostedService, IDisposable
             // Copy the data for sending
             deltaToSend = new Dictionary<string, object?>(batch.Delta);
             vectorClockToSend = new Dictionary<string, long>(batch.MergedVectorClock);
+            batchCreatedAtMs = batch.CreatedAtMs;
+            firstDeltaAtMs = batch.FirstDeltaAtMs;
         }
+
+        var lockReleasedMs = sw.ElapsedMilliseconds;
 
         if (deltaToSend.Count == 0)
         {
@@ -145,47 +179,81 @@ public class DeltaBatchingService : IHostedService, IDisposable
             return;
         }
 
-        // Convert dictionary to JsonElement for source-generated serialization
-        var deltaJson = JsonSerializer.SerializeToElement(deltaToSend);
-
-        // Build the broadcast message
-        var broadcastMessage = new DeltaMessage
-        {
-            Id = Guid.NewGuid().ToString(),
-            Timestamp = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds(),
-            DocumentId = documentId,
-            Delta = deltaJson,
-            VectorClock = vectorClockToSend
-        };
+        // Log timing breakdown
+        var batchWaitTime = flushStartMs - batchCreatedAtMs;
+        var firstDeltaWaitTime = flushStartMs - firstDeltaAtMs;
 
         _logger.LogDebug(
-            "Flushing batch for document {DocumentId}: {FieldCount} fields coalesced",
-            documentId, deltaToSend.Count);
+            "Flushing batch for document {DocumentId}: {FieldCount} fields, " +
+            "batchWait={BatchWait}ms, firstDeltaWait={FirstDeltaWait}ms, " +
+            "lockTime={LockTime}ms",
+            documentId, deltaToSend.Count,
+            batchWaitTime, firstDeltaWaitTime,
+            lockReleasedMs);
 
-        // Broadcast to all subscribers (including sender for convergence)
-        // Fire-and-forget since we're in a timer callback
-        _ = BroadcastAsync(documentId, broadcastMessage);
+        // Send individual field messages (matches TypeScript flushBatch behavior)
+        // This provides lower per-field latency compared to batching all fields into one message
+        _ = BroadcastFieldsAsync(documentId, deltaToSend, vectorClockToSend, sw);
     }
 
     /// <summary>
-    /// Broadcasts the batched delta message to all document subscribers.
+    /// Broadcasts individual field messages to all document subscribers.
+    /// Each field is sent as a separate DeltaMessage, matching TypeScript behavior.
     /// </summary>
-    private async Task BroadcastAsync(string documentId, DeltaMessage message)
+    private async Task BroadcastFieldsAsync(
+        string documentId,
+        Dictionary<string, object?> fields,
+        Dictionary<string, long> vectorClock,
+        Stopwatch? sw = null)
     {
+        var broadcastStartMs = sw?.ElapsedMilliseconds ?? 0;
+        var fieldCount = 0;
+
         try
         {
-            // Broadcast to all subscribers (don't exclude anyone - sender needs convergence)
-            await _connectionManager.BroadcastToDocumentAsync(
-                documentId,
-                message,
-                excludeConnectionId: null);
+            // Send each field as an individual message (matches TypeScript)
+            foreach (var (field, value) in fields)
+            {
+                // Create single-field delta
+                var singleFieldDelta = new Dictionary<string, object?> { { field, value } };
+                var deltaJson = JsonSerializer.SerializeToElement(singleFieldDelta);
 
-            // Publish to Redis for other server instances
-            if (_redis != null)
+                var fieldMessage = new DeltaMessage
+                {
+                    Id = Guid.NewGuid().ToString(),
+                    Timestamp = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds(),
+                    DocumentId = documentId,
+                    Delta = deltaJson,
+                    VectorClock = vectorClock
+                };
+
+                // Broadcast to all subscribers (don't exclude anyone - sender needs convergence)
+                await _connectionManager.BroadcastToDocumentAsync(
+                    documentId,
+                    fieldMessage,
+                    excludeConnectionId: null);
+
+                fieldCount++;
+            }
+
+            var broadcastEndMs = sw?.ElapsedMilliseconds ?? 0;
+
+            // Publish to Redis for other server instances (batch for efficiency)
+            if (_redis != null && fields.Count > 0)
             {
                 try
                 {
-                    await _redis.PublishDeltaAsync(documentId, message);
+                    // Send combined delta to Redis (other instances will broadcast individually)
+                    var combinedDelta = JsonSerializer.SerializeToElement(fields);
+                    var redisMessage = new DeltaMessage
+                    {
+                        Id = Guid.NewGuid().ToString(),
+                        Timestamp = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds(),
+                        DocumentId = documentId,
+                        Delta = combinedDelta,
+                        VectorClock = vectorClock
+                    };
+                    await _redis.PublishDeltaAsync(documentId, redisMessage);
                 }
                 catch (Exception ex)
                 {
@@ -195,14 +263,20 @@ public class DeltaBatchingService : IHostedService, IDisposable
                 }
             }
 
-            _logger.LogTrace(
-                "Broadcast batched delta for document {DocumentId}",
-                documentId);
+            var redisEndMs = sw?.ElapsedMilliseconds ?? 0;
+
+            _logger.LogDebug(
+                "Broadcast complete for document {DocumentId}: {FieldCount} field messages, " +
+                "broadcastTime={BroadcastTime}ms, redisTime={RedisTime}ms, totalFlush={TotalFlush}ms",
+                documentId, fieldCount,
+                broadcastEndMs - broadcastStartMs,
+                redisEndMs - broadcastEndMs,
+                redisEndMs);
         }
         catch (Exception ex)
         {
             _logger.LogError(ex,
-                "Failed to broadcast batched delta for document {DocumentId}",
+                "Failed to broadcast field messages for document {DocumentId}",
                 documentId);
         }
     }
