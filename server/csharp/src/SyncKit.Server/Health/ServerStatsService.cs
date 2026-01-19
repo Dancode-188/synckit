@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using SyncKit.Server.WebSockets;
 
 namespace SyncKit.Server.Health;
 
@@ -8,14 +9,19 @@ namespace SyncKit.Server.Health;
 public interface IServerStatsService
 {
     /// <summary>
-    /// Gets the current uptime in seconds.
+    /// Gets the current uptime in seconds (as a double for fractional seconds).
     /// </summary>
-    long GetUptimeSeconds();
+    double GetUptimeSeconds();
 
     /// <summary>
-    /// Gets current server statistics.
+    /// Gets connection statistics matching TypeScript server format.
     /// </summary>
-    HealthStats GetStats();
+    ConnectionStats GetConnectionStats();
+
+    /// <summary>
+    /// Gets document statistics matching TypeScript server format.
+    /// </summary>
+    DocumentStats GetDocumentStats();
 
     /// <summary>
     /// Increments the connection count.
@@ -46,6 +52,21 @@ public interface IServerStatsService
     /// Sets the connection count.
     /// </summary>
     void SetConnectionCount(int count);
+
+    /// <summary>
+    /// Sets the unique user count.
+    /// </summary>
+    void SetUserCount(int count);
+
+    /// <summary>
+    /// Increments the unique user count.
+    /// </summary>
+    void IncrementUsers();
+
+    /// <summary>
+    /// Decrements the unique user count.
+    /// </summary>
+    void DecrementUsers();
 }
 
 /// <summary>
@@ -57,6 +78,7 @@ public class ServerStatsService : IServerStatsService
     private readonly Stopwatch _uptimeStopwatch;
     private int _connectionCount;
     private int _documentCount;
+    private int _userCount;
 
     public ServerStatsService()
     {
@@ -64,19 +86,30 @@ public class ServerStatsService : IServerStatsService
     }
 
     /// <inheritdoc />
-    public long GetUptimeSeconds()
+    public double GetUptimeSeconds()
     {
-        return (long)_uptimeStopwatch.Elapsed.TotalSeconds;
+        return _uptimeStopwatch.Elapsed.TotalSeconds;
     }
 
     /// <inheritdoc />
-    public HealthStats GetStats()
+    public ConnectionStats GetConnectionStats()
     {
-        return new HealthStats
+        var connections = _connectionCount;
+        return new ConnectionStats
         {
-            Connections = _connectionCount,
-            Documents = _documentCount,
-            MemoryUsage = GetMemoryUsage()
+            TotalConnections = connections,
+            TotalUsers = _userCount,
+            TotalClients = connections  // Clients == Connections for now
+        };
+    }
+
+    /// <inheritdoc />
+    public DocumentStats GetDocumentStats()
+    {
+        return new DocumentStats
+        {
+            TotalDocuments = _documentCount,
+            Documents = []  // Empty array for privacy (matches TypeScript)
         };
     }
 
@@ -116,10 +149,21 @@ public class ServerStatsService : IServerStatsService
         Interlocked.Exchange(ref _connectionCount, count);
     }
 
-    private static long GetMemoryUsage()
+    /// <inheritdoc />
+    public void SetUserCount(int count)
     {
-        // Get total memory allocated to the managed heap
-        // This includes Gen0, Gen1, Gen2, and LOH
-        return GC.GetTotalMemory(forceFullCollection: false);
+        Interlocked.Exchange(ref _userCount, count);
+    }
+
+    /// <inheritdoc />
+    public void IncrementUsers()
+    {
+        Interlocked.Increment(ref _userCount);
+    }
+
+    /// <inheritdoc />
+    public void DecrementUsers()
+    {
+        Interlocked.Decrement(ref _userCount);
     }
 }

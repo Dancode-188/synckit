@@ -5,19 +5,24 @@ namespace SyncKit.Server.Health;
 /// <summary>
 /// Health check response model matching the TypeScript server's health endpoint.
 /// </summary>
+/// <remarks>
+/// Response format matches TypeScript server exactly:
+/// {
+///   "status": "healthy",
+///   "timestamp": "2024-01-01T00:00:00.000Z",
+///   "version": "0.1.0",
+///   "uptime": 123.456,
+///   "connections": { "totalConnections": 5, "totalUsers": 3, "totalClients": 5 },
+///   "documents": { "totalDocuments": 2, "documents": [] }
+/// }
+/// </remarks>
 public record HealthResponse
 {
     /// <summary>
-    /// Server status. Always "ok" when the server is healthy.
+    /// Server status. Always "healthy" when the server is running.
     /// </summary>
     [JsonPropertyName("status")]
-    public string Status { get; init; } = "ok";
-
-    /// <summary>
-    /// Server version.
-    /// </summary>
-    [JsonPropertyName("version")]
-    public string Version { get; init; } = "1.0.0";
+    public string Status { get; init; } = "healthy";
 
     /// <summary>
     /// ISO 8601 timestamp of the health check.
@@ -26,38 +31,68 @@ public record HealthResponse
     public string Timestamp { get; init; } = DateTime.UtcNow.ToString("o");
 
     /// <summary>
+    /// Server version.
+    /// </summary>
+    [JsonPropertyName("version")]
+    public string Version { get; init; } = "0.1.0";
+
+    /// <summary>
     /// Server uptime in seconds since start.
     /// </summary>
     [JsonPropertyName("uptime")]
-    public long Uptime { get; init; }
+    public double Uptime { get; init; }
 
     /// <summary>
-    /// Server statistics.
+    /// Connection statistics.
     /// </summary>
-    [JsonPropertyName("stats")]
-    public HealthStats Stats { get; init; } = new();
+    [JsonPropertyName("connections")]
+    public ConnectionStats Connections { get; init; } = new();
+
+    /// <summary>
+    /// Document statistics.
+    /// </summary>
+    [JsonPropertyName("documents")]
+    public DocumentStats Documents { get; init; } = new();
 }
 
 /// <summary>
-/// Server statistics included in the health response.
+/// Connection statistics matching TypeScript server format.
 /// </summary>
-public record HealthStats
+public record ConnectionStats
 {
     /// <summary>
-    /// Current number of active WebSocket connections.
+    /// Total number of active WebSocket connections.
     /// </summary>
-    [JsonPropertyName("connections")]
-    public int Connections { get; init; }
+    [JsonPropertyName("totalConnections")]
+    public int TotalConnections { get; init; }
 
     /// <summary>
-    /// Current number of active documents.
+    /// Total number of unique users connected.
+    /// </summary>
+    [JsonPropertyName("totalUsers")]
+    public int TotalUsers { get; init; }
+
+    /// <summary>
+    /// Total number of clients (same as connections for now).
+    /// </summary>
+    [JsonPropertyName("totalClients")]
+    public int TotalClients { get; init; }
+}
+
+/// <summary>
+/// Document statistics matching TypeScript server format.
+/// </summary>
+public record DocumentStats
+{
+    /// <summary>
+    /// Total number of active documents.
+    /// </summary>
+    [JsonPropertyName("totalDocuments")]
+    public int TotalDocuments { get; init; }
+
+    /// <summary>
+    /// List of active document IDs (empty by default for privacy).
     /// </summary>
     [JsonPropertyName("documents")]
-    public int Documents { get; init; }
-
-    /// <summary>
-    /// Current memory usage in bytes.
-    /// </summary>
-    [JsonPropertyName("memoryUsage")]
-    public long MemoryUsage { get; init; }
+    public string[] Documents { get; init; } = [];
 }

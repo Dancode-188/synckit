@@ -57,16 +57,17 @@ public static class HealthExtensions
     /// </summary>
     public static WebApplication MapSyncKitHealthEndpoints(this WebApplication app)
     {
-        // Main health endpoint with detailed stats (matches TypeScript server)
+        // Main health endpoint with detailed stats (matches TypeScript server format)
         app.MapGet("/health", (IServerStatsService statsService) =>
         {
             var response = new HealthResponse
             {
                 Status = "healthy",
-                Version = "1.0.0",
                 Timestamp = DateTime.UtcNow.ToString("o"),
+                Version = "0.1.0",
                 Uptime = statsService.GetUptimeSeconds(),
-                Stats = statsService.GetStats()
+                Connections = statsService.GetConnectionStats(),
+                Documents = statsService.GetDocumentStats()
             };
 
             return Results.Ok(response);

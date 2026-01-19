@@ -36,12 +36,13 @@ public class SyncKitReadinessHealthCheck : IHealthCheck
                 HealthCheckResult.Unhealthy("Server is not ready to accept traffic"));
         }
 
-        var stats = _statsService.GetStats();
+        var connectionStats = _statsService.GetConnectionStats();
+        var documentStats = _statsService.GetDocumentStats();
         var data = new Dictionary<string, object>
         {
-            { "connections", stats.Connections },
-            { "documents", stats.Documents },
-            { "memoryUsage", stats.MemoryUsage }
+            { "connections", connectionStats.TotalConnections },
+            { "documents", documentStats.TotalDocuments },
+            { "users", connectionStats.TotalUsers }
         };
 
         return Task.FromResult(
