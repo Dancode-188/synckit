@@ -231,27 +231,27 @@ public class ConnectionManager : IConnectionManager
         var sendCount = 0;
         var failCount = 0;
 
-        // Use parallel sends for better throughput with multiple connections
-        // Connection.Send() is non-blocking (queues to async send loop)
-        Parallel.ForEach(connections.Values, connection =>
+        // Use sequential loop - Connection.Send() is non-blocking (queues to channel)
+        // Parallel.ForEach adds thread pool overhead without benefit for non-blocking sends
+        foreach (var connection in connections.Values)
         {
             if (excludeConnectionId != null && connection.Id == excludeConnectionId)
-                return;
+                continue;
 
             _logger.LogDebug("Attempting to send to connection {ConnectionId} (State: {State})",
                 connection.Id, connection.State);
 
             if (connection.Send(message))
             {
-                Interlocked.Increment(ref sendCount);
+                sendCount++;
             }
             else
             {
-                Interlocked.Increment(ref failCount);
+                failCount++;
                 _logger.LogWarning("Failed to send to connection {ConnectionId} (State: {State})",
                     connection.Id, connection.State);
             }
-        });
+        }
 
         if (failCount > 0)
         {
