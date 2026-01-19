@@ -4,6 +4,11 @@ using Npgsql;
 
 namespace SyncKit.Server.Storage;
 
+/// <summary>
+/// PostgreSQL implementation of {@link IStorageAdapter} for persistent storage.
+/// Uses ValueTask return types to match the interface contract.
+/// Note: PostgreSQL operations are truly async, so these methods will allocate Tasks internally.
+/// </summary>
 public class PostgresStorageAdapter : IStorageAdapter, IAsyncDisposable
 {
     private readonly string _connectionString;
@@ -25,7 +30,7 @@ public class PostgresStorageAdapter : IStorageAdapter, IAsyncDisposable
 
     public bool IsConnected => _isConnected;
 
-    public async Task ConnectAsync(CancellationToken ct = default)
+    public async ValueTask ConnectAsync(CancellationToken ct = default)
     {
         _logger.LogInformation("Connecting to PostgreSQL...");
         try
@@ -54,11 +59,11 @@ public class PostgresStorageAdapter : IStorageAdapter, IAsyncDisposable
         }
     }
 
-    public Task DisconnectAsync(CancellationToken ct = default)
+    public ValueTask DisconnectAsync(CancellationToken ct = default)
     {
         // Npgsql provides automatic connection pooling via connection string; nothing to dispose here.
         _isConnected = false;
-        return Task.CompletedTask;
+        return ValueTask.CompletedTask;
     }
 
     public ValueTask DisposeAsync()
@@ -67,7 +72,7 @@ public class PostgresStorageAdapter : IStorageAdapter, IAsyncDisposable
         return ValueTask.CompletedTask;
     }
 
-    public async Task<bool> HealthCheckAsync(CancellationToken ct = default)
+    public async ValueTask<bool> HealthCheckAsync(CancellationToken ct = default)
     {
         try
         {
@@ -86,7 +91,7 @@ public class PostgresStorageAdapter : IStorageAdapter, IAsyncDisposable
     }
 
     // === Document operations ===
-    public async Task<DocumentState?> GetDocumentAsync(string id, CancellationToken ct = default)
+    public async ValueTask<DocumentState?> GetDocumentAsync(string id, CancellationToken ct = default)
     {
         await using var conn = new NpgsqlConnection(_connectionString);
         await conn.OpenAsync(ct);
@@ -104,7 +109,7 @@ public class PostgresStorageAdapter : IStorageAdapter, IAsyncDisposable
         return new DocumentState(id, state, version, created, updated);
     }
 
-    public async Task<DocumentState> SaveDocumentAsync(string id, JsonElement state, CancellationToken ct = default)
+    public async ValueTask<DocumentState> SaveDocumentAsync(string id, JsonElement state, CancellationToken ct = default)
     {
         await using var conn = new NpgsqlConnection(_connectionString);
         await conn.OpenAsync(ct);
@@ -127,7 +132,7 @@ RETURNING version, created_at, updated_at";
         return new DocumentState(id, state, version, created, updated);
     }
 
-    public async Task<DocumentState> UpdateDocumentAsync(string id, JsonElement state, CancellationToken ct = default)
+    public async ValueTask<DocumentState> UpdateDocumentAsync(string id, JsonElement state, CancellationToken ct = default)
     {
         await using var conn = new NpgsqlConnection(_connectionString);
         await conn.OpenAsync(ct);
@@ -148,7 +153,7 @@ RETURNING version, created_at, updated_at";
         return new DocumentState(id, state, version, created, updated);
     }
 
-    public async Task<bool> DeleteDocumentAsync(string id, CancellationToken ct = default)
+    public async ValueTask<bool> DeleteDocumentAsync(string id, CancellationToken ct = default)
     {
         await using var conn = new NpgsqlConnection(_connectionString);
         await conn.OpenAsync(ct);
@@ -159,7 +164,7 @@ RETURNING version, created_at, updated_at";
         return rows > 0;
     }
 
-    public async Task<IReadOnlyList<DocumentState>> ListDocumentsAsync(int limit = 100, int offset = 0, CancellationToken ct = default)
+    public async ValueTask<IReadOnlyList<DocumentState>> ListDocumentsAsync(int limit = 100, int offset = 0, CancellationToken ct = default)
     {
         await using var conn = new NpgsqlConnection(_connectionString);
         await conn.OpenAsync(ct);
@@ -183,7 +188,7 @@ RETURNING version, created_at, updated_at";
         return list.AsReadOnly();
     }
 
-    public async Task<Dictionary<string, object?>> GetDocumentStateAsync(string documentId, CancellationToken ct = default)
+    public async ValueTask<Dictionary<string, object?>> GetDocumentStateAsync(string documentId, CancellationToken ct = default)
     {
         // Build document state from deltas - apply each delta to reconstruct current state
         var deltas = await GetDeltasAsync(documentId, limit: 10000, ct);
@@ -226,7 +231,7 @@ RETURNING version, created_at, updated_at";
     }
 
     // === Vector clocks ===
-    public async Task<Dictionary<string, long>> GetVectorClockAsync(string documentId, CancellationToken ct = default)
+    public async ValueTask<Dictionary<string, long>> GetVectorClockAsync(string documentId, CancellationToken ct = default)
     {
         await using var conn = new NpgsqlConnection(_connectionString);
         await conn.OpenAsync(ct);
@@ -244,7 +249,7 @@ RETURNING version, created_at, updated_at";
         return dict;
     }
 
-    public async Task UpdateVectorClockAsync(string documentId, string clientId, long clockValue, CancellationToken ct = default)
+    public async ValueTask UpdateVectorClockAsync(string documentId, string clientId, long clockValue, CancellationToken ct = default)
     {
         await using var conn = new NpgsqlConnection(_connectionString);
         await conn.OpenAsync(ct);
@@ -256,7 +261,7 @@ RETURNING version, created_at, updated_at";
         await cmd.ExecuteNonQueryAsync(ct);
     }
 
-    public async Task MergeVectorClockAsync(string documentId, Dictionary<string, long> clock, CancellationToken ct = default)
+    public async ValueTask MergeVectorClockAsync(string documentId, Dictionary<string, long> clock, CancellationToken ct = default)
     {
         await using var conn = new NpgsqlConnection(_connectionString);
         await conn.OpenAsync(ct);
@@ -275,7 +280,7 @@ RETURNING version, created_at, updated_at";
     }
 
     // === Deltas ===
-    public async Task<DeltaEntry> SaveDeltaAsync(DeltaEntry delta, CancellationToken ct = default)
+    public async ValueTask<DeltaEntry> SaveDeltaAsync(DeltaEntry delta, CancellationToken ct = default)
     {
         await using var conn = new NpgsqlConnection(_connectionString);
         await conn.OpenAsync(ct);
@@ -298,7 +303,7 @@ RETURNING version, created_at, updated_at";
         return delta with { Id = id, Timestamp = ts, MaxClockValue = maxClockValue };
     }
 
-    public async Task<IReadOnlyList<DeltaEntry>> GetDeltasAsync(string documentId, int limit = 100, CancellationToken ct = default)
+    public async ValueTask<IReadOnlyList<DeltaEntry>> GetDeltasAsync(string documentId, int limit = 100, CancellationToken ct = default)
     {
         await using var conn = new NpgsqlConnection(_connectionString);
         await conn.OpenAsync(ct);
@@ -328,7 +333,7 @@ RETURNING version, created_at, updated_at";
         return list.AsReadOnly();
     }
 
-    public async Task<IReadOnlyList<DeltaEntry>> GetDeltasSinceAsync(string documentId, long? sinceMaxClock, CancellationToken ct = default)
+    public async ValueTask<IReadOnlyList<DeltaEntry>> GetDeltasSinceAsync(string documentId, long? sinceMaxClock, CancellationToken ct = default)
     {
         await using var conn = new NpgsqlConnection(_connectionString);
         await conn.OpenAsync(ct);
@@ -367,7 +372,7 @@ RETURNING version, created_at, updated_at";
     }
 
     // === Sessions ===
-    public async Task<SessionEntry> SaveSessionAsync(SessionEntry session, CancellationToken ct = default)
+    public async ValueTask<SessionEntry> SaveSessionAsync(SessionEntry session, CancellationToken ct = default)
     {
         await using var conn = new NpgsqlConnection(_connectionString);
         await conn.OpenAsync(ct);
@@ -388,7 +393,7 @@ RETURNING version, created_at, updated_at";
         return session with { ConnectedAt = connected, LastSeen = last };
     }
 
-    public async Task UpdateSessionAsync(string sessionId, DateTime lastSeen, Dictionary<string, object>? metadata = null, CancellationToken ct = default)
+    public async ValueTask UpdateSessionAsync(string sessionId, DateTime lastSeen, Dictionary<string, object>? metadata = null, CancellationToken ct = default)
     {
         await using var conn = new NpgsqlConnection(_connectionString);
         await conn.OpenAsync(ct);
@@ -400,7 +405,7 @@ RETURNING version, created_at, updated_at";
         await cmd.ExecuteNonQueryAsync(ct);
     }
 
-    public async Task<bool> DeleteSessionAsync(string sessionId, CancellationToken ct = default)
+    public async ValueTask<bool> DeleteSessionAsync(string sessionId, CancellationToken ct = default)
     {
         await using var conn = new NpgsqlConnection(_connectionString);
         await conn.OpenAsync(ct);
@@ -411,7 +416,7 @@ RETURNING version, created_at, updated_at";
         return rows > 0;
     }
 
-    public async Task<IReadOnlyList<SessionEntry>> GetSessionsAsync(string userId, CancellationToken ct = default)
+    public async ValueTask<IReadOnlyList<SessionEntry>> GetSessionsAsync(string userId, CancellationToken ct = default)
     {
         await using var conn = new NpgsqlConnection(_connectionString);
         await conn.OpenAsync(ct);
@@ -436,7 +441,7 @@ RETURNING version, created_at, updated_at";
         return list.AsReadOnly();
     }
 
-    public async Task<CleanupResult> CleanupAsync(CleanupOptions? options = null, CancellationToken ct = default)
+    public async ValueTask<CleanupResult> CleanupAsync(CleanupOptions? options = null, CancellationToken ct = default)
     {
         var opts = options ?? new CleanupOptions();
         await using var conn = new NpgsqlConnection(_connectionString);
@@ -454,7 +459,7 @@ RETURNING version, created_at, updated_at";
     /// Clear all storage (test/development mode only).
     /// WARNING: This deletes all data! Only use in development/test environments.
     /// </summary>
-    public async Task ClearAllAsync(CancellationToken ct = default)
+    public async ValueTask ClearAllAsync(CancellationToken ct = default)
     {
         await using var conn = new NpgsqlConnection(_connectionString);
         await conn.OpenAsync(ct);

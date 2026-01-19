@@ -299,7 +299,7 @@ public class MessageHandlerAuthEnforcementTests
         var mockStorage = new Mock<SyncKit.Server.Storage.IStorageAdapter>();
         var mockConnManager = new Mock<IConnectionManager>();
         mockStorage.Setup(s => s.SaveDeltaAsync(It.IsAny<SyncKit.Server.Storage.DeltaEntry>(), It.IsAny<CancellationToken>()))
-            .Returns<SyncKit.Server.Storage.DeltaEntry, CancellationToken>((de, ct) => Task.FromResult(de));
+            .Returns<SyncKit.Server.Storage.DeltaEntry, CancellationToken>((de, ct) => ValueTask.FromResult(de));
         var handler = new DeltaMessageHandler(
             _authGuard,
             mockStorage.Object,

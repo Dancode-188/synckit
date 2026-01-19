@@ -57,7 +57,7 @@ public class DeltaMessageHandlerTests
 
         SetupAuthenticatedConnectionWithWriteAccess(connectionId, clientId, subscriptions, documentId);
         _mockStorage.Setup(s => s.SaveDeltaAsync(It.IsAny<SyncKit.Server.Storage.DeltaEntry>(), It.IsAny<CancellationToken>()))
-            .Returns((SyncKit.Server.Storage.DeltaEntry d, CancellationToken _) => Task.FromResult(d));
+            .Returns((SyncKit.Server.Storage.DeltaEntry d, CancellationToken _) => ValueTask.FromResult(d));
         _mockStorage.Setup(s => s.GetDocumentStateAsync(documentId, It.IsAny<CancellationToken>()))
             .ReturnsAsync(new Dictionary<string, object?> { { "field", "value" } });
         _mockConnectionManager.Setup(cm => cm.BroadcastToDocumentAsync(
@@ -107,7 +107,7 @@ public class DeltaMessageHandlerTests
 
         SetupAuthenticatedConnectionWithWriteAccess(connectionId, clientId, subscriptions, documentId);
         _mockStorage.Setup(s => s.SaveDeltaAsync(It.IsAny<SyncKit.Server.Storage.DeltaEntry>(), It.IsAny<CancellationToken>()))
-            .Returns((SyncKit.Server.Storage.DeltaEntry d, CancellationToken _) => Task.FromResult(d));
+            .Returns((SyncKit.Server.Storage.DeltaEntry d, CancellationToken _) => ValueTask.FromResult(d));
         _mockStorage.Setup(s => s.GetDocumentStateAsync(documentId, It.IsAny<CancellationToken>()))
             .ReturnsAsync(new Dictionary<string, object?> { { "field", "value" } });
         _mockConnectionManager.Setup(cm => cm.BroadcastToDocumentAsync(
@@ -242,7 +242,7 @@ public class DeltaMessageHandlerTests
 
         SetupAuthenticatedConnectionWithWriteAccess(senderConnectionId, "client-1", subscriptions, documentId);
         _mockStorage.Setup(s => s.SaveDeltaAsync(It.IsAny<SyncKit.Server.Storage.DeltaEntry>(), It.IsAny<CancellationToken>()))
-            .Returns((SyncKit.Server.Storage.DeltaEntry d, CancellationToken _) => Task.FromResult(d));
+            .Returns((SyncKit.Server.Storage.DeltaEntry d, CancellationToken _) => ValueTask.FromResult(d));
         _mockStorage.Setup(s => s.GetDocumentStateAsync(documentId, It.IsAny<CancellationToken>()))
             .ReturnsAsync(new Dictionary<string, object?> { { "field", "value" } });
         _mockConnectionManager.Setup(cm => cm.BroadcastToDocumentAsync(
@@ -283,7 +283,7 @@ public class DeltaMessageHandlerTests
         SyncKit.Server.Storage.DeltaEntry? storedDelta = null;
         _mockStorage.Setup(s => s.SaveDeltaAsync(It.IsAny<SyncKit.Server.Storage.DeltaEntry>(), It.IsAny<CancellationToken>()))
             .Callback<SyncKit.Server.Storage.DeltaEntry, CancellationToken>((delta, ct) => storedDelta = delta)
-            .Returns((SyncKit.Server.Storage.DeltaEntry d, CancellationToken _) => Task.FromResult(d));
+            .Returns((SyncKit.Server.Storage.DeltaEntry d, CancellationToken _) => ValueTask.FromResult(d));
         _mockStorage.Setup(s => s.GetDocumentStateAsync(documentId, It.IsAny<CancellationToken>()))
             .ReturnsAsync(new Dictionary<string, object?> { { "field", "value" } });
         _mockConnectionManager.Setup(cm => cm.BroadcastToDocumentAsync(
@@ -322,7 +322,7 @@ public class DeltaMessageHandlerTests
         SyncKit.Server.Storage.DeltaEntry? storedDelta = null;
         _mockStorage.Setup(s => s.SaveDeltaAsync(It.IsAny<SyncKit.Server.Storage.DeltaEntry>(), It.IsAny<CancellationToken>()))
             .Callback<SyncKit.Server.Storage.DeltaEntry, CancellationToken>((delta, _) => storedDelta = delta)
-            .Returns((SyncKit.Server.Storage.DeltaEntry d, CancellationToken _) => Task.FromResult(d));
+            .Returns((SyncKit.Server.Storage.DeltaEntry d, CancellationToken _) => ValueTask.FromResult(d));
         _mockStorage.Setup(s => s.GetDocumentStateAsync(documentId, It.IsAny<CancellationToken>()))
             .ReturnsAsync(new Dictionary<string, object?> { { "field", "value" } });
         _mockConnectionManager.Setup(cm => cm.BroadcastToDocumentAsync(
@@ -349,7 +349,7 @@ public class DeltaMessageHandlerTests
 
         SetupAuthenticatedConnectionWithWriteAccess("conn-1", "client-1", subscriptions, documentId);
         _mockStorage.Setup(s => s.SaveDeltaAsync(It.IsAny<SyncKit.Server.Storage.DeltaEntry>(), It.IsAny<CancellationToken>()))
-            .Returns((SyncKit.Server.Storage.DeltaEntry d, CancellationToken _) => Task.FromResult(d));
+            .Returns((SyncKit.Server.Storage.DeltaEntry d, CancellationToken _) => ValueTask.FromResult(d));
         _mockStorage.Setup(s => s.GetDocumentStateAsync(documentId, It.IsAny<CancellationToken>()))
             .ReturnsAsync(new Dictionary<string, object?> { { "field", "value" } });
         _mockConnectionManager.Setup(cm => cm.BroadcastToDocumentAsync(
@@ -384,7 +384,7 @@ public class DeltaMessageHandlerTests
 
         SetupAuthenticatedConnectionWithWriteAccess("conn-1", "client-1", subscriptions, documentId);
         _mockStorage.Setup(s => s.SaveDeltaAsync(It.IsAny<SyncKit.Server.Storage.DeltaEntry>(), It.IsAny<CancellationToken>()))
-            .Returns((SyncKit.Server.Storage.DeltaEntry d, CancellationToken _) => Task.FromResult(d));
+            .Returns((SyncKit.Server.Storage.DeltaEntry d, CancellationToken _) => ValueTask.FromResult(d));
         _mockStorage.Setup(s => s.GetDocumentStateAsync(documentId, It.IsAny<CancellationToken>()))
             .ReturnsAsync(new Dictionary<string, object?> { { "field", "value" } });
 
@@ -414,7 +414,7 @@ public class DeltaMessageHandlerTests
 
         SetupAuthenticatedConnectionWithWriteAccess("conn-1", "client-1", subscriptions, documentId);
         _mockStorage.Setup(s => s.SaveDeltaAsync(It.IsAny<SyncKit.Server.Storage.DeltaEntry>(), It.IsAny<CancellationToken>()))
-            .Returns((SyncKit.Server.Storage.DeltaEntry d, CancellationToken _) => Task.FromResult(d));
+            .Returns((SyncKit.Server.Storage.DeltaEntry d, CancellationToken _) => ValueTask.FromResult(d));
         // LWW uses authoritative state - so we return the expected field values
         _mockStorage.Setup(s => s.GetDocumentStateAsync(documentId, It.IsAny<CancellationToken>()))
             .ReturnsAsync(new Dictionary<string, object?>
@@ -536,7 +536,7 @@ public class DeltaMessageHandlerTests
         SyncKit.Server.Storage.DeltaEntry? storedDelta = null;
         _mockStorage.Setup(s => s.SaveDeltaAsync(It.IsAny<SyncKit.Server.Storage.DeltaEntry>(), It.IsAny<CancellationToken>()))
             .Callback<SyncKit.Server.Storage.DeltaEntry, CancellationToken>((delta, _) => storedDelta = delta)
-            .Returns((SyncKit.Server.Storage.DeltaEntry d, CancellationToken _) => Task.FromResult(d));
+            .Returns((SyncKit.Server.Storage.DeltaEntry d, CancellationToken _) => ValueTask.FromResult(d));
         _mockStorage.Setup(s => s.GetDocumentStateAsync(documentId, It.IsAny<CancellationToken>()))
             .ReturnsAsync(new Dictionary<string, object?> { { "operation", "set" }, { "path", "title" }, { "value", "Test" } });
         _mockConnectionManager.Setup(cm => cm.BroadcastToDocumentAsync(
@@ -589,7 +589,7 @@ public class DeltaMessageHandlerTests
         });
 
         _mockStorage.Setup(s => s.SaveDeltaAsync(It.IsAny<SyncKit.Server.Storage.DeltaEntry>(), It.IsAny<CancellationToken>()))
-            .Returns((SyncKit.Server.Storage.DeltaEntry d, CancellationToken _) => Task.FromResult(d));
+            .Returns((SyncKit.Server.Storage.DeltaEntry d, CancellationToken _) => ValueTask.FromResult(d));
         _mockStorage.Setup(s => s.GetDocumentStateAsync(documentId, It.IsAny<CancellationToken>()))
             .ReturnsAsync(new Dictionary<string, object?> { { "field", "value" } });
         _mockConnectionManager.Setup(cm => cm.BroadcastToDocumentAsync(

@@ -7,6 +7,7 @@ namespace SyncKit.Server.Storage;
 
 /// <summary>
 /// In-memory implementation of {@link IStorageAdapter} backed by in-process collections.
+/// Uses ValueTask for allocation-free synchronous completions.
 /// </summary>
 public class InMemoryStorageAdapter : IStorageAdapter
 {
@@ -21,24 +22,24 @@ public class InMemoryStorageAdapter : IStorageAdapter
     }
 
     // === Connection lifecycle ===
-    public Task ConnectAsync(CancellationToken ct = default) => Task.CompletedTask;
-    public Task DisconnectAsync(CancellationToken ct = default) => Task.CompletedTask;
+    public ValueTask ConnectAsync(CancellationToken ct = default) => ValueTask.CompletedTask;
+    public ValueTask DisconnectAsync(CancellationToken ct = default) => ValueTask.CompletedTask;
     public bool IsConnected => true;
-    public Task<bool> HealthCheckAsync(CancellationToken ct = default) => Task.FromResult(true);
+    public ValueTask<bool> HealthCheckAsync(CancellationToken ct = default) => ValueTask.FromResult(true);
 
     // === IStorageAdapter Document operations ===
-    public Task<DocumentState?> GetDocumentAsync(string id, CancellationToken ct = default)
+    public ValueTask<DocumentState?> GetDocumentAsync(string id, CancellationToken ct = default)
     {
         _documents.TryGetValue(id, out var doc);
-        if (doc == null) return Task.FromResult<DocumentState?>(null);
+        if (doc == null) return ValueTask.FromResult<DocumentState?>(null);
 
         // No structured state is tracked in the current Document model; return empty state for now.
         var emptyState = JsonDocument.Parse("{}").RootElement;
         var ds = new DocumentState(id, emptyState, doc.UpdatedAt, DateTimeOffset.FromUnixTimeMilliseconds(doc.CreatedAt).UtcDateTime, DateTimeOffset.FromUnixTimeMilliseconds(doc.UpdatedAt).UtcDateTime);
-        return Task.FromResult<DocumentState?>(ds);
+        return ValueTask.FromResult<DocumentState?>(ds);
     }
 
-    public Task<DocumentState> SaveDocumentAsync(string id, JsonElement state, CancellationToken ct = default)
+    public ValueTask<DocumentState> SaveDocumentAsync(string id, JsonElement state, CancellationToken ct = default)
     {
         var doc = _documents.GetOrAdd(id, id2 => new Document(id2));
         // bump updated timestamp
@@ -48,49 +49,49 @@ public class InMemoryStorageAdapter : IStorageAdapter
         // reflect into Document by adding a no-op delta maybe; we simply update UpdatedAt by adding an internal delta
         // For now, keep it simple and return DocumentState
         var ds = new DocumentState(id, state, updatedAt, DateTimeOffset.FromUnixTimeMilliseconds(doc.CreatedAt).UtcDateTime, DateTimeOffset.FromUnixTimeMilliseconds(updatedAt).UtcDateTime);
-        return Task.FromResult(ds);
+        return ValueTask.FromResult(ds);
     }
 
-    public Task<DocumentState> UpdateDocumentAsync(string id, JsonElement state, CancellationToken ct = default)
+    public ValueTask<DocumentState> UpdateDocumentAsync(string id, JsonElement state, CancellationToken ct = default)
     {
         if (!_documents.ContainsKey(id)) throw new InvalidOperationException("Document does not exist");
         return SaveDocumentAsync(id, state, ct);
     }
 
-    public Task<bool> DeleteDocumentAsync(string id, CancellationToken ct = default)
+    public ValueTask<bool> DeleteDocumentAsync(string id, CancellationToken ct = default)
     {
         var removed = _documents.TryRemove(id, out _);
-        return Task.FromResult(removed);
+        return ValueTask.FromResult(removed);
     }
 
-    public Task<IReadOnlyList<DocumentState>> ListDocumentsAsync(int limit = 100, int offset = 0, CancellationToken ct = default)
+    public ValueTask<IReadOnlyList<DocumentState>> ListDocumentsAsync(int limit = 100, int offset = 0, CancellationToken ct = default)
     {
         var items = _documents.Values.Skip(offset).Take(limit).Select(d => new DocumentState(d.Id, JsonDocument.Parse("{}").RootElement, d.UpdatedAt, DateTimeOffset.FromUnixTimeMilliseconds(d.CreatedAt).UtcDateTime, DateTimeOffset.FromUnixTimeMilliseconds(d.UpdatedAt).UtcDateTime)).ToList().AsReadOnly();
-        return Task.FromResult<IReadOnlyList<DocumentState>>(items);
+        return ValueTask.FromResult<IReadOnlyList<DocumentState>>(items);
     }
 
-    public Task<Dictionary<string, object?>> GetDocumentStateAsync(string documentId, CancellationToken ct = default)
+    public ValueTask<Dictionary<string, object?>> GetDocumentStateAsync(string documentId, CancellationToken ct = default)
     {
         _documents.TryGetValue(documentId, out var doc);
         if (doc == null)
         {
             _logger.LogDebug("GetDocumentStateAsync: Document {DocumentId} not found, returning empty state", documentId);
-            return Task.FromResult(new Dictionary<string, object?>());
+            return ValueTask.FromResult(new Dictionary<string, object?>());
         }
         var state = doc.BuildState();
         _logger.LogDebug("GetDocumentStateAsync: Document {DocumentId} has {DeltaCount} deltas, built state with {FieldCount} fields: {State}",
             documentId, doc.DeltaCount, state.Count, System.Text.Json.JsonSerializer.Serialize(state));
-        return Task.FromResult(state);
+        return ValueTask.FromResult(state);
     }
 
     // === Vector clock operations ===
-    public Task<Dictionary<string, long>> GetVectorClockAsync(string documentId, CancellationToken ct = default)
+    public ValueTask<Dictionary<string, long>> GetVectorClockAsync(string documentId, CancellationToken ct = default)
     {
         _documents.TryGetValue(documentId, out var doc);
-        return Task.FromResult(doc != null ? doc.VectorClock.ToDict() : new Dictionary<string, long>());
+        return ValueTask.FromResult(doc != null ? doc.VectorClock.ToDict() : new Dictionary<string, long>());
     }
 
-    public Task UpdateVectorClockAsync(string documentId, string clientId, long clockValue, CancellationToken ct = default)
+    public ValueTask UpdateVectorClockAsync(string documentId, string clientId, long clockValue, CancellationToken ct = default)
     {
         var document = _documents.GetOrAdd(documentId, id => new Document(id));
         // There's no direct setter on VectorClock, so simulate by saving an internal delta
@@ -103,10 +104,10 @@ public class InMemoryStorageAdapter : IStorageAdapter
             VectorClock = VectorClock.FromDict(new Dictionary<string, long> { [clientId] = clockValue })
         };
         document.AddDelta(delta);
-        return Task.CompletedTask;
+        return ValueTask.CompletedTask;
     }
 
-    public Task MergeVectorClockAsync(string documentId, Dictionary<string, long> clock, CancellationToken ct = default)
+    public ValueTask MergeVectorClockAsync(string documentId, Dictionary<string, long> clock, CancellationToken ct = default)
     {
         var document = _documents.GetOrAdd(documentId, id => new Document(id));
         var vc = VectorClock.FromDict(clock);
@@ -120,11 +121,11 @@ public class InMemoryStorageAdapter : IStorageAdapter
             VectorClock = vc
         };
         document.AddDelta(delta);
-        return Task.CompletedTask;
+        return ValueTask.CompletedTask;
     }
 
     // === Delta operations ===
-    public Task<DeltaEntry> SaveDeltaAsync(DeltaEntry delta, CancellationToken ct = default)
+    public ValueTask<DeltaEntry> SaveDeltaAsync(DeltaEntry delta, CancellationToken ct = default)
     {
         // Get or create the document
         var document = _documents.GetOrAdd(delta.DocumentId, id => new Document(id));
@@ -170,13 +171,13 @@ public class InMemoryStorageAdapter : IStorageAdapter
             VectorClock = stored.VectorClock.ToDict()
         };
 
-        return Task.FromResult(result);
+        return ValueTask.FromResult(result);
     }
 
-    public Task<IReadOnlyList<DeltaEntry>> GetDeltasAsync(string documentId, int limit = 100, CancellationToken ct = default)
+    public ValueTask<IReadOnlyList<DeltaEntry>> GetDeltasAsync(string documentId, int limit = 100, CancellationToken ct = default)
     {
         _documents.TryGetValue(documentId, out var doc);
-        if (doc == null) return Task.FromResult<IReadOnlyList<DeltaEntry>>(Array.Empty<DeltaEntry>());
+        if (doc == null) return ValueTask.FromResult<IReadOnlyList<DeltaEntry>>(Array.Empty<DeltaEntry>());
 
         var takeLimit = limit <= 0 ? int.MaxValue : limit;
         var deltas = doc.GetAllDeltas().Take(takeLimit).Select(d => new DeltaEntry
@@ -192,13 +193,13 @@ public class InMemoryStorageAdapter : IStorageAdapter
             VectorClock = d.VectorClock.ToDict()
         }).ToList().AsReadOnly();
 
-        return Task.FromResult<IReadOnlyList<DeltaEntry>>(deltas);
+        return ValueTask.FromResult<IReadOnlyList<DeltaEntry>>(deltas);
     }
 
-    public Task<IReadOnlyList<DeltaEntry>> GetDeltasSinceAsync(string documentId, long? sinceMaxClock, CancellationToken ct = default)
+    public ValueTask<IReadOnlyList<DeltaEntry>> GetDeltasSinceAsync(string documentId, long? sinceMaxClock, CancellationToken ct = default)
     {
         _documents.TryGetValue(documentId, out var doc);
-        if (doc == null) return Task.FromResult<IReadOnlyList<DeltaEntry>>(Array.Empty<DeltaEntry>());
+        if (doc == null) return ValueTask.FromResult<IReadOnlyList<DeltaEntry>>(Array.Empty<DeltaEntry>());
 
         var deltas = doc.GetAllDeltas()
             .Where(d =>
@@ -219,17 +220,17 @@ public class InMemoryStorageAdapter : IStorageAdapter
                 VectorClock = d.VectorClock.ToDict()
             }).ToList().AsReadOnly();
 
-        return Task.FromResult<IReadOnlyList<DeltaEntry>>(deltas);
+        return ValueTask.FromResult<IReadOnlyList<DeltaEntry>>(deltas);
     }
 
     // === Session operations ===
-    public Task<SessionEntry> SaveSessionAsync(SessionEntry session, CancellationToken ct = default)
+    public ValueTask<SessionEntry> SaveSessionAsync(SessionEntry session, CancellationToken ct = default)
     {
         _sessions[session.Id] = session with { ConnectedAt = session.ConnectedAt == default ? DateTime.UtcNow : session.ConnectedAt };
-        return Task.FromResult(_sessions[session.Id]);
+        return ValueTask.FromResult(_sessions[session.Id]);
     }
 
-    public Task UpdateSessionAsync(string sessionId, DateTime lastSeen, Dictionary<string, object>? metadata = null, CancellationToken ct = default)
+    public ValueTask UpdateSessionAsync(string sessionId, DateTime lastSeen, Dictionary<string, object>? metadata = null, CancellationToken ct = default)
     {
         if (_sessions.TryGetValue(sessionId, out var session))
         {
@@ -237,23 +238,23 @@ public class InMemoryStorageAdapter : IStorageAdapter
             _sessions[sessionId] = updated;
         }
 
-        return Task.CompletedTask;
+        return ValueTask.CompletedTask;
     }
 
-    public Task<bool> DeleteSessionAsync(string sessionId, CancellationToken ct = default)
+    public ValueTask<bool> DeleteSessionAsync(string sessionId, CancellationToken ct = default)
     {
         var removed = _sessions.TryRemove(sessionId, out _);
-        return Task.FromResult(removed);
+        return ValueTask.FromResult(removed);
     }
 
-    public Task<IReadOnlyList<SessionEntry>> GetSessionsAsync(string userId, CancellationToken ct = default)
+    public ValueTask<IReadOnlyList<SessionEntry>> GetSessionsAsync(string userId, CancellationToken ct = default)
     {
         var sessions = _sessions.Values.Where(s => s.UserId == userId).ToList().AsReadOnly();
-        return Task.FromResult<IReadOnlyList<SessionEntry>>(sessions);
+        return ValueTask.FromResult<IReadOnlyList<SessionEntry>>(sessions);
     }
 
     // === Maintenance ===
-    public Task<CleanupResult> CleanupAsync(CleanupOptions? options = null, CancellationToken ct = default)
+    public ValueTask<CleanupResult> CleanupAsync(CleanupOptions? options = null, CancellationToken ct = default)
     {
         var opts = options ?? new CleanupOptions();
         var cutoff = DateTime.UtcNow.AddHours(-opts.OldSessionsHours);
@@ -263,19 +264,19 @@ public class InMemoryStorageAdapter : IStorageAdapter
         foreach (var id in removedSessions) _sessions.TryRemove(id, out _);
 
         // Deltas cleanup not implemented in-memory (could filter by timestamp)
-        return Task.FromResult(new CleanupResult(removedSessions.Count, 0));
+        return ValueTask.FromResult(new CleanupResult(removedSessions.Count, 0));
     }
 
     /// <summary>
     /// Clear all storage (test/development mode only).
     /// Used for test isolation between test runs.
     /// </summary>
-    public Task ClearAllAsync(CancellationToken ct = default)
+    public ValueTask ClearAllAsync(CancellationToken ct = default)
     {
         _documents.Clear();
         _sessions.Clear();
         _logger.LogInformation("In-memory storage cleared");
-        return Task.CompletedTask;
+        return ValueTask.CompletedTask;
     }
 
 }

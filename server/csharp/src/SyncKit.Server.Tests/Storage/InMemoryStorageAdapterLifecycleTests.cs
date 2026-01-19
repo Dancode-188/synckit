@@ -37,7 +37,7 @@ public class InMemoryStorageAdapterLifecycleTests
         var docId = "missing-doc";
 
         // Act & Assert
-        await Assert.ThrowsAsync<InvalidOperationException>(() => _store.UpdateDocumentAsync(docId, JsonDocument.Parse("{}").RootElement));
+        await Assert.ThrowsAsync<InvalidOperationException>(() => _store.UpdateDocumentAsync(docId, JsonDocument.Parse("{}").RootElement).AsTask());
     }
 
     [Fact]

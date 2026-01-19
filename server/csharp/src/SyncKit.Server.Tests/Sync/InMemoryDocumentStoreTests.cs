@@ -488,7 +488,7 @@ public class InMemoryStorageAdapterTests
         // Act - Multiple threads trying to save the same document concurrently
         for (int i = 0; i < threadCount; i++)
         {
-            tasks.Add(_store.SaveDocumentAsync(docId, JsonDocument.Parse("{}").RootElement));
+            tasks.Add(_store.SaveDocumentAsync(docId, JsonDocument.Parse("{}").RootElement).AsTask());
         }
 
         await Task.WhenAll(tasks);
