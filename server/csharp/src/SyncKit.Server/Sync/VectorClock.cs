@@ -1,3 +1,5 @@
+using System.Runtime.CompilerServices;
+
 namespace SyncKit.Server.Sync;
 
 /// <summary>
@@ -12,9 +14,14 @@ namespace SyncKit.Server.Sync;
 /// - Monotonicity: Clock values only increase
 /// - ConcurrentDetection: Concurrent operations detected correctly
 /// - MergeCorrectness: Clock merging preserves causality
+///
+/// Performance optimizations:
+/// - Pre-sized dictionary capacity
+/// - [MethodImpl(AggressiveInlining)] on hot paths
 /// </summary>
 public class VectorClock : IEquatable<VectorClock>
 {
+    private const int InitialCapacity = 4;
     private readonly Dictionary<string, long> _entries;
 
     /// <summary>
@@ -22,7 +29,7 @@ public class VectorClock : IEquatable<VectorClock>
     /// </summary>
     public VectorClock()
     {
-        _entries = new Dictionary<string, long>();
+        _entries = new Dictionary<string, long>(InitialCapacity);
     }
 
     /// <summary>
@@ -31,7 +38,11 @@ public class VectorClock : IEquatable<VectorClock>
     /// <param name="entries">Dictionary of client IDs to clock values</param>
     public VectorClock(Dictionary<string, long> entries)
     {
-        _entries = new Dictionary<string, long>(entries);
+        _entries = new Dictionary<string, long>(entries.Count > 0 ? entries.Count : InitialCapacity);
+        foreach (var kvp in entries)
+        {
+            _entries[kvp.Key] = kvp.Value;
+        }
     }
 
     /// <summary>
@@ -45,12 +56,15 @@ public class VectorClock : IEquatable<VectorClock>
     /// </summary>
     /// <param name="clientId">Client ID to increment</param>
     /// <returns>New vector clock with incremented value</returns>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public VectorClock Increment(string clientId)
     {
-        var newEntries = new Dictionary<string, long>(_entries)
+        var newEntries = new Dictionary<string, long>(_entries.Count + 1);
+        foreach (var kvp in _entries)
         {
-            [clientId] = Get(clientId) + 1
-        };
+            newEntries[kvp.Key] = kvp.Value;
+        }
+        newEntries[clientId] = Get(clientId) + 1;
         return new VectorClock(newEntries);
     }
 
@@ -59,9 +73,10 @@ public class VectorClock : IEquatable<VectorClock>
     /// </summary>
     /// <param name="clientId">Client ID to query</param>
     /// <returns>Clock value for the client</returns>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public long Get(string clientId)
     {
-        return _entries.GetValueOrDefault(clientId, 0);
+        return _entries.TryGetValue(clientId, out var value) ? value : 0;
     }
 
     /// <summary>
@@ -71,13 +86,18 @@ public class VectorClock : IEquatable<VectorClock>
     /// </summary>
     /// <param name="other">Other vector clock to merge with</param>
     /// <returns>New vector clock with merged values</returns>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public VectorClock Merge(VectorClock other)
     {
-        var merged = new Dictionary<string, long>(_entries);
+        var merged = new Dictionary<string, long>(_entries.Count + other._entries.Count);
+        foreach (var kvp in _entries)
+        {
+            merged[kvp.Key] = kvp.Value;
+        }
 
         foreach (var (clientId, value) in other._entries)
         {
-            merged[clientId] = Math.Max(merged.GetValueOrDefault(clientId, 0), value);
+            merged[clientId] = Math.Max(merged.TryGetValue(clientId, out var existing) ? existing : 0, value);
         }
 
         return new VectorClock(merged);

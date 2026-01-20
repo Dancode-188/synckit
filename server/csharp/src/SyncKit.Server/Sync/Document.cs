@@ -1,6 +1,8 @@
+using System.Buffers;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Linq;
+using System.Runtime.CompilerServices;
 using System.Text.Json;
 
 namespace SyncKit.Server.Sync;
@@ -13,24 +15,36 @@ namespace SyncKit.Server.Sync;
 /// For short critical sections, lock has lower overhead than ReaderWriterLockSlim or
 /// ConcurrentDictionary.AddOrUpdate which has retry overhead under contention.
 /// LWW resolution is applied at write-time for O(fields) state reads.
+///
+/// Quick-win optimizations applied:
+/// - Pre-sized collections to reduce allocations
+/// - [MethodImpl(AggressiveInlining)] on hot paths
+/// - Cached timestamp for batched operations
 /// </summary>
 public class Document
 {
+    // Initial capacity for collections based on typical document sizes
+    private const int InitialDeltaCapacity = 16;
+    private const int InitialFieldCapacity = 8;
+
     // Single lock for all state mutation - simpler and faster than ReaderWriterLockSlim for short operations
     private readonly object _stateLock = new();
-    private readonly List<StoredDelta> _deltas = new();
+    private readonly List<StoredDelta> _deltas;
     private readonly ConcurrentDictionary<string, byte> _subscribedConnections = new();
 
     /// <summary>
     /// Cached resolved state - LWW applied at write-time for O(1) reads.
     /// Maps field name to (Value, Timestamp, ClockCounter, ClientId).
     /// </summary>
-    private readonly Dictionary<string, FieldEntry> _resolvedFields = new();
+    private readonly Dictionary<string, FieldEntry> _resolvedFields;
+
+    // Cached timestamp to avoid repeated DateTime.UtcNow calls within the same batch
+    private long _cachedTimestamp;
 
     /// <summary>
     /// Tracks a field's resolved value and metadata for LWW comparison.
     /// </summary>
-    private record FieldEntry(object? Value, long Timestamp, long ClockCounter, string ClientId, bool IsTombstone);
+    private readonly record struct FieldEntry(object? Value, long Timestamp, long ClockCounter, string ClientId, bool IsTombstone);
 
     /// <summary>
     /// Unique identifier for the document.
@@ -60,8 +74,11 @@ public class Document
     {
         Id = id;
         VectorClock = new VectorClock();
-        CreatedAt = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
-        UpdatedAt = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
+        _deltas = new List<StoredDelta>(InitialDeltaCapacity);
+        _resolvedFields = new Dictionary<string, FieldEntry>(InitialFieldCapacity);
+        _cachedTimestamp = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
+        CreatedAt = _cachedTimestamp;
+        UpdatedAt = _cachedTimestamp;
     }
 
     /// <summary>
@@ -75,9 +92,13 @@ public class Document
     {
         Id = id;
         VectorClock = vectorClock;
-        _deltas = deltas.ToList();
-        CreatedAt = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
-        UpdatedAt = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
+        var deltaList = deltas.ToList();
+        _deltas = new List<StoredDelta>(Math.Max(deltaList.Count, InitialDeltaCapacity));
+        _deltas.AddRange(deltaList);
+        _resolvedFields = new Dictionary<string, FieldEntry>(Math.Max(deltaList.Count / 2, InitialFieldCapacity));
+        _cachedTimestamp = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
+        CreatedAt = _cachedTimestamp;
+        UpdatedAt = _cachedTimestamp;
 
         // Rebuild the resolved state cache from existing deltas (no lock needed in constructor)
         foreach (var delta in _deltas)
@@ -92,13 +113,15 @@ public class Document
     /// Also applies LWW resolution at write-time for O(1) state reads.
     /// </summary>
     /// <param name="delta">Delta to add</param>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public void AddDelta(StoredDelta delta)
     {
         lock (_stateLock)
         {
             _deltas.Add(delta);
             VectorClock = VectorClock.Merge(delta.VectorClock);
-            UpdatedAt = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
+            _cachedTimestamp = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
+            UpdatedAt = _cachedTimestamp;
 
             // Apply LWW resolution at write-time
             ApplyDeltaToResolvedStateInternal(delta);
@@ -114,25 +137,27 @@ public class Document
     /// <param name="data">Delta data (JSON payload)</param>
     /// <param name="deltaId">Optional delta ID (generated if not provided)</param>
     /// <returns>The stored delta with the assigned vector clock</returns>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public StoredDelta AddDeltaWithIncrementedClock(string clientId, JsonElement data, string? deltaId = null)
     {
         lock (_stateLock)
         {
             // Atomically increment and capture the new clock value
             var incrementedClock = VectorClock.Increment(clientId);
+            _cachedTimestamp = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
 
             var stored = new StoredDelta
             {
                 Id = deltaId ?? Guid.NewGuid().ToString(),
                 ClientId = clientId,
-                Timestamp = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds(),
+                Timestamp = _cachedTimestamp,
                 Data = data,
                 VectorClock = incrementedClock
             };
 
             _deltas.Add(stored);
             VectorClock = incrementedClock;
-            UpdatedAt = stored.Timestamp;
+            UpdatedAt = _cachedTimestamp;
 
             // Apply LWW resolution at write-time
             ApplyDeltaToResolvedStateInternal(stored);
@@ -230,11 +255,12 @@ public class Document
     /// 3. ClientId (lexicographic) - deterministic tiebreaker for concurrent updates
     /// </summary>
     /// <returns>Document state as a dictionary</returns>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public Dictionary<string, object?> BuildState()
     {
         lock (_stateLock)
         {
-            var state = new Dictionary<string, object?>();
+            var state = new Dictionary<string, object?>(_resolvedFields.Count);
 
             foreach (var kvp in _resolvedFields)
             {
@@ -254,6 +280,7 @@ public class Document
     /// Apply a delta to the resolved state cache using LWW resolution.
     /// Must be called while holding _stateLock.
     /// </summary>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private void ApplyDeltaToResolvedStateInternal(StoredDelta delta)
     {
         if (delta.Data.ValueKind != JsonValueKind.Object)
@@ -266,7 +293,7 @@ public class Document
         foreach (var property in delta.Data.EnumerateObject())
         {
             var fieldName = property.Name;
-            var isTombstone = IsTombstone(property.Value);
+            var isTombstone = IsTombstoneInline(property.Value);
             var value = isTombstone ? null : ConvertJsonElement(property.Value);
 
             if (_resolvedFields.TryGetValue(fieldName, out var existing))
@@ -300,17 +327,17 @@ public class Document
         }
     }
 
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    private static bool IsTombstoneInline(JsonElement element)
+    {
+        return element.ValueKind == JsonValueKind.Object &&
+               element.TryGetProperty("__deleted", out var deletedProp) &&
+               deletedProp.ValueKind == JsonValueKind.True;
+    }
+
     private static bool IsTombstone(JsonElement element)
     {
-        if (element.ValueKind != JsonValueKind.Object)
-            return false;
-
-        if (element.TryGetProperty("__deleted", out var deletedProp))
-        {
-            return deletedProp.ValueKind == JsonValueKind.True;
-        }
-
-        return false;
+        return IsTombstoneInline(element);
     }
 
     private static object? ConvertJsonElement(JsonElement element)
