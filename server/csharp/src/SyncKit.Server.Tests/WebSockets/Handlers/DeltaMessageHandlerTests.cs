@@ -3,6 +3,7 @@ using Microsoft.Extensions.Logging.Abstractions;
 using Moq;
 using SyncKit.Server.Auth;
 using SyncKit.Server.Sync;
+using Sync = SyncKit.Server.Sync;
 using SyncKit.Server.WebSockets;
 using SyncKit.Server.WebSockets.Handlers;
 using SyncKit.Server.WebSockets.Protocol;
@@ -13,17 +14,19 @@ namespace SyncKit.Server.Tests.WebSockets.Handlers;
 public class DeltaMessageHandlerTests
 {
     private readonly AuthGuard _authGuard;
-    private readonly Mock<Sync.ISyncCoordinator> _mockCoordinator;
+    private readonly Mock<SyncKit.Server.Sync.ISyncCoordinator> _mockCoordinator;
     private readonly Mock<IConnectionManager> _mockConnectionManager;
     private readonly Mock<IConnection> _mockConnection;
+    private readonly Mock<SyncKit.Server.Storage.IStorageAdapter> _mockStorage;
     private readonly DeltaMessageHandler _handler;
 
     public DeltaMessageHandlerTests()
     {
         _authGuard = new AuthGuard(NullLogger<AuthGuard>.Instance);
-        _mockCoordinator = new Mock<Sync.ISyncCoordinator>();
+        _mockCoordinator = new Mock<SyncKit.Server.Sync.ISyncCoordinator>();
         _mockConnectionManager = new Mock<IConnectionManager>();
         _mockConnection = new Mock<IConnection>();
+        _mockStorage = new Mock<SyncKit.Server.Storage.IStorageAdapter>();
         _mockCoordinator.Setup(c => c.ApplyDeltaAsync(It.IsAny<string>(), It.IsAny<System.Text.Json.JsonElement>(), It.IsAny<Dictionary<string, long>>(), It.IsAny<long>(), It.IsAny<string>(), It.IsAny<string>()))
             .ReturnsAsync(new Dictionary<string, object?> { { "field", "value" } });
 
@@ -72,11 +75,13 @@ public class DeltaMessageHandlerTests
         await _handler.HandleAsync(_mockConnection.Object, delta);
 
         // Assert - Delta should be stored
-        _mockStorage.Verify(s => s.SaveDeltaAsync(
-            It.Is<SyncKit.Server.Storage.DeltaEntry>(de =>
-                de.Id == messageId &&
-                de.ClientId == clientId),
-            It.IsAny<CancellationToken>()),
+        _mockCoordinator.Verify(c => c.ApplyDeltaAsync(
+            documentId,
+            It.IsAny<System.Text.Json.JsonElement>(),
+            It.IsAny<Dictionary<string,long>>(),
+            It.IsAny<long>(),
+            It.Is<string>(id => id == clientId),
+            It.IsAny<string>()),
             Times.Once);
 
         // Assert - Should broadcast to ALL subscribers (including sender for LWW convergence)
@@ -289,11 +294,18 @@ public class DeltaMessageHandlerTests
 
         SetupAuthenticatedConnectionWithWriteAccess(connectionId, clientId, subscriptions, documentId);
 
-        SyncKit.Server.Storage.DeltaEntry? storedDelta = null;
-        _mockStorage.Setup(s => s.SaveDeltaAsync(It.IsAny<SyncKit.Server.Storage.DeltaEntry>(), It.IsAny<CancellationToken>()))
-            .Callback<SyncKit.Server.Storage.DeltaEntry, CancellationToken>((delta, ct) => storedDelta = delta)
-            .Returns((SyncKit.Server.Storage.DeltaEntry d, CancellationToken _) => ValueTask.FromResult(d));
-        _mockStorage.Setup(s => s.GetDocumentStateAsync(documentId, It.IsAny<CancellationToken>()))
+        Dictionary<string,long>? capturedVectorClock = null;
+        _mockCoordinator.Setup(c => c.ApplyDeltaAsync(
+                It.IsAny<string>(),
+                It.IsAny<System.Text.Json.JsonElement>(),
+                It.IsAny<Dictionary<string, long>>(),
+                It.IsAny<long>(),
+                It.IsAny<string>(),
+                It.IsAny<string>()))
+            .Callback<string, System.Text.Json.JsonElement, Dictionary<string,long>, long, string, string>((docId, deltaJson, vc, ts, clientId, deltaId) =>
+            {
+                capturedVectorClock = vc == null ? null : new Dictionary<string,long>(vc);
+            })
             .ReturnsAsync(new Dictionary<string, object?> { { "field", "value" } });
         _mockConnectionManager.Setup(cm => cm.BroadcastToDocumentAsync(
             documentId, It.IsAny<DeltaMessage>(), It.IsAny<string?>()))
@@ -312,9 +324,9 @@ public class DeltaMessageHandlerTests
         await _handler.HandleAsync(_mockConnection.Object, message);
 
         // Assert - Vector clock should be stored correctly
-        Assert.NotNull(storedDelta);
-        Assert.Equal(5, storedDelta!.VectorClock!["client-789"]);
-        Assert.Equal(3, storedDelta!.VectorClock!["client-other"]);
+        Assert.NotNull(capturedVectorClock);
+        Assert.Equal(5, capturedVectorClock!["client-789"]);
+        Assert.Equal(3, capturedVectorClock!["client-other"]);
     }
 
     [Fact]
@@ -328,11 +340,18 @@ public class DeltaMessageHandlerTests
         // Client ID is null - should fall back to connection ID
         SetupAuthenticatedConnectionWithWriteAccess(connectionId, clientId: null, subscriptions, documentId);
 
-        SyncKit.Server.Storage.DeltaEntry? storedDelta = null;
-        _mockStorage.Setup(s => s.SaveDeltaAsync(It.IsAny<SyncKit.Server.Storage.DeltaEntry>(), It.IsAny<CancellationToken>()))
-            .Callback<SyncKit.Server.Storage.DeltaEntry, CancellationToken>((delta, _) => storedDelta = delta)
-            .Returns((SyncKit.Server.Storage.DeltaEntry d, CancellationToken _) => ValueTask.FromResult(d));
-        _mockStorage.Setup(s => s.GetDocumentStateAsync(documentId, It.IsAny<CancellationToken>()))
+        string? capturedClientId = null;
+        _mockCoordinator.Setup(c => c.ApplyDeltaAsync(
+                It.IsAny<string>(),
+                It.IsAny<System.Text.Json.JsonElement>(),
+                It.IsAny<Dictionary<string, long>>(),
+                It.IsAny<long>(),
+                It.IsAny<string>(),
+                It.IsAny<string>()))
+            .Callback<string, System.Text.Json.JsonElement, Dictionary<string,long>, long, string, string>((docId, deltaJson, vc, ts, clientId, deltaId) =>
+            {
+                capturedClientId = clientId;
+            })
             .ReturnsAsync(new Dictionary<string, object?> { { "field", "value" } });
         _mockConnectionManager.Setup(cm => cm.BroadcastToDocumentAsync(
             documentId, It.IsAny<DeltaMessage>(), It.IsAny<string?>()))
@@ -344,8 +363,7 @@ public class DeltaMessageHandlerTests
         await _handler.HandleAsync(_mockConnection.Object, delta);
 
         // Assert - Should use connection ID as client ID
-        Assert.NotNull(storedDelta);
-        Assert.Equal(connectionId, storedDelta.ClientId);
+        Assert.Equal(connectionId, capturedClientId);
     }
 
     [Fact]
@@ -422,10 +440,14 @@ public class DeltaMessageHandlerTests
         var subscriptions = new HashSet<string> { documentId };
 
         SetupAuthenticatedConnectionWithWriteAccess("conn-1", "client-1", subscriptions, documentId);
-        _mockStorage.Setup(s => s.SaveDeltaAsync(It.IsAny<SyncKit.Server.Storage.DeltaEntry>(), It.IsAny<CancellationToken>()))
-            .Returns((SyncKit.Server.Storage.DeltaEntry d, CancellationToken _) => ValueTask.FromResult(d));
-        // LWW uses authoritative state - so we return the expected field values
-        _mockStorage.Setup(s => s.GetDocumentStateAsync(documentId, It.IsAny<CancellationToken>()))
+        // LWW uses authoritative state - coordinator returns the authoritative field values
+        _mockCoordinator.Setup(c => c.ApplyDeltaAsync(
+                It.IsAny<string>(),
+                It.IsAny<System.Text.Json.JsonElement>(),
+                It.IsAny<Dictionary<string, long>>(),
+                It.IsAny<long>(),
+                It.IsAny<string>(),
+                It.IsAny<string>()))
             .ReturnsAsync(new Dictionary<string, object?>
             {
                 { "operation", "set" },
@@ -489,7 +511,7 @@ public class DeltaMessageHandlerTests
         var exception = Assert.Throws<ArgumentNullException>(() =>
             new DeltaMessageHandler(
                 authGuard,
-                (Sync.ISyncCoordinator)null!,
+                (SyncKit.Server.Sync.ISyncCoordinator)null!,
                 _mockConnectionManager.Object,
                 null,
                 NullLogger<DeltaMessageHandler>.Instance));
@@ -619,10 +641,14 @@ public class DeltaMessageHandlerTests
         // Act
         await _handler.HandleAsync(_mockConnection.Object, delta);
 
-        // Assert - Delta should be stored
-        _mockStorage.Verify(s => s.SaveDeltaAsync(
-            It.Is<ServerStorage.DeltaEntry>(de => de.DocumentId == documentId && de.ClientId == "admin-client"),
-            It.IsAny<CancellationToken>()), Times.Once);
+        // Assert - Coordinator should be invoked with admin client id
+        _mockCoordinator.Verify(c => c.ApplyDeltaAsync(
+            documentId,
+            It.IsAny<System.Text.Json.JsonElement>(),
+            It.IsAny<Dictionary<string,long>>(),
+            It.IsAny<long>(),
+            It.Is<string>(id => id == "admin-client"),
+            It.IsAny<string>()), Times.Once);
     }
 
     #region Helper Methods
