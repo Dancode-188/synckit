@@ -22,9 +22,21 @@ public static class WebSocketExtensions
     {
         services.AddSingleton<IConnectionManager, ConnectionManager>();
 
-        // Register in-memory storage adapter (single modern registration)
-        services.AddSingleton<Storage.InMemoryStorageAdapter>();
-        services.AddSingleton<Storage.IStorageAdapter>(sp => sp.GetRequiredService<Storage.InMemoryStorageAdapter>());
+        // Register storage adapter based on SYNCKIT_STORAGE_MODEL environment variable
+        // Options: "actor" for ActorModelStorageAdapter, default for InMemoryStorageAdapter
+        var storageModel = Environment.GetEnvironmentVariable("SYNCKIT_STORAGE_MODEL")?.ToLowerInvariant();
+        if (storageModel == "actor")
+        {
+            // Actor model: Channel<T>-based per-document message queues
+            services.AddSingleton<Storage.ActorModelStorageAdapter>();
+            services.AddSingleton<Storage.IStorageAdapter>(sp => sp.GetRequiredService<Storage.ActorModelStorageAdapter>());
+        }
+        else
+        {
+            // Default: lock-based in-memory storage
+            services.AddSingleton<Storage.InMemoryStorageAdapter>();
+            services.AddSingleton<Storage.IStorageAdapter>(sp => sp.GetRequiredService<Storage.InMemoryStorageAdapter>());
+        }
 
         // Register awareness store (in-memory for Phase 5)
         services.AddSingleton<IAwarenessStore, InMemoryAwarenessStore>();
