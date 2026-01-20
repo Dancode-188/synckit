@@ -21,7 +21,7 @@ public class DeltaMessageHandler : IMessageHandler
     private static readonly MessageType[] _handledTypes = [MessageType.Delta];
 
     private readonly AuthGuard _authGuard;
-    private readonly Storage.IStorageAdapter _storage;
+    private readonly Sync.ISyncCoordinator _coordinator;
     private readonly IConnectionManager _connectionManager;
     private readonly DeltaBatchingService? _batchingService;
     private readonly MessagePool? _messagePool;
@@ -33,37 +33,37 @@ public class DeltaMessageHandler : IMessageHandler
     // Backwards-compatible constructor for existing tests (no redis or batching parameters)
     public DeltaMessageHandler(
         AuthGuard authGuard,
-        Storage.IStorageAdapter storage,
+        Sync.ISyncCoordinator coordinator,
         IConnectionManager connectionManager,
         ILogger<DeltaMessageHandler> logger)
-        : this(authGuard, storage, connectionManager, null, null, null, logger)
+        : this(authGuard, coordinator, connectionManager, null, null, null, logger)
     {
     }
 
     public DeltaMessageHandler(
         AuthGuard authGuard,
-        Storage.IStorageAdapter storage,
+        Sync.ISyncCoordinator coordinator,
         IConnectionManager connectionManager,
         PubSub.IRedisPubSub? redis,
         ILogger<DeltaMessageHandler> logger)
-        : this(authGuard, storage, connectionManager, null, null, redis, logger)
+        : this(authGuard, coordinator, connectionManager, null, null, redis, logger)
     {
     }
 
     public DeltaMessageHandler(
         AuthGuard authGuard,
-        Storage.IStorageAdapter storage,
+        Sync.ISyncCoordinator coordinator,
         IConnectionManager connectionManager,
         DeltaBatchingService? batchingService,
         PubSub.IRedisPubSub? redis,
         ILogger<DeltaMessageHandler> logger)
-        : this(authGuard, storage, connectionManager, batchingService, null, redis, logger)
+        : this(authGuard, coordinator, connectionManager, batchingService, null, redis, logger)
     {
     }
 
     public DeltaMessageHandler(
         AuthGuard authGuard,
-        Storage.IStorageAdapter storage,
+        Sync.ISyncCoordinator coordinator,
         IConnectionManager connectionManager,
         DeltaBatchingService? batchingService,
         MessagePool? messagePool,
@@ -71,7 +71,7 @@ public class DeltaMessageHandler : IMessageHandler
         ILogger<DeltaMessageHandler> logger)
     {
         _authGuard = authGuard ?? throw new ArgumentNullException(nameof(authGuard));
-        _storage = storage ?? throw new ArgumentNullException(nameof(storage));
+        _coordinator = coordinator ?? throw new ArgumentNullException(nameof(coordinator));
         _connectionManager = connectionManager ?? throw new ArgumentNullException(nameof(connectionManager));
         _batchingService = batchingService;
         _messagePool = messagePool;
@@ -128,30 +128,14 @@ public class DeltaMessageHandler : IMessageHandler
             deltaData = JsonSerializer.Deserialize<JsonElement>(jsonString);
         }
 
-        // Create storage delta entry from incoming message
-        var deltaEntry = new SyncKit.Server.Storage.DeltaEntry
-        {
-            Id = delta.Id,
-            DocumentId = delta.DocumentId,
-            ClientId = connection.ClientId ?? connection.Id,
-            OperationType = "set",
-            FieldPath = string.Empty,
-            Value = deltaData,
-            ClockValue = delta.VectorClock.Values.DefaultIfEmpty(0).Max(),
-            Timestamp = DateTimeOffset.FromUnixTimeMilliseconds(delta.Timestamp).UtcDateTime,
-            VectorClock = delta.VectorClock
-        };
-
-        // Store the delta via storage adapter
-        await _storage.SaveDeltaAsync(deltaEntry);
-
-        _logger.LogDebug(
-            "Stored delta {DeltaId} for document {DocumentId} from client {ClientId}",
-            delta.Id, delta.DocumentId, connection.ClientId ?? connection.Id);
-
-        // Get current document state to determine authoritative values (LWW)
-        // IMPORTANT: This is AFTER saving the delta, so it reflects LWW resolution
-        var currentState = await _storage.GetDocumentStateAsync(delta.DocumentId);
+        // Apply delta via sync coordinator (handles persistence and in-memory state)
+        var currentState = await _coordinator.ApplyDeltaAsync(
+            delta.DocumentId,
+            deltaData,
+            delta.VectorClock,
+            delta.Timestamp,
+            connection.ClientId ?? connection.Id,
+            delta.Id);
 
         // Build authoritative delta by checking current state
         // For LWW, we always use the server's current state (which includes all applied deltas)

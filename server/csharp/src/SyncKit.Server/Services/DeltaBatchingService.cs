@@ -46,11 +46,6 @@ public class DeltaBatchingService : IHostedService, IDisposable
         public ConcurrentDictionary<string, long> MergedVectorClock { get; } = new();
 
         /// <summary>
-        /// Lock object for thread-safe batch operations.
-        /// </summary>
-        public readonly object Lock = new();
-
-        /// <summary>
         /// Timestamp when this batch was created (for latency tracking).
         /// </summary>
         public long CreatedAtMs { get; set; }
@@ -58,7 +53,7 @@ public class DeltaBatchingService : IHostedService, IDisposable
         /// <summary>
         /// Timestamp of the first delta added to this batch.
         /// </summary>
-        public long FirstDeltaAtMs { get; set; }
+        public long FirstDeltaAtMs; 
     }
 
     public DeltaBatchingService(
@@ -110,28 +105,25 @@ public class DeltaBatchingService : IHostedService, IDisposable
             return newBatch;
         });
 
-        lock (batch.Lock)
+        // Track first delta time if this is the first one (atomic set when zero)
+        if (batch.Delta.IsEmpty)
         {
-            // Track first delta time if this is the first one
-            if (batch.Delta.IsEmpty)
-            {
-                batch.FirstDeltaAtMs = nowMs;
-            }
+            System.Threading.Interlocked.CompareExchange(ref batch.FirstDeltaAtMs, nowMs, 0);
+        }
 
-            // Coalesce delta fields (later writes win for same field)
-            foreach (var (key, value) in authoritativeDelta)
-            {
-                batch.Delta[key] = value;
-            }
+        // Coalesce delta fields (later writes win for same field)
+        foreach (var (key, value) in authoritativeDelta)
+        {
+            batch.Delta[key] = value;
+        }
 
-            // Merge vector clocks (take max for each client)
-            foreach (var (clientId, clock) in vectorClock)
-            {
-                batch.MergedVectorClock.AddOrUpdate(
-                    clientId,
-                    clock,
-                    (_, existing) => Math.Max(existing, clock));
-            }
+        // Merge vector clocks (take max for each client)
+        foreach (var (clientId, clock) in vectorClock)
+        {
+            batch.MergedVectorClock.AddOrUpdate(
+                clientId,
+                clock,
+                (_, existing) => Math.Max(existing, clock));
         }
 
         _logger.LogTrace(
@@ -158,18 +150,15 @@ public class DeltaBatchingService : IHostedService, IDisposable
         long batchCreatedAtMs;
         long firstDeltaAtMs;
 
-        lock (batch.Lock)
-        {
-            // Dispose the timer
-            batch.Timer?.Dispose();
-            batch.Timer = null;
+        // Dispose the timer
+        batch.Timer?.Dispose();
+        batch.Timer = null;
 
-            // Copy the data for sending
-            deltaToSend = new Dictionary<string, object?>(batch.Delta);
-            vectorClockToSend = new Dictionary<string, long>(batch.MergedVectorClock);
-            batchCreatedAtMs = batch.CreatedAtMs;
-            firstDeltaAtMs = batch.FirstDeltaAtMs;
-        }
+        // Copy the data for sending
+        deltaToSend = new Dictionary<string, object?>(batch.Delta);
+        vectorClockToSend = new Dictionary<string, long>(batch.MergedVectorClock);
+        batchCreatedAtMs = batch.CreatedAtMs;
+        firstDeltaAtMs = batch.FirstDeltaAtMs;
 
         var lockReleasedMs = sw.ElapsedMilliseconds;
 
@@ -228,7 +217,7 @@ public class DeltaBatchingService : IHostedService, IDisposable
                 };
 
                 // Broadcast to all subscribers (don't exclude anyone - sender needs convergence)
-                await _connectionManager.BroadcastToDocumentAsync(
+                _ = _connectionManager.BroadcastToDocumentAsync(
                     documentId,
                     fieldMessage,
                     excludeConnectionId: null);

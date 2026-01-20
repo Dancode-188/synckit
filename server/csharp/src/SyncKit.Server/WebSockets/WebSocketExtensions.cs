@@ -46,6 +46,9 @@ public static class WebSocketExtensions
         // Register message pool for object reuse (reduces GC pressure)
         services.AddSingleton<MessagePool>();
 
+        // Register in-memory sync coordinator (loads documents on first access; persists deltas async)
+        services.AddSingleton<Sync.ISyncCoordinator, Sync.InMemorySyncCoordinator>();
+
         // Register delta batching service for efficient broadcast coalescing
         // This batches rapid delta updates within a 50ms window before broadcasting
         services.AddSingleton<DeltaBatchingService>();
@@ -78,7 +81,7 @@ public static class WebSocketExtensions
         services.AddSingleton<Handlers.IMessageHandler>(sp =>
         {
             var authGuard = sp.GetRequiredService<AuthGuard>();
-            var storage = sp.GetRequiredService<Storage.IStorageAdapter>();
+            var coordinator = sp.GetRequiredService<Sync.ISyncCoordinator>();
             var connectionManager = sp.GetRequiredService<IConnectionManager>();
             var batchingService = sp.GetRequiredService<DeltaBatchingService>();
             var messagePool = sp.GetRequiredService<MessagePool>();
@@ -87,7 +90,7 @@ public static class WebSocketExtensions
 
             return new Handlers.DeltaMessageHandler(
                 authGuard,
-                storage,
+                coordinator,
                 connectionManager,
                 batchingService,
                 messagePool,
