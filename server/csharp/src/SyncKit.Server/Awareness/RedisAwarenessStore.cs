@@ -53,13 +53,16 @@ public class RedisAwarenessStore : IAwarenessStore
     {
         var key = HashKey(documentId);
         var val = await _db.HashGetAsync(key, clientId).ConfigureAwait(false);
-        if (val.IsNullOrEmpty) return null;
+        if (val.IsNullOrEmpty)
+            return null;
         try
         {
             var entry = JsonSerializer.Deserialize<AwarenessEntry>(val.ToString()!, _jsonOptions);
-            if (entry == null) return null;
+            if (entry == null)
+                return null;
             // Treat expired entries as missing
-            if (entry.IsExpired()) return null;
+            if (entry.IsExpired())
+                return null;
             return entry;
         }
         catch (Exception ex)
@@ -77,7 +80,8 @@ public class RedisAwarenessStore : IAwarenessStore
         var list = new List<AwarenessEntry>(values.Length);
         foreach (var v in values)
         {
-            if (v.IsNullOrEmpty) continue;
+            if (v.IsNullOrEmpty)
+                continue;
             try
             {
                 var e = JsonSerializer.Deserialize<AwarenessEntry>(v.ToString()!, _jsonOptions);
@@ -165,7 +169,8 @@ public class RedisAwarenessStore : IAwarenessStore
         foreach (var doc in docs)
         {
             var documentId = doc.ToString();
-            if (string.IsNullOrEmpty(documentId)) continue;
+            if (string.IsNullOrEmpty(documentId))
+                continue;
             var hashKey = HashKey(documentId);
             var entries = await _db.HashGetAllAsync(hashKey).ConfigureAwait(false);
             var toRemove = new List<RedisValue>();
@@ -177,7 +182,8 @@ public class RedisAwarenessStore : IAwarenessStore
                 }
             }
 
-            if (toRemove.Count == 0) continue;
+            if (toRemove.Count == 0)
+                continue;
 
             var tasks = toRemove.Select(c => _db.HashDeleteAsync(hashKey, c));
             await Task.WhenAll(tasks).ConfigureAwait(false);
@@ -196,19 +202,23 @@ public class RedisAwarenessStore : IAwarenessStore
         foreach (var doc in docs)
         {
             var documentId = doc.ToString();
-            if (string.IsNullOrEmpty(documentId)) continue;
+            if (string.IsNullOrEmpty(documentId))
+                continue;
             var zKey = ExpiresKey(documentId);
             var members = await _db.SortedSetRangeByScoreAsync(zKey, double.NegativeInfinity, now).ConfigureAwait(false);
-            if (members.Length == 0) continue;
+            if (members.Length == 0)
+                continue;
             var hashKey = HashKey(documentId);
             foreach (var member in members)
             {
                 var raw = await _db.HashGetAsync(hashKey, member).ConfigureAwait(false);
-                if (raw.IsNullOrEmpty) continue;
+                if (raw.IsNullOrEmpty)
+                    continue;
                 try
                 {
                     var e = JsonSerializer.Deserialize<AwarenessEntry>(raw.ToString()!, _jsonOptions);
-                    if (e != null) expired.Add(e);
+                    if (e != null)
+                        expired.Add(e);
                 }
                 catch (Exception ex)
                 {
@@ -229,22 +239,26 @@ public class RedisAwarenessStore : IAwarenessStore
         foreach (var doc in docs)
         {
             var documentId = doc.ToString();
-            if (string.IsNullOrEmpty(documentId)) continue;
+            if (string.IsNullOrEmpty(documentId))
+                continue;
             var zKey = ExpiresKey(documentId);
             var members = await _db.SortedSetRangeByScoreAsync(zKey, double.NegativeInfinity, now).ConfigureAwait(false);
-            if (members.Length == 0) continue;
+            if (members.Length == 0)
+                continue;
 
             var hashKey = HashKey(documentId);
             foreach (var member in members)
             {
                 var did = await _db.HashDeleteAsync(hashKey, member).ConfigureAwait(false);
-                if (did) removed++;
+                if (did)
+                    removed++;
             }
 
             // Remove expired members from zset
             await _db.SortedSetRemoveRangeByScoreAsync(zKey, double.NegativeInfinity, now).ConfigureAwait(false);
         }
 
-        if (removed > 0) _logger.LogDebug("Pruned {Count} expired awareness entries", removed);
+        if (removed > 0)
+            _logger.LogDebug("Pruned {Count} expired awareness entries", removed);
     }
 }

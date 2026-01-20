@@ -34,11 +34,13 @@ public class SyncRequestMessageHandlerTests
         _mockStorage.Setup(s => s.GetVectorClockAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync((string id, CancellationToken ct) =>
             {
-                if (!_storageDeltas.TryGetValue(id, out var list)) return new Dictionary<string, long>();
+                if (!_storageDeltas.TryGetValue(id, out var list))
+                    return new Dictionary<string, long>();
                 var merged = new Dictionary<string, long>();
                 foreach (var e in list)
                 {
-                    if (e.VectorClock == null) continue;
+                    if (e.VectorClock == null)
+                        continue;
                     foreach (var kv in e.VectorClock)
                     {
                         if (!merged.ContainsKey(kv.Key) || merged[kv.Key] < kv.Value)
@@ -52,11 +54,13 @@ public class SyncRequestMessageHandlerTests
         _mockStorage.Setup(s => s.GetDocumentAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync((string id, CancellationToken ct) =>
             {
-                if (!_storageDeltas.TryGetValue(id, out var list)) return (SyncKit.Server.Storage.DocumentState?)null;
+                if (!_storageDeltas.TryGetValue(id, out var list))
+                    return (SyncKit.Server.Storage.DocumentState?)null;
                 var merged = new Dictionary<string, long>();
                 foreach (var e in list)
                 {
-                    if (e.VectorClock == null) continue;
+                    if (e.VectorClock == null)
+                        continue;
                     foreach (var kv in e.VectorClock)
                     {
                         if (!merged.ContainsKey(kv.Key) || merged[kv.Key] < kv.Value)
@@ -76,11 +80,13 @@ public class SyncRequestMessageHandlerTests
         _mockStorage.Setup(s => s.GetDocumentStateAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync((string id, CancellationToken ct) =>
             {
-                if (!_storageDeltas.TryGetValue(id, out var list)) return new Dictionary<string, object?>();
+                if (!_storageDeltas.TryGetValue(id, out var list))
+                    return new Dictionary<string, object?>();
                 var merged = new Dictionary<string, object?>();
                 foreach (var e in list)
                 {
-                    if (e.VectorClock == null) continue;
+                    if (e.VectorClock == null)
+                        continue;
                     foreach (var kv in e.VectorClock)
                     {
                         if (!merged.ContainsKey(kv.Key) || (long)(merged[kv.Key] ?? 0) < kv.Value)

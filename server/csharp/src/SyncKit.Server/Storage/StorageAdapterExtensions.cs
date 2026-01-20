@@ -12,7 +12,8 @@ public static class StorageAdapterExtensions
     {
         // If the adapter can indicate the document exists return a Document wrapper; otherwise create
         var docState = await adapter.GetDocumentAsync(documentId);
-        if (docState != null) return new Document(documentId);
+        if (docState != null)
+            return new Document(documentId);
 
         await adapter.SaveDocumentAsync(documentId, JsonDocument.Parse("{}").RootElement);
         return new Document(documentId);

@@ -68,7 +68,8 @@ public class MessagePool : IDisposable
     /// <returns>A pooled or new AckMessage instance.</returns>
     public AckMessage RentAckMessage(string messageId)
     {
-        if (_disposed) throw new ObjectDisposedException(nameof(MessagePool));
+        if (_disposed)
+            throw new ObjectDisposedException(nameof(MessagePool));
 
         Interlocked.Increment(ref _ackMessagesRented);
 
@@ -85,7 +86,8 @@ public class MessagePool : IDisposable
     /// </summary>
     public void ReturnAckMessage(AckMessage message)
     {
-        if (_disposed || message == null) return;
+        if (_disposed || message == null)
+            return;
 
         Interlocked.Increment(ref _ackMessagesReturned);
         _ackMessagePool.Return(message);
@@ -103,7 +105,8 @@ public class MessagePool : IDisposable
     /// <returns>A pooled or new ErrorMessage instance.</returns>
     public ErrorMessage RentErrorMessage(string error)
     {
-        if (_disposed) throw new ObjectDisposedException(nameof(MessagePool));
+        if (_disposed)
+            throw new ObjectDisposedException(nameof(MessagePool));
 
         Interlocked.Increment(ref _errorMessagesRented);
 
@@ -121,7 +124,8 @@ public class MessagePool : IDisposable
     /// </summary>
     public void ReturnErrorMessage(ErrorMessage message)
     {
-        if (_disposed || message == null) return;
+        if (_disposed || message == null)
+            return;
 
         Interlocked.Increment(ref _errorMessagesReturned);
         _errorMessagePool.Return(message);
@@ -138,7 +142,8 @@ public class MessagePool : IDisposable
     /// <returns>A pooled or new PongMessage instance.</returns>
     public PongMessage RentPongMessage()
     {
-        if (_disposed) throw new ObjectDisposedException(nameof(MessagePool));
+        if (_disposed)
+            throw new ObjectDisposedException(nameof(MessagePool));
 
         Interlocked.Increment(ref _pongMessagesRented);
 
@@ -154,7 +159,8 @@ public class MessagePool : IDisposable
     /// </summary>
     public void ReturnPongMessage(PongMessage message)
     {
-        if (_disposed || message == null) return;
+        if (_disposed || message == null)
+            return;
 
         Interlocked.Increment(ref _pongMessagesReturned);
         _pongMessagePool.Return(message);
@@ -171,7 +177,8 @@ public class MessagePool : IDisposable
     /// <returns>A pooled or new Dictionary instance.</returns>
     public Dictionary<string, long> RentVectorClock()
     {
-        if (_disposed) throw new ObjectDisposedException(nameof(MessagePool));
+        if (_disposed)
+            throw new ObjectDisposedException(nameof(MessagePool));
 
         Interlocked.Increment(ref _vectorClocksRented);
         return _vectorClockPool.Get();
@@ -197,7 +204,8 @@ public class MessagePool : IDisposable
     /// </summary>
     public void ReturnVectorClock(Dictionary<string, long>? dictionary)
     {
-        if (_disposed || dictionary == null) return;
+        if (_disposed || dictionary == null)
+            return;
 
         Interlocked.Increment(ref _vectorClocksReturned);
         dictionary.Clear();
@@ -215,7 +223,8 @@ public class MessagePool : IDisposable
     /// <returns>A pooled or new Dictionary instance.</returns>
     public Dictionary<string, object?> RentDeltaDictionary()
     {
-        if (_disposed) throw new ObjectDisposedException(nameof(MessagePool));
+        if (_disposed)
+            throw new ObjectDisposedException(nameof(MessagePool));
 
         Interlocked.Increment(ref _deltaDictionariesRented);
         return _deltaDictionaryPool.Get();
@@ -226,7 +235,8 @@ public class MessagePool : IDisposable
     /// </summary>
     public void ReturnDeltaDictionary(Dictionary<string, object?>? dictionary)
     {
-        if (_disposed || dictionary == null) return;
+        if (_disposed || dictionary == null)
+            return;
 
         Interlocked.Increment(ref _deltaDictionariesReturned);
         dictionary.Clear();
@@ -288,7 +298,8 @@ public class MessagePool : IDisposable
 
     public void Dispose()
     {
-        if (_disposed) return;
+        if (_disposed)
+            return;
         _disposed = true;
 
         var stats = GetStatistics();

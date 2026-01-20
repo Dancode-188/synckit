@@ -123,7 +123,8 @@ public class RedisPubSubProvider : IRedisPubSub, IAsyncDisposable
 
     public async Task SubscribeAsync(string documentId, Func<IMessage, Task> handler)
     {
-        if (handler == null) throw new ArgumentNullException(nameof(handler));
+        if (handler == null)
+            throw new ArgumentNullException(nameof(handler));
 
         // Register handler
         _handlers[documentId] = handler;
@@ -140,7 +141,8 @@ public class RedisPubSubProvider : IRedisPubSub, IAsyncDisposable
 
     public async Task UnsubscribeAsync(string documentId)
     {
-        if (!_subscriptionRefCount.ContainsKey(documentId)) return;
+        if (!_subscriptionRefCount.ContainsKey(documentId))
+            return;
 
         _subscriptionRefCount.AddOrUpdate(documentId, 0, (_, v) => Math.Max(0, v - 1));
         if (_subscriptionRefCount[documentId] == 0)
@@ -166,7 +168,8 @@ public class RedisPubSubProvider : IRedisPubSub, IAsyncDisposable
         try
         {
             var json = value.ToString();
-            if (string.IsNullOrEmpty(json)) return;
+            if (string.IsNullOrEmpty(json))
+                return;
 
             using var doc = JsonDocument.Parse(json);
             var root = doc.RootElement;
@@ -177,7 +180,8 @@ public class RedisPubSubProvider : IRedisPubSub, IAsyncDisposable
             }
 
             var typeStr = typeElement.GetString();
-            if (string.IsNullOrEmpty(typeStr)) return;
+            if (string.IsNullOrEmpty(typeStr))
+                return;
 
             var message = ParseMessage(json, typeStr);
             if (message == null)
@@ -201,7 +205,8 @@ public class RedisPubSubProvider : IRedisPubSub, IAsyncDisposable
             if (_handlers.TryGetValue(documentId, out var handler))
             {
                 // Fire-and-forget handler invocation, log any unobserved exceptions
-                _ = handler.Invoke(message).ContinueWith(t => {
+                _ = handler.Invoke(message).ContinueWith(t =>
+                {
                     if (t.IsFaulted)
                     {
                         _logger.LogError(t.Exception, "Handler for document {DocumentId} threw an exception", documentId);
@@ -220,14 +225,17 @@ public class RedisPubSubProvider : IRedisPubSub, IAsyncDisposable
         // Convert snake_case to MessageType
         // Reuse logic: try parse case-insensitive else convert snake_case to PascalCase
         MessageType? messageType = null;
-        if (Enum.TryParse<MessageType>(typeStr, ignoreCase: true, out var direct)) messageType = direct;
+        if (Enum.TryParse<MessageType>(typeStr, ignoreCase: true, out var direct))
+            messageType = direct;
         else
         {
             var pascal = ConvertSnakeCaseToPascalCase(typeStr);
-            if (Enum.TryParse<MessageType>(pascal, ignoreCase: false, out var conv)) messageType = conv;
+            if (Enum.TryParse<MessageType>(pascal, ignoreCase: false, out var conv))
+                messageType = conv;
         }
 
-        if (messageType == null) return null;
+        if (messageType == null)
+            return null;
 
         return messageType switch
         {
@@ -239,14 +247,17 @@ public class RedisPubSubProvider : IRedisPubSub, IAsyncDisposable
 
     private string ConvertSnakeCaseToPascalCase(string snakeCase)
     {
-        if (string.IsNullOrEmpty(snakeCase)) return snakeCase;
+        if (string.IsNullOrEmpty(snakeCase))
+            return snakeCase;
         var parts = snakeCase.Split('_');
         var sb = new StringBuilder();
         foreach (var part in parts)
         {
-            if (part.Length == 0) continue;
+            if (part.Length == 0)
+                continue;
             sb.Append(char.ToUpperInvariant(part[0]));
-            if (part.Length > 1) sb.Append(part.Substring(1).ToLowerInvariant());
+            if (part.Length > 1)
+                sb.Append(part.Substring(1).ToLowerInvariant());
         }
         return sb.ToString();
     }

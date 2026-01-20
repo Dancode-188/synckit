@@ -45,7 +45,8 @@ public class RedisPubSubIntegrationTests : IAsyncLifetime
 
     public async Task DisposeAsync()
     {
-        if (_dockerUnavailable) return;
+        if (_dockerUnavailable)
+            return;
 
         try
         {
@@ -61,7 +62,8 @@ public class RedisPubSubIntegrationTests : IAsyncLifetime
     [Fact]
     public async Task MessagePublishedOnOneInstance_IsReceivedByTheOther()
     {
-        if (_dockerUnavailable) return;
+        if (_dockerUnavailable)
+            return;
 
         var host = _redisContainer.Hostname;
         var port = _redisContainer.GetMappedPublicPort(6379);
@@ -107,7 +109,8 @@ public class RedisPubSubIntegrationTests : IAsyncLifetime
     [Fact]
     public async Task AwarenessPublishedOnOneInstance_IsReceivedByTheOther()
     {
-        if (_dockerUnavailable) return;
+        if (_dockerUnavailable)
+            return;
 
         var host = _redisContainer.Hostname;
         var port = _redisContainer.GetMappedPublicPort(6379);

@@ -107,7 +107,7 @@ public class MessageHandlerAuthEnforcementTests
         // Act
         await handler.HandleAsync(_mockConnection.Object, message);
 
-    // Assert
+        // Assert
         _mockConnection.Verify(c => c.Send(It.Is<ErrorMessage>(
             m => m.Error == "Permission denied")), Times.Once);
         _mockConnection.Verify(c => c.AddSubscription(It.IsAny<string>()), Times.Never);
@@ -217,11 +217,13 @@ public class MessageHandlerAuthEnforcementTests
     public async Task DeltaHandler_NotAuthenticated_SendsError()
     {
         // Arrange
-        var mockStorage = new Mock<SyncKit.Server.Storage.IStorageAdapter>();
+        var mockCoordinator = new Mock<ISyncCoordinator>();
         var mockConnManager = new Mock<IConnectionManager>();
+        mockCoordinator.Setup(c => c.ApplyDeltaAsync(It.IsAny<string>(), It.IsAny<System.Text.Json.JsonElement>(), It.IsAny<Dictionary<string, long>>(), It.IsAny<long>(), It.IsAny<string>(), It.IsAny<string>()))
+            .ReturnsAsync(new Dictionary<string, object?>());
         var handler = new DeltaMessageHandler(
             _authGuard,
-            mockStorage.Object,
+            mockCoordinator.Object,
             mockConnManager.Object,
             null,
             NullLogger<DeltaMessageHandler>.Instance);
@@ -251,11 +253,13 @@ public class MessageHandlerAuthEnforcementTests
     public async Task DeltaHandler_NoWritePermission_SendsError()
     {
         // Arrange
-        var mockStorage = new Mock<SyncKit.Server.Storage.IStorageAdapter>();
+        var mockCoordinator = new Mock<ISyncCoordinator>();
         var mockConnManager = new Mock<IConnectionManager>();
+        mockCoordinator.Setup(c => c.ApplyDeltaAsync(It.IsAny<string>(), It.IsAny<System.Text.Json.JsonElement>(), It.IsAny<Dictionary<string, long>>(), It.IsAny<long>(), It.IsAny<string>(), It.IsAny<string>()))
+            .ReturnsAsync(new Dictionary<string, object?>());
         var handler = new DeltaMessageHandler(
             _authGuard,
-            mockStorage.Object,
+            mockCoordinator.Object,
             mockConnManager.Object,
             NullLogger<DeltaMessageHandler>.Instance);
 
@@ -296,13 +300,13 @@ public class MessageHandlerAuthEnforcementTests
     public async Task DeltaHandler_HasWritePermission_Succeeds()
     {
         // Arrange
-        var mockStorage = new Mock<SyncKit.Server.Storage.IStorageAdapter>();
+        var mockCoordinator = new Mock<ISyncCoordinator>();
         var mockConnManager = new Mock<IConnectionManager>();
-        mockStorage.Setup(s => s.SaveDeltaAsync(It.IsAny<SyncKit.Server.Storage.DeltaEntry>(), It.IsAny<CancellationToken>()))
-            .Returns<SyncKit.Server.Storage.DeltaEntry, CancellationToken>((de, ct) => ValueTask.FromResult(de));
+        mockCoordinator.Setup(c => c.ApplyDeltaAsync(It.IsAny<string>(), It.IsAny<System.Text.Json.JsonElement>(), It.IsAny<Dictionary<string, long>>(), It.IsAny<long>(), It.IsAny<string>(), It.IsAny<string>()))
+            .ReturnsAsync(new Dictionary<string, object?>());
         var handler = new DeltaMessageHandler(
             _authGuard,
-            mockStorage.Object,
+            mockCoordinator.Object,
             mockConnManager.Object,
             NullLogger<DeltaMessageHandler>.Instance);
 
@@ -344,11 +348,13 @@ public class MessageHandlerAuthEnforcementTests
     public async Task DeltaHandler_NullDelta_SendsError()
     {
         // Arrange
-        var mockStorage = new Mock<SyncKit.Server.Storage.IStorageAdapter>();
+        var mockCoordinator = new Mock<ISyncCoordinator>();
         var mockConnManager = new Mock<IConnectionManager>();
+        mockCoordinator.Setup(c => c.ApplyDeltaAsync(It.IsAny<string>(), It.IsAny<System.Text.Json.JsonElement>(), It.IsAny<Dictionary<string, long>>(), It.IsAny<long>(), It.IsAny<string>(), It.IsAny<string>()))
+            .ReturnsAsync(new Dictionary<string, object?>());
         var handler = new DeltaMessageHandler(
             _authGuard,
-            mockStorage.Object,
+            mockCoordinator.Object,
             mockConnManager.Object,
             NullLogger<DeltaMessageHandler>.Instance);
 

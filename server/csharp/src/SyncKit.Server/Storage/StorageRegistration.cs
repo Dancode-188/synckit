@@ -14,7 +14,8 @@ public static class StorageRegistration
         var storageMode = Environment.GetEnvironmentVariable("SyncKit__Storage") ?? (string.IsNullOrEmpty(config.DatabaseUrl) ? "inmemory" : "postgres");
         if (storageMode == "postgres" || storageMode == "postgresql")
         {
-            if (string.IsNullOrEmpty(config.DatabaseUrl)) throw new InvalidOperationException("DATABASE_URL is required for postgres storage");
+            if (string.IsNullOrEmpty(config.DatabaseUrl))
+                throw new InvalidOperationException("DATABASE_URL is required for postgres storage");
 
             var connectionString = config.DatabaseUrl;
 

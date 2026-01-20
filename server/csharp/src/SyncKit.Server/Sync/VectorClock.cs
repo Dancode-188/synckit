@@ -142,8 +142,10 @@ public class VectorClock : IEquatable<VectorClock>
     /// <returns>True if clocks are equal</returns>
     public bool Equals(VectorClock? other)
     {
-        if (other is null) return false;
-        if (ReferenceEquals(this, other)) return true;
+        if (other is null)
+            return false;
+        if (ReferenceEquals(this, other))
+            return true;
 
         var allKeys = _entries.Keys.Union(other._entries.Keys);
         return allKeys.All(k => Get(k) == other.Get(k));

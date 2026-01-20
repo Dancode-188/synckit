@@ -221,7 +221,8 @@ public class AckTracker : IHostedService, IDisposable
     /// </summary>
     private void ProcessTimeouts(object? state)
     {
-        if (_disposed) return;
+        if (_disposed)
+            return;
 
         var now = DateTimeOffset.UtcNow;
         var timedOut = _pendingAcks
@@ -324,7 +325,8 @@ public class AckTracker : IHostedService, IDisposable
 
     public void Dispose()
     {
-        if (_disposed) return;
+        if (_disposed)
+            return;
         _disposed = true;
 
         _cleanupTimer?.Dispose();

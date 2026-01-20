@@ -36,7 +36,8 @@ public static class ConnectionManagerTestHelper
 
                 foreach (var s in subs)
                 {
-                    if (s.Object.Id == exclude) continue;
+                    if (s.Object.Id == exclude)
+                        continue;
                     try
                     {
                         s.Object.Send(msg);
@@ -69,12 +70,14 @@ public static class ConnectionManagerTestHelper
         mock.Setup(cm => cm.BroadcastToDocumentAsync(It.IsAny<string>(), It.IsAny<IMessage>(), It.IsAny<string?>()))
             .Returns<string, IMessage, string?>((doc, msg, exclude) =>
             {
-                if (!documentSubscribers.ContainsKey(doc)) return Task.CompletedTask;
+                if (!documentSubscribers.ContainsKey(doc))
+                    return Task.CompletedTask;
                 var errors = new List<Exception>();
 
                 foreach (var s in documentSubscribers[doc])
                 {
-                    if (s.Object.Id == exclude) continue;
+                    if (s.Object.Id == exclude)
+                        continue;
                     try
                     {
                         s.Object.Send(msg);

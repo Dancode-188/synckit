@@ -21,7 +21,8 @@ public static class TestHelpers
     /// </summary>
     public static JsonElement? ToNullableJsonElement(object? obj)
     {
-        if (obj == null) return null;
+        if (obj == null)
+            return null;
         return ToJsonElement(obj);
     }
 
@@ -56,7 +57,8 @@ public static class TestHelpers
     /// </summary>
     public static Dictionary<string, object>? AsDictionary(object? obj)
     {
-        if (obj == null) return null;
+        if (obj == null)
+            return null;
 
         // If it's already a dictionary, return it
         if (obj is Dictionary<string, object> dict)

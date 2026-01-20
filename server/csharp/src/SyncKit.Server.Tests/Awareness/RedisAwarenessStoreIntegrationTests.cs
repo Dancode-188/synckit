@@ -41,7 +41,8 @@ public class RedisAwarenessStoreIntegrationTests : IAsyncLifetime
 
     public async Task DisposeAsync()
     {
-        if (_dockerUnavailable) return;
+        if (_dockerUnavailable)
+            return;
         try
         {
             await _redisContainer.StopAsync();
@@ -56,7 +57,8 @@ public class RedisAwarenessStoreIntegrationTests : IAsyncLifetime
     [Fact]
     public async Task Set_OnOneInstance_IsVisibleToAnother()
     {
-        if (_dockerUnavailable) return;
+        if (_dockerUnavailable)
+            return;
 
         var host = _redisContainer.Hostname;
         var port = _redisContainer.GetMappedPublicPort(6379);
@@ -81,7 +83,8 @@ public class RedisAwarenessStoreIntegrationTests : IAsyncLifetime
     [Fact]
     public async Task Expiration_PruneExpired_RemovesEntries()
     {
-        if (_dockerUnavailable) return;
+        if (_dockerUnavailable)
+            return;
 
         var host = _redisContainer.Hostname;
         var port = _redisContainer.GetMappedPublicPort(6379);

@@ -262,7 +262,8 @@ public class SubscribeMessageHandlerTests
         foreach (var sd in document.GetAllDeltas())
         {
             var d = sd.VectorClock?.ToDict();
-            if (d == null) continue;
+            if (d == null)
+                continue;
             foreach (var kv in d)
             {
                 if (!mergedClock.ContainsKey(kv.Key) || mergedClock[kv.Key] < kv.Value)
@@ -383,7 +384,8 @@ public class SubscribeMessageHandlerTests
         foreach (var sd in document.GetAllDeltas())
         {
             var d = sd.VectorClock?.ToDict();
-            if (d == null) continue;
+            if (d == null)
+                continue;
             foreach (var kv in d)
             {
                 if (!mergedClock.ContainsKey(kv.Key) || mergedClock[kv.Key] < kv.Value)

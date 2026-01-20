@@ -7,7 +7,7 @@ using Xunit;
 
 namespace SyncKit.Server.Tests.Health;
 
-[Trait("Category","Integration")]
+[Trait("Category", "Integration")]
 public class PostgreSqlHealthCheckTests : IAsyncLifetime
 {
     private readonly TestcontainersContainer _postgresContainer;
@@ -41,7 +41,8 @@ public class PostgreSqlHealthCheckTests : IAsyncLifetime
 
     public async Task DisposeAsync()
     {
-        if (_dockerUnavailable) return;
+        if (_dockerUnavailable)
+            return;
 
         try
         {
@@ -57,7 +58,8 @@ public class PostgreSqlHealthCheckTests : IAsyncLifetime
     [Fact]
     public async Task PostgresHealthCheck_ReturnsHealthy_WhenPostgresAvailable()
     {
-        if (_dockerUnavailable) return;
+        if (_dockerUnavailable)
+            return;
 
         var host = _postgresContainer.Hostname;
         var port = _postgresContainer.GetMappedPublicPort(5432);

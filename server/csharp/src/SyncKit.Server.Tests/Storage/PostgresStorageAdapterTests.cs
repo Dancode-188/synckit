@@ -10,7 +10,7 @@ using Xunit.Sdk;
 
 namespace SyncKit.Server.Tests.Integration.Storage;
 
-[Trait("Category","Integration")]
+[Trait("Category", "Integration")]
 public class PostgresStorageAdapterTests : IAsyncLifetime
 {
     private readonly TestcontainersContainer _postgresContainer;
@@ -80,7 +80,8 @@ public class PostgresStorageAdapterTests : IAsyncLifetime
     [Fact]
     public async Task SaveAndGetDocument_Roundtrip()
     {
-        if (_adapter == null) return; // Docker unavailable - skip integration test
+        if (_adapter == null)
+            return; // Docker unavailable - skip integration test
 
         var id = "doc-1";
         var json = JsonDocument.Parse("{\"foo\": \"bar\"}").RootElement;
@@ -96,7 +97,8 @@ public class PostgresStorageAdapterTests : IAsyncLifetime
     [Fact]
     public async Task MergeVectorClock_WorksAndGetVectorClock()
     {
-        if (_adapter == null) return; // Docker unavailable - skip integration test
+        if (_adapter == null)
+            return; // Docker unavailable - skip integration test
 
         var docId = "vc-doc";
         await _adapter!.SaveDocumentAsync(docId, JsonDocument.Parse("{}").RootElement);
@@ -116,7 +118,8 @@ public class PostgresStorageAdapterTests : IAsyncLifetime
     [Fact]
     public async Task SaveDeltaAndGetDeltasSince_Works()
     {
-        if (_adapter == null) return; // Docker unavailable - skip integration test
+        if (_adapter == null)
+            return; // Docker unavailable - skip integration test
 
         var docId = "delta-doc";
         await _adapter!.SaveDocumentAsync(docId, JsonDocument.Parse("{}").RootElement);
@@ -137,7 +140,8 @@ public class PostgresStorageAdapterTests : IAsyncLifetime
     [Fact]
     public async Task Sessions_CRUD()
     {
-        if (_adapter == null) return; // Docker unavailable - skip integration test
+        if (_adapter == null)
+            return; // Docker unavailable - skip integration test
 
         var s = new SessionEntry { Id = "s1", UserId = "u1", ClientId = "cl1", ConnectedAt = DateTime.UtcNow, LastSeen = DateTime.UtcNow };
         var saved = await _adapter!.SaveSessionAsync(s);
@@ -157,7 +161,8 @@ public class PostgresStorageAdapterTests : IAsyncLifetime
     [Fact]
     public async Task Cleanup_ReturnsCounts()
     {
-        if (_adapter == null) return; // Docker unavailable - skip integration test
+        if (_adapter == null)
+            return; // Docker unavailable - skip integration test
 
         var res = await _adapter!.CleanupAsync();
         Assert.NotNull(res);
@@ -166,7 +171,8 @@ public class PostgresStorageAdapterTests : IAsyncLifetime
     [Fact]
     public async Task ConnectAsync_Throws_WhenSchemaMissing()
     {
-        if (_connectionString == null) return; // Docker unavailable - skip
+        if (_connectionString == null)
+            return; // Docker unavailable - skip
 
         // create new empty database without applying schema
         var emptyDbName = "empty_db" + Guid.NewGuid().ToString("N").Substring(0, 6);

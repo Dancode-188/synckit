@@ -31,7 +31,8 @@ public class InMemoryStorageAdapter : IStorageAdapter
     public ValueTask<DocumentState?> GetDocumentAsync(string id, CancellationToken ct = default)
     {
         _documents.TryGetValue(id, out var doc);
-        if (doc == null) return ValueTask.FromResult<DocumentState?>(null);
+        if (doc == null)
+            return ValueTask.FromResult<DocumentState?>(null);
 
         // No structured state is tracked in the current Document model; return empty state for now.
         var emptyState = JsonDocument.Parse("{}").RootElement;
@@ -54,7 +55,8 @@ public class InMemoryStorageAdapter : IStorageAdapter
 
     public ValueTask<DocumentState> UpdateDocumentAsync(string id, JsonElement state, CancellationToken ct = default)
     {
-        if (!_documents.ContainsKey(id)) throw new InvalidOperationException("Document does not exist");
+        if (!_documents.ContainsKey(id))
+            throw new InvalidOperationException("Document does not exist");
         return SaveDocumentAsync(id, state, ct);
     }
 
@@ -161,7 +163,8 @@ public class InMemoryStorageAdapter : IStorageAdapter
         var clockValueForClient = stored.VectorClock.Get(delta.ClientId);
 
         // Return with the server-assigned clock value
-        var result = delta with {
+        var result = delta with
+        {
             Id = stored.Id,
             Timestamp = DateTimeOffset.FromUnixTimeMilliseconds(stored.Timestamp).UtcDateTime,
             MaxClockValue = clockValueForClient,
@@ -177,7 +180,8 @@ public class InMemoryStorageAdapter : IStorageAdapter
     public ValueTask<IReadOnlyList<DeltaEntry>> GetDeltasAsync(string documentId, int limit = 100, CancellationToken ct = default)
     {
         _documents.TryGetValue(documentId, out var doc);
-        if (doc == null) return ValueTask.FromResult<IReadOnlyList<DeltaEntry>>(Array.Empty<DeltaEntry>());
+        if (doc == null)
+            return ValueTask.FromResult<IReadOnlyList<DeltaEntry>>(Array.Empty<DeltaEntry>());
 
         var takeLimit = limit <= 0 ? int.MaxValue : limit;
         var deltas = doc.GetAllDeltas().Take(takeLimit).Select(d => new DeltaEntry
@@ -199,7 +203,8 @@ public class InMemoryStorageAdapter : IStorageAdapter
     public ValueTask<IReadOnlyList<DeltaEntry>> GetDeltasSinceAsync(string documentId, long? sinceMaxClock, CancellationToken ct = default)
     {
         _documents.TryGetValue(documentId, out var doc);
-        if (doc == null) return ValueTask.FromResult<IReadOnlyList<DeltaEntry>>(Array.Empty<DeltaEntry>());
+        if (doc == null)
+            return ValueTask.FromResult<IReadOnlyList<DeltaEntry>>(Array.Empty<DeltaEntry>());
 
         var deltas = doc.GetAllDeltas()
             .Where(d =>
@@ -261,7 +266,8 @@ public class InMemoryStorageAdapter : IStorageAdapter
         // Use ConnectedAt for cleanup to match tests (remove old connections),
         // and also remove by LastSeen to be safe.
         var removedSessions = _sessions.Where(kvp => kvp.Value.ConnectedAt < cutoff || kvp.Value.LastSeen < cutoff).Select(kvp => kvp.Key).ToList();
-        foreach (var id in removedSessions) _sessions.TryRemove(id, out _);
+        foreach (var id in removedSessions)
+            _sessions.TryRemove(id, out _);
 
         // Deltas cleanup not implemented in-memory (could filter by timestamp)
         return ValueTask.FromResult(new CleanupResult(removedSessions.Count, 0));

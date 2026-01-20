@@ -22,7 +22,8 @@ public class JwtValidator : IJwtValidator
     public JwtValidator(IOptions<SyncKitConfig> config, ILogger<JwtValidator> logger)
     {
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
-        if (config == null) throw new ArgumentNullException(nameof(config));
+        if (config == null)
+            throw new ArgumentNullException(nameof(config));
 
         var settings = config.Value ?? throw new ArgumentException("Configuration value is missing", nameof(config));
         if (string.IsNullOrWhiteSpace(settings.JwtSecret))
@@ -119,7 +120,8 @@ public class JwtValidator : IJwtValidator
     public bool IsExpired(TokenPayload payload)
     {
         // `payload.Exp` is in Unix epoch seconds per RFC 7519; convert with FromUnixTimeSeconds.
-        if (payload.Exp == null) return false;
+        if (payload.Exp == null)
+            return false;
         var expiration = DateTimeOffset.FromUnixTimeSeconds(payload.Exp.Value);
         return expiration <= DateTimeOffset.UtcNow;
     }

@@ -30,7 +30,7 @@ var storageMode = builder.Configuration["SyncKit:Storage"] ?? "inmemory";
 var frontendMode = builder.Configuration["SyncKit:Frontend"] ?? "react";
 
 // Shared JWT secret for both backends (ensures token compatibility)
-var jwtSecret = builder.Configuration["SyncKit:JwtSecret"] 
+var jwtSecret = builder.Configuration["SyncKit:JwtSecret"]
     ?? "development-secret-change-in-production-min-32-chars";
 
 // ============================================================================
@@ -47,9 +47,9 @@ if (storageMode == "postgres")
     postgres = builder.AddPostgres("postgres")
         .WithDataVolume("synckit-postgres-data")
         .WithLifetime(ContainerLifetime.Persistent);
-    
+
     syncKitDb = postgres.AddDatabase("synckit");
-    
+
     // Run migrations BEFORE starting any server
     migrations = builder.AddExecutable("synckit-migrations", "bun", Path.GetFullPath(
             Path.Combine(builder.AppHostDirectory, "..", "..", "..", "server", "typescript")),
@@ -74,12 +74,12 @@ if (backendMode is "typescript" or "both")
 {
     var tsServerPath = Path.GetFullPath(
         Path.Combine(builder.AppHostDirectory, "..", "..", "..", "server", "typescript"));
-    
+
     var tsBackend = builder.AddExecutable("synckit-ts-server", "bun", tsServerPath, "run", "dev")
         .WithHttpEndpoint(port: 3000, name: "http", env: "PORT")
         .WithEnvironment("NODE_ENV", "development")
         .WithEnvironment("JWT_SECRET", jwtSecret);
-    
+
     if (storageMode == "postgres" && syncKitDb is not null && redis is not null)
     {
         // TypeScript server expects DATABASE_URL and REDIS_URL environment variables
@@ -103,7 +103,7 @@ if (backendMode is "csharp" or "both")
         .WithHttpEndpoint(port: 5000, name: "http")
         .WithEnvironment("STORAGE_MODE", storageMode)
         .WithEnvironment("JWT_SECRET", jwtSecret);
-    
+
     if (storageMode == "postgres" && syncKitDb is not null && redis is not null)
     {
         // C# server uses Aspire's standard WithReference() which injects:
@@ -125,12 +125,12 @@ if (frontendMode != "none")
 {
     var examplesPath = Path.GetFullPath(
         Path.Combine(builder.AppHostDirectory, "..", "..", "..", "examples"));
-    
+
     // Determine which backend URL to use for the frontend
-    var backendUrl = backendMode == "csharp" 
-        ? "http://localhost:5000" 
+    var backendUrl = backendMode == "csharp"
+        ? "http://localhost:5000"
         : "http://localhost:3000";
-    
+
     switch (frontendMode)
     {
         case "react":
@@ -142,7 +142,7 @@ if (frontendMode != "none")
                 .WithEnvironment("VITE_SYNCKIT_SERVER_URL", backendUrl)
                 .WithExternalHttpEndpoints();
             break;
-            
+
         case "vue":
             var vuePath = Path.Combine(examplesPath, "vue-collaborative-editor");
             builder.AddNodeApp("synckit-vue-frontend", vuePath, "node_modules/.bin/vite")
@@ -151,7 +151,7 @@ if (frontendMode != "none")
                 .WithEnvironment("VITE_SYNCKIT_SERVER_URL", backendUrl)
                 .WithExternalHttpEndpoints();
             break;
-            
+
         case "svelte":
             var sveltePath = Path.Combine(examplesPath, "svelte-collaborative-editor");
             builder.AddNodeApp("synckit-svelte-frontend", sveltePath, "node_modules/.bin/vite")

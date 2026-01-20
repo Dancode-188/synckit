@@ -99,7 +99,8 @@ public class PostgresStorageAdapter : IStorageAdapter, IAsyncDisposable
         cmd.CommandText = @"SELECT state, version, created_at, updated_at FROM documents WHERE id = @id";
         cmd.Parameters.AddWithValue("@id", id);
         await using var reader = await cmd.ExecuteReaderAsync(ct);
-        if (!await reader.ReadAsync(ct)) return null;
+        if (!await reader.ReadAsync(ct))
+            return null;
 
         var state = (JsonElement)await reader.GetFieldValueAsync<JsonElement>(0, ct);
         var version = reader.GetFieldValue<long>(1);
@@ -123,7 +124,8 @@ RETURNING version, created_at, updated_at";
         cmd.Parameters.AddWithValue("@state", NpgsqlTypes.NpgsqlDbType.Jsonb, state.ToString());
 
         await using var reader = await cmd.ExecuteReaderAsync(ct);
-        if (!await reader.ReadAsync(ct)) throw new InvalidOperationException("Failed to save document");
+        if (!await reader.ReadAsync(ct))
+            throw new InvalidOperationException("Failed to save document");
 
         var version = reader.GetFieldValue<long>(0);
         var created = reader.GetFieldValue<DateTime>(1);
@@ -143,7 +145,8 @@ RETURNING version, created_at, updated_at";
         cmd.Parameters.AddWithValue("@state", NpgsqlTypes.NpgsqlDbType.Jsonb, state.ToString());
 
         await using var reader = await cmd.ExecuteReaderAsync(ct);
-        if (!await reader.ReadAsync(ct)) throw new InvalidOperationException("Document does not exist");
+        if (!await reader.ReadAsync(ct))
+            throw new InvalidOperationException("Document does not exist");
 
         var version = reader.GetFieldValue<long>(0);
         var created = reader.GetFieldValue<DateTime>(1);
@@ -290,11 +293,12 @@ RETURNING version, created_at, updated_at";
         cmd.Parameters.AddWithValue("@clientId", delta.ClientId);
         cmd.Parameters.AddWithValue("@op", delta.OperationType);
         cmd.Parameters.AddWithValue("@path", delta.FieldPath);
-        cmd.Parameters.AddWithValue("@value", NpgsqlTypes.NpgsqlDbType.Jsonb, delta.Value?.ToString() ?? "{}" );
+        cmd.Parameters.AddWithValue("@value", NpgsqlTypes.NpgsqlDbType.Jsonb, delta.Value?.ToString() ?? "{}");
         cmd.Parameters.AddWithValue("@clock", delta.ClockValue);
 
         await using var reader = await cmd.ExecuteReaderAsync(ct);
-        if (!await reader.ReadAsync(ct)) throw new InvalidOperationException("Failed to insert delta");
+        if (!await reader.ReadAsync(ct))
+            throw new InvalidOperationException("Failed to insert delta");
 
         var id = reader.GetFieldValue<Guid>(0).ToString();
         var ts = reader.GetFieldValue<DateTime>(1);
@@ -383,10 +387,11 @@ RETURNING version, created_at, updated_at";
         cmd.Parameters.AddWithValue("@client", (object?)session.ClientId ?? DBNull.Value);
         cmd.Parameters.AddWithValue("@connected", session.ConnectedAt == default ? DateTime.UtcNow : session.ConnectedAt);
         cmd.Parameters.AddWithValue("@last", session.LastSeen == default ? DateTime.UtcNow : session.LastSeen);
-        cmd.Parameters.AddWithValue("@meta", NpgsqlTypes.NpgsqlDbType.Jsonb, session.Metadata != null ? JsonSerializer.Serialize(session.Metadata) : "{}" );
+        cmd.Parameters.AddWithValue("@meta", NpgsqlTypes.NpgsqlDbType.Jsonb, session.Metadata != null ? JsonSerializer.Serialize(session.Metadata) : "{}");
 
         await using var reader = await cmd.ExecuteReaderAsync(ct);
-        if (!await reader.ReadAsync(ct)) throw new InvalidOperationException("Failed to save session");
+        if (!await reader.ReadAsync(ct))
+            throw new InvalidOperationException("Failed to save session");
 
         var connected = reader.GetFieldValue<DateTime>(0);
         var last = reader.GetFieldValue<DateTime>(1);
@@ -401,7 +406,7 @@ RETURNING version, created_at, updated_at";
         cmd.CommandText = "UPDATE sessions SET last_seen = @last, metadata = @meta::jsonb WHERE id = @id";
         cmd.Parameters.AddWithValue("@id", sessionId);
         cmd.Parameters.AddWithValue("@last", lastSeen);
-        cmd.Parameters.AddWithValue("@meta", NpgsqlTypes.NpgsqlDbType.Jsonb, metadata != null ? JsonSerializer.Serialize(metadata) : "{}" );
+        cmd.Parameters.AddWithValue("@meta", NpgsqlTypes.NpgsqlDbType.Jsonb, metadata != null ? JsonSerializer.Serialize(metadata) : "{}");
         await cmd.ExecuteNonQueryAsync(ct);
     }
 
@@ -449,7 +454,8 @@ RETURNING version, created_at, updated_at";
         await using var cmd = conn.CreateCommand();
         cmd.CommandText = "SELECT cleanup_old_sessions(), cleanup_old_deltas()";
         await using var reader = await cmd.ExecuteReaderAsync(ct);
-        if (!await reader.ReadAsync(ct)) return new CleanupResult(0, 0);
+        if (!await reader.ReadAsync(ct))
+            return new CleanupResult(0, 0);
         var sessionsDeleted = reader.GetFieldValue<int>(0);
         var deltasDeleted = reader.GetFieldValue<int>(1);
         return new CleanupResult(sessionsDeleted, deltasDeleted);

@@ -8,7 +8,7 @@ using Xunit;
 
 namespace SyncKit.Server.Tests.Health;
 
-[Trait("Category","Integration")]
+[Trait("Category", "Integration")]
 public class RedisHealthCheckTests : IAsyncLifetime
 {
     private readonly TestcontainersContainer _redisContainer;
@@ -39,7 +39,8 @@ public class RedisHealthCheckTests : IAsyncLifetime
 
     public async Task DisposeAsync()
     {
-        if (_dockerUnavailable) return;
+        if (_dockerUnavailable)
+            return;
 
         try
         {
@@ -55,7 +56,8 @@ public class RedisHealthCheckTests : IAsyncLifetime
     [Fact]
     public async Task RedisHealthCheck_ReturnsHealthy_WhenRedisAvailable()
     {
-        if (_dockerUnavailable) return;
+        if (_dockerUnavailable)
+            return;
 
         var host = _redisContainer.Hostname;
         var port = _redisContainer.GetMappedPublicPort(6379);

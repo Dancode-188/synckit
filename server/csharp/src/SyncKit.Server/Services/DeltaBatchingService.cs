@@ -53,7 +53,7 @@ public class DeltaBatchingService : IHostedService, IDisposable
         /// <summary>
         /// Timestamp of the first delta added to this batch.
         /// </summary>
-        public long FirstDeltaAtMs; 
+        public long FirstDeltaAtMs;
     }
 
     public DeltaBatchingService(
