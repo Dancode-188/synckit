@@ -94,7 +94,8 @@ public class AwarenessUpdateMessageHandler : IMessageHandler
             return;
         }
 
-        _logger.LogInformation(
+        // Use Debug level to avoid I/O overhead in production (this is a hot path)
+        _logger.LogDebug(
             "Connection {ConnectionId} (user {UserId}) sent awareness update for document {DocumentId}",
             connection.Id, connection.UserId, update.DocumentId);
 

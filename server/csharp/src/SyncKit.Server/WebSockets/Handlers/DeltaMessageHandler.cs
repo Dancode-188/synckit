@@ -258,7 +258,8 @@ public class DeltaMessageHandler : IMessageHandler
 
         connection.Send(ackMessage);
 
-        _logger.LogInformation(
+        // Use Debug level to avoid I/O overhead in production (this is a hot path)
+        _logger.LogDebug(
             "Connection {ConnectionId} (user {UserId}) applied delta {DeltaId} to document {DocumentId}",
             connection.Id, connection.UserId, delta.Id, delta.DocumentId);
     }
