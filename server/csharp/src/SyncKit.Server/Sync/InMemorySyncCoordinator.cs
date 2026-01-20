@@ -7,8 +7,8 @@ namespace SyncKit.Server.Sync;
 /// <summary>
 /// In-memory sync coordinator that mirrors TypeScript coordinator behaviour for low-latency reads.
 /// - Keeps an in-memory cache of document states loaded on first access
-/// - ApplyDeltaAsync persists deltas and refreshes cache
-/// - Logs and swallows persistence errors (best-effort async persist)
+/// - ApplyDeltaAsync persists deltas and returns state in a single operation
+/// - Optimized for high-throughput with minimal lock contention
 /// </summary>
 public class InMemorySyncCoordinator : ISyncCoordinator
 {
@@ -25,11 +25,13 @@ public class InMemorySyncCoordinator : ISyncCoordinator
 
     public async Task<Dictionary<string, object?>> GetDocumentStateAsync(string documentId)
     {
+        // Fast path: check cache first (no lock needed)
         if (_cache.TryGetValue(documentId, out var cached))
             return new Dictionary<string, object?>(cached);
 
+        // Slow path: load from storage with lock to prevent thundering herd
         var sem = _loadLocks.GetOrAdd(documentId, _ => new SemaphoreSlim(1, 1));
-        await sem.WaitAsync();
+        await sem.WaitAsync().ConfigureAwait(false);
         try
         {
             // Double-check after acquiring lock
@@ -38,12 +40,8 @@ public class InMemorySyncCoordinator : ISyncCoordinator
 
             try
             {
-                var state = await _storage.GetDocumentStateAsync(documentId);
-                // Ensure a concrete dictionary (storage may return null)
-                var newState = state != null
-                    ? new Dictionary<string, object?>(state)
-                    : new Dictionary<string, object?>();
-
+                var state = await _storage.GetDocumentStateAsync(documentId).ConfigureAwait(false);
+                var newState = state ?? new Dictionary<string, object?>();
                 _cache[documentId] = newState;
                 return new Dictionary<string, object?>(newState);
             }
@@ -69,7 +67,6 @@ public class InMemorySyncCoordinator : ISyncCoordinator
         string clientId,
         string deltaId)
     {
-        // Persist delta (best-effort) and then refresh authoritative state from storage
         var deltaEntry = new DeltaEntry
         {
             Id = deltaId,
@@ -85,32 +82,21 @@ public class InMemorySyncCoordinator : ISyncCoordinator
 
         try
         {
-            await _storage.SaveDeltaAsync(deltaEntry);
+            // Save delta - this internally applies LWW and updates Document state
+            await _storage.SaveDeltaAsync(deltaEntry).ConfigureAwait(false);
             _logger.LogDebug("Persisted delta {DeltaId} for document {DocumentId}", deltaId, documentId);
         }
         catch (Exception ex)
         {
-            _logger.LogWarning(ex, "Failed to persist delta {DeltaId} for document {DocumentId}; continuing with in-memory update", deltaId, documentId);
+            _logger.LogWarning(ex, "Failed to persist delta {DeltaId} for document {DocumentId}; continuing with cache-only update", deltaId, documentId);
         }
 
-        // Refresh authoritative state from storage; if that fails, fall back to cached snapshot
-        try
-        {
-            var currentState = await _storage.GetDocumentStateAsync(documentId);
-            var newState = currentState != null
-                ? new Dictionary<string, object?>(currentState)
-                : new Dictionary<string, object?>();
+        // Get updated state from storage (single call - Document.BuildState is now lock-free and O(fields))
+        var currentState = await _storage.GetDocumentStateAsync(documentId).ConfigureAwait(false);
+        var newState = currentState ?? new Dictionary<string, object?>();
 
-            _cache[documentId] = newState;
-            return new Dictionary<string, object?>(newState);
-        }
-        catch (Exception ex)
-        {
-            _logger.LogWarning(ex, "Failed to refresh document {DocumentId} after persisting delta; returning cached state", documentId);
-            if (_cache.TryGetValue(documentId, out var cached))
-                return new Dictionary<string, object?>(cached);
-
-            return new Dictionary<string, object?>();
-        }
+        // Update cache atomically
+        _cache[documentId] = newState;
+        return new Dictionary<string, object?>(newState);
     }
 }

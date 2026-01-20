@@ -238,7 +238,8 @@ public class ConnectionManager : IConnectionManager
             if (excludeConnectionId != null && connection.Id == excludeConnectionId)
                 continue;
 
-            _logger.LogDebug("Attempting to send to connection {ConnectionId} (State: {State})",
+            // Use Trace level for per-connection logging (hot path)
+            _logger.LogTrace("Attempting to send to connection {ConnectionId} (State: {State})",
                 connection.Id, connection.State);
 
             if (connection.Send(message))
