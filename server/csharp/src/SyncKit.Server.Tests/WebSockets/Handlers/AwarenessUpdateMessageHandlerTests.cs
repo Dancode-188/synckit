@@ -181,10 +181,10 @@ public class AwarenessUpdateMessageHandlerTests
         // Act
         await _handler.HandleAsync(_mockConnection.Object, message);
 
-        // Assert - Should log successful update
+        // Assert - Should log successful update (at Debug level - hot path optimization)
         _mockLogger.Verify(
             l => l.Log(
-                LogLevel.Information,
+                LogLevel.Debug,
                 It.IsAny<EventId>(),
                 It.Is<It.IsAnyType>((o, t) =>
                     o.ToString()!.Contains("awareness update") &&
