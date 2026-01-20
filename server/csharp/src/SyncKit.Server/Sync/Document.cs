@@ -2,7 +2,6 @@ using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text.Json;
-using System.Threading;
 
 namespace SyncKit.Server.Sync;
 
@@ -10,34 +9,26 @@ namespace SyncKit.Server.Sync;
 /// Represents a document with its state, deltas, and subscriptions.
 /// Thread-safe document state management for sync operations.
 ///
-/// Performance optimization: Uses lock-free ConcurrentDictionary with atomic Compare-And-Swap (CAS)
-/// operations for high-throughput concurrent updates without lock contention.
-/// LWW resolution is applied at write-time rather than read-time.
-/// This makes BuildState() O(fields) instead of O(deltas), dramatically improving performance
-/// for documents with many historical deltas.
+/// Performance optimization: Uses simple lock (Monitor) for all state mutations.
+/// For short critical sections, lock has lower overhead than ReaderWriterLockSlim or
+/// ConcurrentDictionary.AddOrUpdate which has retry overhead under contention.
+/// LWW resolution is applied at write-time for O(fields) state reads.
 /// </summary>
 public class Document
 {
-    // Lock-free collections for high-throughput scenarios
-    private readonly ConcurrentQueue<StoredDelta> _deltas = new();
+    // Single lock for all state mutation - simpler and faster than ReaderWriterLockSlim for short operations
+    private readonly object _stateLock = new();
+    private readonly List<StoredDelta> _deltas = new();
     private readonly ConcurrentDictionary<string, byte> _subscribedConnections = new();
 
     /// <summary>
     /// Cached resolved state - LWW applied at write-time for O(1) reads.
     /// Maps field name to (Value, Timestamp, ClockCounter, ClientId).
-    /// Uses ConcurrentDictionary with atomic AddOrUpdate for lock-free LWW resolution.
     /// </summary>
-    private readonly ConcurrentDictionary<string, FieldEntry> _resolvedFields = new();
-
-    /// <summary>
-    /// Atomic vector clock using interlocked operations.
-    /// </summary>
-    private VectorClock _vectorClock;
-    private readonly object _vectorClockLock = new(); // Lightweight lock only for clock merge
+    private readonly Dictionary<string, FieldEntry> _resolvedFields = new();
 
     /// <summary>
     /// Tracks a field's resolved value and metadata for LWW comparison.
-    /// Immutable record enables safe atomic replacement via CAS.
     /// </summary>
     private record FieldEntry(object? Value, long Timestamp, long ClockCounter, string ClientId, bool IsTombstone);
 
@@ -48,25 +39,8 @@ public class Document
 
     /// <summary>
     /// Vector clock tracking causality for this document.
-    /// Thread-safe property accessor.
     /// </summary>
-    public VectorClock VectorClock
-    {
-        get
-        {
-            lock (_vectorClockLock)
-            {
-                return _vectorClock;
-            }
-        }
-        private set
-        {
-            lock (_vectorClockLock)
-            {
-                _vectorClock = value;
-            }
-        }
-    }
+    public VectorClock VectorClock { get; private set; }
 
     /// <summary>
     /// When the document was created (Unix milliseconds).
@@ -75,14 +49,8 @@ public class Document
 
     /// <summary>
     /// When the document was last updated (Unix milliseconds).
-    /// Uses Interlocked for lock-free atomic updates.
     /// </summary>
-    private long _updatedAt;
-    public long UpdatedAt
-    {
-        get => Interlocked.Read(ref _updatedAt);
-        private set => Interlocked.Exchange(ref _updatedAt, value);
-    }
+    public long UpdatedAt { get; private set; }
 
     /// <summary>
     /// Create a new empty document.
@@ -91,9 +59,9 @@ public class Document
     public Document(string id)
     {
         Id = id;
-        _vectorClock = new VectorClock();
+        VectorClock = new VectorClock();
         CreatedAt = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
-        _updatedAt = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
+        UpdatedAt = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
     }
 
     /// <summary>
@@ -106,46 +74,41 @@ public class Document
     public Document(string id, VectorClock vectorClock, IEnumerable<StoredDelta> deltas)
     {
         Id = id;
-        _vectorClock = vectorClock;
+        VectorClock = vectorClock;
+        _deltas = deltas.ToList();
         CreatedAt = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
-        _updatedAt = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
+        UpdatedAt = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
 
-        // Add existing deltas to the queue (preserves order) and rebuild resolved state
-        foreach (var delta in deltas)
+        // Rebuild the resolved state cache from existing deltas (no lock needed in constructor)
+        foreach (var delta in _deltas)
         {
-            _deltas.Enqueue(delta);
-            ApplyDeltaToResolvedState(delta);
+            ApplyDeltaToResolvedStateInternal(delta);
         }
     }
 
     /// <summary>
     /// Add a delta to the document.
     /// Merges the delta's vector clock and updates the timestamp.
-    /// Uses lock-free LWW resolution via atomic CAS operations.
+    /// Also applies LWW resolution at write-time for O(1) state reads.
     /// </summary>
     /// <param name="delta">Delta to add</param>
     public void AddDelta(StoredDelta delta)
     {
-        // Add to deltas queue (lock-free, preserves FIFO order)
-        _deltas.Enqueue(delta);
-
-        // Merge vector clock (lightweight lock)
-        lock (_vectorClockLock)
+        lock (_stateLock)
         {
-            _vectorClock = _vectorClock.Merge(delta.VectorClock);
+            _deltas.Add(delta);
+            VectorClock = VectorClock.Merge(delta.VectorClock);
+            UpdatedAt = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
+
+            // Apply LWW resolution at write-time
+            ApplyDeltaToResolvedStateInternal(delta);
         }
-
-        // Update timestamp atomically
-        UpdatedAt = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
-
-        // Apply LWW resolution (lock-free CAS)
-        ApplyDeltaToResolvedState(delta);
     }
 
     /// <summary>
     /// Atomically increment the vector clock for a client and add a delta.
     /// This ensures proper ordering when multiple deltas arrive concurrently from the same client.
-    /// Uses lock-free LWW resolution for O(1) state reads.
+    /// Also applies LWW resolution at write-time for O(1) state reads.
     /// </summary>
     /// <param name="clientId">Client ID to increment clock for</param>
     /// <param name="data">Delta data (JSON payload)</param>
@@ -153,58 +116,51 @@ public class Document
     /// <returns>The stored delta with the assigned vector clock</returns>
     public StoredDelta AddDeltaWithIncrementedClock(string clientId, JsonElement data, string? deltaId = null)
     {
-        VectorClock incrementedClock;
-
-        // Atomic clock increment (lightweight lock only on vector clock)
-        lock (_vectorClockLock)
+        lock (_stateLock)
         {
-            incrementedClock = _vectorClock.Increment(clientId);
-            _vectorClock = incrementedClock;
+            // Atomically increment and capture the new clock value
+            var incrementedClock = VectorClock.Increment(clientId);
+
+            var stored = new StoredDelta
+            {
+                Id = deltaId ?? Guid.NewGuid().ToString(),
+                ClientId = clientId,
+                Timestamp = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds(),
+                Data = data,
+                VectorClock = incrementedClock
+            };
+
+            _deltas.Add(stored);
+            VectorClock = incrementedClock;
+            UpdatedAt = stored.Timestamp;
+
+            // Apply LWW resolution at write-time
+            ApplyDeltaToResolvedStateInternal(stored);
+
+            return stored;
         }
-
-        var timestamp = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
-        var stored = new StoredDelta
-        {
-            Id = deltaId ?? Guid.NewGuid().ToString(),
-            ClientId = clientId,
-            Timestamp = timestamp,
-            Data = data,
-            VectorClock = incrementedClock
-        };
-
-        // Add to deltas queue (lock-free, preserves FIFO order)
-        _deltas.Enqueue(stored);
-
-        // Update timestamp atomically
-        UpdatedAt = timestamp;
-
-        // Apply LWW resolution (lock-free CAS)
-        ApplyDeltaToResolvedState(stored);
-
-        return stored;
     }
 
     /// <summary>
     /// Get all deltas that occurred after the given vector clock.
     /// Returns deltas that the client hasn't seen yet.
-    /// Note: ConcurrentQueue enumeration is thread-safe and preserves FIFO order.
     /// </summary>
     /// <param name="since">Vector clock representing client's current state (null for all deltas)</param>
     /// <returns>List of deltas the client needs</returns>
     public IReadOnlyList<StoredDelta> GetDeltasSince(VectorClock? since)
     {
-        // Snapshot the deltas for filtering (ConcurrentQueue.ToList() is thread-safe)
-        var allDeltas = _deltas.ToList();
-
-        if (since == null)
+        lock (_stateLock)
         {
-            return allDeltas;
-        }
+            if (since == null)
+            {
+                return _deltas.ToList();
+            }
 
-        return allDeltas
-            .Where(d => !d.VectorClock.HappensBefore(since) &&
-                       !d.VectorClock.Equals(since))
-            .ToList();
+            return _deltas
+                .Where(d => !d.VectorClock.HappensBefore(since) &&
+                           !d.VectorClock.Equals(since))
+                .ToList();
+        }
     }
 
     /// <summary>
@@ -241,22 +197,32 @@ public class Document
 
     /// <summary>
     /// Get all deltas (for debugging/inspection).
-    /// Thread-safe enumeration of ConcurrentQueue.
     /// </summary>
     public IReadOnlyList<StoredDelta> GetAllDeltas()
     {
-        return _deltas.ToList();
+        lock (_stateLock)
+        {
+            return _deltas.ToList();
+        }
     }
 
     /// <summary>
     /// Get delta count (for debugging/metrics).
     /// </summary>
-    public int DeltaCount => _deltas.Count;
+    public int DeltaCount
+    {
+        get
+        {
+            lock (_stateLock)
+            {
+                return _deltas.Count;
+            }
+        }
+    }
 
     /// <summary>
     /// Build the current document state from the cached resolved fields.
     /// This is O(fields) instead of O(deltas) because LWW is applied at write-time.
-    /// Thread-safe: uses ConcurrentDictionary snapshot enumeration.
     ///
     /// Uses multi-level LWW conflict resolution (matching TypeScript server):
     /// 1. Timestamp (wall-clock) - later writes win
@@ -266,27 +232,29 @@ public class Document
     /// <returns>Document state as a dictionary</returns>
     public Dictionary<string, object?> BuildState()
     {
-        var state = new Dictionary<string, object?>();
-
-        // Snapshot enumeration of ConcurrentDictionary is thread-safe
-        foreach (var kvp in _resolvedFields)
+        lock (_stateLock)
         {
-            var entry = kvp.Value;
-            // Skip tombstoned fields - they represent deleted fields
-            if (!entry.IsTombstone)
-            {
-                state[kvp.Key] = entry.Value;
-            }
-        }
+            var state = new Dictionary<string, object?>();
 
-        return state;
+            foreach (var kvp in _resolvedFields)
+            {
+                var entry = kvp.Value;
+                // Skip tombstoned fields - they represent deleted fields
+                if (!entry.IsTombstone)
+                {
+                    state[kvp.Key] = entry.Value;
+                }
+            }
+
+            return state;
+        }
     }
 
     /// <summary>
     /// Apply a delta to the resolved state cache using LWW resolution.
-    /// Uses lock-free atomic AddOrUpdate with CAS for thread-safe concurrent updates.
+    /// Must be called while holding _stateLock.
     /// </summary>
-    private void ApplyDeltaToResolvedState(StoredDelta delta)
+    private void ApplyDeltaToResolvedStateInternal(StoredDelta delta)
     {
         if (delta.Data.ValueKind != JsonValueKind.Object)
             return;
@@ -301,35 +269,34 @@ public class Document
             var isTombstone = IsTombstone(property.Value);
             var value = isTombstone ? null : ConvertJsonElement(property.Value);
 
-            var newEntry = new FieldEntry(value, deltaTs, clockCounter, clientId, isTombstone);
+            if (_resolvedFields.TryGetValue(fieldName, out var existing))
+            {
+                // Multi-level LWW comparison (matches TypeScript server):
+                // 1. Timestamp wins
+                var timestampWins = deltaTs > existing.Timestamp;
+                var timestampTie = deltaTs == existing.Timestamp;
 
-            // Atomic AddOrUpdate with LWW comparison
-            // This is lock-free and thread-safe via CAS (Compare-And-Swap)
-            _resolvedFields.AddOrUpdate(
-                fieldName,
-                // Add factory - first write for this field
-                newEntry,
-                // Update factory - compare with existing using LWW
-                (_, existing) =>
+                // 2. Clock counter wins (for same timestamp)
+                var clockWins = clockCounter > existing.ClockCounter;
+                var clockTie = clockCounter == existing.ClockCounter;
+
+                // 3. Client ID wins (lexicographic, for same timestamp & clock)
+                var clientIdWins = string.Compare(clientId, existing.ClientId, StringComparison.Ordinal) > 0;
+
+                var thisWins = timestampWins ||
+                              (timestampTie && clockWins) ||
+                              (timestampTie && clockTie && clientIdWins);
+
+                if (thisWins)
                 {
-                    // Multi-level LWW comparison (matches TypeScript server):
-                    // 1. Timestamp wins
-                    var timestampWins = deltaTs > existing.Timestamp;
-                    var timestampTie = deltaTs == existing.Timestamp;
-
-                    // 2. Clock counter wins (for same timestamp)
-                    var clockWins = clockCounter > existing.ClockCounter;
-                    var clockTie = clockCounter == existing.ClockCounter;
-
-                    // 3. Client ID wins (lexicographic, for same timestamp & clock)
-                    var clientIdWins = string.Compare(clientId, existing.ClientId, StringComparison.Ordinal) > 0;
-
-                    var thisWins = timestampWins ||
-                                  (timestampTie && clockWins) ||
-                                  (timestampTie && clockTie && clientIdWins);
-
-                    return thisWins ? newEntry : existing;
-                });
+                    _resolvedFields[fieldName] = new FieldEntry(value, deltaTs, clockCounter, clientId, isTombstone);
+                }
+            }
+            else
+            {
+                // First write for this field
+                _resolvedFields[fieldName] = new FieldEntry(value, deltaTs, clockCounter, clientId, isTombstone);
+            }
         }
     }
 
