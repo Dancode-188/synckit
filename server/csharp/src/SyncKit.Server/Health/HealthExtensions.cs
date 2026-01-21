@@ -1,6 +1,7 @@
 using Microsoft.AspNetCore.Diagnostics.HealthChecks;
 using Microsoft.Extensions.Diagnostics.HealthChecks;
 using SyncKit.Server.Services;
+using SyncKit.Server.Storage;
 using SyncKit.Server.WebSockets;
 using System.Text.Json;
 
@@ -181,6 +182,20 @@ public static class HealthExtensions
         .WithName("ResetMetrics")
         .WithDescription("Reset all performance metrics")
         .WithTags("Diagnostics");
+
+        // Test endpoint to clear all storage (for test isolation between test runs)
+        // Only available in Development/Testing environments
+        app.MapPost("/_test/clear", async (IStorageAdapter storage) =>
+        {
+            await storage.ClearAllAsync();
+            ConnectionManager.ResetBroadcastMetrics();
+            Connection.ResetSendMetrics();
+            PerformanceMetrics.Reset();
+            return Results.Ok(new { message = "Storage and metrics cleared" });
+        })
+        .WithName("TestClear")
+        .WithDescription("Clear all storage for test isolation (test/dev only)")
+        .WithTags("Testing");
 
         return app;
     }
