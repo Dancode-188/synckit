@@ -73,6 +73,11 @@ public class Connection : IConnection
     private DateTime _lastPong;
     private readonly MemoryStream _messageBuffer = new(); // For accumulating fragmented messages
     private readonly SemaphoreSlim _sendLock = new(1, 1); // Serializes WebSocket sends (required by .NET WebSocket)
+    private readonly SemaphoreSlim _pendingSendLimit = new(MaxPendingSends, MaxPendingSends); // Limits concurrent fire-and-forget sends
+    
+    // Maximum concurrent pending sends to prevent task accumulation
+    // This bounds memory usage and semaphore contention under high load
+    private const int MaxPendingSends = 100;
 
     /// <inheritdoc />
     public string Id { get; }
@@ -290,6 +295,17 @@ public class Connection : IConnection
             return false;
         }
 
+        // Check if we can accept another pending send (non-blocking)
+        // This prevents unbounded task accumulation under high load
+        if (!_pendingSendLimit.Wait(0))
+        {
+            // Too many pending sends - apply backpressure by dropping
+            Interlocked.Increment(ref _totalSendDropped);
+            _logger.LogDebug("Send dropped due to backpressure on connection {ConnectionId} (max {MaxPending} pending)",
+                Id, MaxPendingSends);
+            return false;
+        }
+
         try
         {
             // Time serialization
@@ -307,6 +323,7 @@ public class Connection : IConnection
             {
                 _logger.LogWarning("Failed to serialize message {MessageId} on connection {ConnectionId}",
                     message.Id, Id);
+                _pendingSendLimit.Release(); // Release on early return
                 return false;
             }
 
@@ -316,13 +333,14 @@ public class Connection : IConnection
                 : WebSocketMessageType.Binary;
 
             // Fire-and-forget async send with semaphore protection
-            // This matches TypeScript's synchronous ws.send() pattern
+            // SendDirectAsync will release _pendingSendLimit when done
             _ = SendDirectAsync(message, messageType, data, serializeUs);
             
             return true;
         }
         catch (Exception ex)
         {
+            _pendingSendLimit.Release(); // Release on error before async starts
             _logger.LogError(ex, "Unexpected error preparing message for connection {ConnectionId}", Id);
             return false;
         }
@@ -400,6 +418,7 @@ public class Connection : IConnection
         finally
         {
             PerformanceMetrics.DecrementPendingSends();
+            _pendingSendLimit.Release(); // Release the pending send slot
         }
     }
 
@@ -577,6 +596,7 @@ public class Connection : IConnection
 
         _webSocket.Dispose();
         _sendLock.Dispose();
+        _pendingSendLimit.Dispose();
 
         if (_rentedBuffer is not null)
         {
