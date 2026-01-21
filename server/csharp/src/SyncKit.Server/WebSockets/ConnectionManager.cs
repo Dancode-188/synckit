@@ -103,7 +103,8 @@ public class ConnectionManager : IConnectionManager
                 connectionId,
                 jsonHandler,
                 binaryHandler,
-                connectionLogger);
+                connectionLogger,
+                _config.WsMaxPendingSendsPerConnection);
 
             // Track the connection
             if (!_connections.TryAdd(connectionId, connection))

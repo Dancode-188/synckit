@@ -145,6 +145,17 @@ public class SyncKitConfig
     [Range(0, int.MaxValue)]
     public int WsConnectionCreationConcurrency { get; set; } = 0;
 
+    /// <summary>
+    /// Maximum pending WebSocket sends per connection before backpressure is applied.
+    /// Controls the trade-off between latency and memory usage under high load.
+    /// Lower values (50-100): Better latency stability, may drop messages under burst load.
+    /// Higher values (200-500): Handles larger bursts, but may increase latency under sustained load.
+    /// Set to 0 for unlimited (not recommended for production).
+    /// Environment variable: WS_MAX_PENDING_SENDS_PER_CONNECTION
+    /// </summary>
+    [Range(0, int.MaxValue)]
+    public int WsMaxPendingSendsPerConnection { get; set; } = 100;
+
     // Sync
     /// <summary>
     /// Number of operations to batch together for sync.

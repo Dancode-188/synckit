@@ -89,6 +89,9 @@ public static class ConfigurationExtensions
                 if (int.TryParse(Environment.GetEnvironmentVariable("WS_MAX_CONNECTIONS"), out var maxConnections))
                     config.WsMaxConnections = maxConnections;
 
+                if (int.TryParse(Environment.GetEnvironmentVariable("WS_MAX_PENDING_SENDS_PER_CONNECTION"), out var maxPendingSends))
+                    config.WsMaxPendingSendsPerConnection = maxPendingSends;
+
                 // Sync
                 if (int.TryParse(Environment.GetEnvironmentVariable("SYNC_BATCH_SIZE"), out var batchSize))
                     config.SyncBatchSize = batchSize;

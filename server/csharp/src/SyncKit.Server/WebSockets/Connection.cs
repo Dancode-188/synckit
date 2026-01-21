@@ -73,11 +73,14 @@ public class Connection : IConnection
     private DateTime _lastPong;
     private readonly MemoryStream _messageBuffer = new(); // For accumulating fragmented messages
     private readonly SemaphoreSlim _sendLock = new(1, 1); // Serializes WebSocket sends (required by .NET WebSocket)
-    private readonly SemaphoreSlim _pendingSendLimit = new(MaxPendingSends, MaxPendingSends); // Limits concurrent fire-and-forget sends
+    private readonly SemaphoreSlim? _pendingSendLimit; // Limits concurrent fire-and-forget sends (null = unlimited)
+    private readonly int _maxPendingSends;
     
-    // Maximum concurrent pending sends to prevent task accumulation
-    // This bounds memory usage and semaphore contention under high load
-    private const int MaxPendingSends = 100;
+    /// <summary>
+    /// Default maximum pending sends per connection.
+    /// Can be overridden via WS_MAX_PENDING_SENDS_PER_CONNECTION environment variable.
+    /// </summary>
+    public const int DefaultMaxPendingSends = 100;
 
     /// <inheritdoc />
     public string Id { get; }
@@ -117,18 +120,28 @@ public class Connection : IConnection
     /// <param name="jsonHandler">JSON protocol handler.</param>
     /// <param name="binaryHandler">Binary protocol handler.</param>
     /// <param name="logger">Logger instance.</param>
+    /// <param name="maxPendingSends">Maximum pending sends before backpressure (0 = unlimited).</param>
     public Connection(
         WebSocket webSocket,
         string connectionId,
         IProtocolHandler jsonHandler,
         IProtocolHandler binaryHandler,
-        ILogger<Connection> logger)
+        ILogger<Connection> logger,
+        int maxPendingSends = DefaultMaxPendingSends)
     {
         _webSocket = webSocket ?? throw new ArgumentNullException(nameof(webSocket));
         Id = connectionId ?? throw new ArgumentNullException(nameof(connectionId));
         _jsonHandler = jsonHandler ?? throw new ArgumentNullException(nameof(jsonHandler));
         _binaryHandler = binaryHandler ?? throw new ArgumentNullException(nameof(binaryHandler));
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
+        _maxPendingSends = maxPendingSends;
+        
+        // Initialize pending send limiter (null = unlimited)
+        if (maxPendingSends > 0)
+        {
+            _pendingSendLimit = new SemaphoreSlim(maxPendingSends, maxPendingSends);
+        }
+        
         State = ConnectionState.Connecting;
         LastActivity = DateTime.UtcNow;
         _lastPong = DateTime.UtcNow;
@@ -297,12 +310,13 @@ public class Connection : IConnection
 
         // Check if we can accept another pending send (non-blocking)
         // This prevents unbounded task accumulation under high load
-        if (!_pendingSendLimit.Wait(0))
+        // If _pendingSendLimit is null, backpressure is disabled (unlimited)
+        if (_pendingSendLimit is not null && !_pendingSendLimit.Wait(0))
         {
             // Too many pending sends - apply backpressure by dropping
             Interlocked.Increment(ref _totalSendDropped);
             _logger.LogDebug("Send dropped due to backpressure on connection {ConnectionId} (max {MaxPending} pending)",
-                Id, MaxPendingSends);
+                Id, _maxPendingSends);
             return false;
         }
 
@@ -323,7 +337,7 @@ public class Connection : IConnection
             {
                 _logger.LogWarning("Failed to serialize message {MessageId} on connection {ConnectionId}",
                     message.Id, Id);
-                _pendingSendLimit.Release(); // Release on early return
+                _pendingSendLimit?.Release(); // Release on early return
                 return false;
             }
 
@@ -340,7 +354,7 @@ public class Connection : IConnection
         }
         catch (Exception ex)
         {
-            _pendingSendLimit.Release(); // Release on error before async starts
+            _pendingSendLimit?.Release(); // Release on error before async starts
             _logger.LogError(ex, "Unexpected error preparing message for connection {ConnectionId}", Id);
             return false;
         }
@@ -418,7 +432,7 @@ public class Connection : IConnection
         finally
         {
             PerformanceMetrics.DecrementPendingSends();
-            _pendingSendLimit.Release(); // Release the pending send slot
+            _pendingSendLimit?.Release(); // Release the pending send slot (if backpressure enabled)
         }
     }
 
@@ -596,7 +610,7 @@ public class Connection : IConnection
 
         _webSocket.Dispose();
         _sendLock.Dispose();
-        _pendingSendLimit.Dispose();
+        _pendingSendLimit?.Dispose();
 
         if (_rentedBuffer is not null)
         {
