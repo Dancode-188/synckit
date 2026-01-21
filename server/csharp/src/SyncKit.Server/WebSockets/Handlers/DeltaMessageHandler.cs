@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using System.Text.Json;
 using SyncKit.Server.Sync;
 using SyncKit.Server.Storage;
@@ -82,12 +83,17 @@ public class DeltaMessageHandler : IMessageHandler
 
     public async Task HandleAsync(IConnection connection, IMessage message)
     {
+        var processingStopwatch = Stopwatch.StartNew();
+
         if (message is not DeltaMessage delta)
         {
             _logger.LogWarning("DeltaMessageHandler received non-delta message type: {Type}",
                 message.Type);
             return;
         }
+
+        // Record delta received for convergence tracking
+        PerformanceMetrics.RecordDeltaReceived();
 
         _logger.LogDebug("Connection {ConnectionId} sending delta for document {DocumentId}",
             connection.Id, delta.DocumentId);
@@ -257,6 +263,11 @@ public class DeltaMessageHandler : IMessageHandler
         }
 
         connection.Send(ackMessage);
+
+        // Record ACK sent and processing latency for metrics
+        PerformanceMetrics.RecordAckSent();
+        processingStopwatch.Stop();
+        PerformanceMetrics.RecordProcessingLatency(processingStopwatch.ElapsedMilliseconds);
 
         // Use Debug level to avoid I/O overhead in production (this is a hot path)
         _logger.LogDebug(

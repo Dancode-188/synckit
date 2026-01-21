@@ -1,9 +1,11 @@
 using System;
 using System.Buffers;
 using System.Collections.Concurrent;
+using System.Diagnostics;
 using System.Linq;
 using System.Net.WebSockets;
 using System.Threading.Channels;
+using SyncKit.Server.Services;
 using SyncKit.Server.WebSockets.Protocol;
 
 namespace SyncKit.Server.WebSockets;
@@ -17,6 +19,44 @@ public class Connection : IConnection
     private const int BufferSize = 8192; // Increased to 8KB per receive
     private const int MaxMessageSize = 10 * 1024 * 1024; // 10MB max message size
     private const int SendQueueCapacity = 10000; // Maximum queued outgoing messages (bounded to prevent memory exhaustion)
+
+    // Static performance counters for send operations
+    private static long _totalSendAttempts = 0;
+    private static long _totalSendSuccesses = 0;
+    private static long _totalSendDropped = 0;
+    private static long _totalSendTimeMs = 0;
+    private static long _maxSendTimeMs = 0;
+    private static long _totalQueueDepth = 0;
+    private static long _maxQueueDepth = 0;
+
+    /// <summary>
+    /// Get connection send performance metrics for diagnostics.
+    /// </summary>
+    public static (long SendAttempts, long SendSuccesses, long SendDropped, long TotalSendTimeMs, long MaxSendTimeMs, long AvgQueueDepth, long MaxQueueDepth) GetSendMetrics()
+    {
+        var attempts = Interlocked.Read(ref _totalSendAttempts);
+        var successes = Interlocked.Read(ref _totalSendSuccesses);
+        var dropped = Interlocked.Read(ref _totalSendDropped);
+        var totalTime = Interlocked.Read(ref _totalSendTimeMs);
+        var maxTime = Interlocked.Read(ref _maxSendTimeMs);
+        var totalDepth = Interlocked.Read(ref _totalQueueDepth);
+        var maxDepth = Interlocked.Read(ref _maxQueueDepth);
+        return (attempts, successes, dropped, totalTime, maxTime, attempts > 0 ? totalDepth / attempts : 0, maxDepth);
+    }
+
+    /// <summary>
+    /// Reset connection send performance metrics.
+    /// </summary>
+    public static void ResetSendMetrics()
+    {
+        Interlocked.Exchange(ref _totalSendAttempts, 0);
+        Interlocked.Exchange(ref _totalSendSuccesses, 0);
+        Interlocked.Exchange(ref _totalSendDropped, 0);
+        Interlocked.Exchange(ref _totalSendTimeMs, 0);
+        Interlocked.Exchange(ref _maxSendTimeMs, 0);
+        Interlocked.Exchange(ref _totalQueueDepth, 0);
+        Interlocked.Exchange(ref _maxQueueDepth, 0);
+    }
 
     private readonly WebSocket _webSocket;
     private readonly IProtocolHandler _jsonHandler;
@@ -90,13 +130,13 @@ public class Connection : IConnection
         _lastPong = DateTime.UtcNow;
 
         // Create bounded channel for send queue to prevent memory exhaustion under load
-        // DropOldest ensures newest messages are prioritized when queue is full
+        // Wait mode applies backpressure instead of dropping messages at the cost of higher latency under burst
         _sendQueue = Channel.CreateBounded<(IMessage, WebSocketMessageType, ReadOnlyMemory<byte>)>(
             new BoundedChannelOptions(SendQueueCapacity)
             {
                 SingleReader = true,
                 SingleWriter = false,
-                FullMode = BoundedChannelFullMode.DropOldest
+                FullMode = BoundedChannelFullMode.Wait
             });
 
         // Start background send loop
@@ -255,6 +295,9 @@ public class Connection : IConnection
     /// <inheritdoc />
     public bool Send(IMessage message)
     {
+        var sw = Stopwatch.StartNew();
+        Interlocked.Increment(ref _totalSendAttempts);
+
         if (_webSocket.State != WebSocketState.Open)
         {
             _logger.LogDebug("Cannot send message on connection {ConnectionId}: WebSocket not open (State: {State})",
@@ -282,24 +325,99 @@ public class Connection : IConnection
                 ? WebSocketMessageType.Text
                 : WebSocketMessageType.Binary;
 
-            // Queue the message for async sending (non-blocking)
+            // Track queue depth before writing
+            var queueDepth = _sendQueue.Reader.Count;
+            Interlocked.Add(ref _totalQueueDepth, queueDepth);
+
+            // Record queue depth to centralized performance metrics
+            PerformanceMetrics.RecordQueueDepth(queueDepth);
+
+            // Track max queue depth (compare-and-swap loop)
+            long currentMax;
+            do
+            {
+                currentMax = Interlocked.Read(ref _maxQueueDepth);
+                if (queueDepth <= currentMax) break;
+            } while (Interlocked.CompareExchange(ref _maxQueueDepth, queueDepth, currentMax) != currentMax);
+
+            // Queue the message for async sending
+            // With BoundedChannelFullMode.Wait, TryWrite returns false when queue is full
+            // In that case, we log a warning but continue trying with WriteAsync in the background
             if (_sendQueue.Writer.TryWrite((message, messageType, data)))
             {
-                _logger.LogTrace("Queued message {MessageType} {MessageId} for connection {ConnectionId} ({ByteCount} bytes)",
-                    message.Type, message.Id, Id, data.Length);
+                sw.Stop();
+                var elapsedMs = sw.ElapsedMilliseconds;
+                Interlocked.Increment(ref _totalSendSuccesses);
+                Interlocked.Add(ref _totalSendTimeMs, elapsedMs);
+
+                // Track max send time
+                do
+                {
+                    currentMax = Interlocked.Read(ref _maxSendTimeMs);
+                    if (elapsedMs <= currentMax) break;
+                } while (Interlocked.CompareExchange(ref _maxSendTimeMs, elapsedMs, currentMax) != currentMax);
+
+                _logger.LogTrace("Queued message {MessageType} {MessageId} for connection {ConnectionId} ({ByteCount} bytes, queue={QueueDepth})",
+                    message.Type, message.Id, Id, data.Length, queueDepth);
                 return true;
             }
             else
             {
-                _logger.LogWarning("Send queue full for connection {ConnectionId}, dropping message {MessageId}",
-                    Id, message.Id);
-                return false;
+                // Queue is full - with Wait mode, we need to use async write
+                // Fire-and-forget the async write to avoid blocking the caller
+                _ = WriteAsyncWithBackpressure(message, messageType, data, queueDepth);
+                return true; // Return true since message will be sent (just delayed)
             }
         }
         catch (Exception ex)
         {
             _logger.LogError(ex, "Unexpected error queueing message for connection {ConnectionId}", Id);
             return false;
+        }
+    }
+
+    /// <summary>
+    /// Writes a message to the send queue with backpressure support.
+    /// This is used when TryWrite fails (queue full) and we need to wait for space.
+    /// </summary>
+    private async Task WriteAsyncWithBackpressure(IMessage message, WebSocketMessageType messageType, ReadOnlyMemory<byte> data, int queueDepthAtAttempt)
+    {
+        var sw = Stopwatch.StartNew();
+        try
+        {
+            _logger.LogDebug("Backpressure: waiting to queue message {MessageId} for connection {ConnectionId} (queue={QueueDepth}/{Capacity})",
+                message.Id, Id, queueDepthAtAttempt, SendQueueCapacity);
+
+            // Wait for space in the queue (with timeout to prevent indefinite blocking)
+            using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(30));
+            await _sendQueue.Writer.WriteAsync((message, messageType, data), cts.Token);
+
+            sw.Stop();
+            var elapsedMs = sw.ElapsedMilliseconds;
+            Interlocked.Increment(ref _totalSendSuccesses);
+            Interlocked.Add(ref _totalSendTimeMs, elapsedMs);
+
+            // Track max send time (compare-and-swap loop)
+            long currentMax;
+            do
+            {
+                currentMax = Interlocked.Read(ref _maxSendTimeMs);
+                if (elapsedMs <= currentMax) break;
+            } while (Interlocked.CompareExchange(ref _maxSendTimeMs, elapsedMs, currentMax) != currentMax);
+
+            _logger.LogDebug("Backpressure resolved: queued message {MessageId} for connection {ConnectionId} after {WaitMs}ms",
+                message.Id, Id, elapsedMs);
+        }
+        catch (OperationCanceledException)
+        {
+            Interlocked.Increment(ref _totalSendDropped);
+            _logger.LogWarning("Backpressure timeout: dropped message {MessageId} for connection {ConnectionId} after 30s wait",
+                message.Id, Id);
+        }
+        catch (Exception ex)
+        {
+            Interlocked.Increment(ref _totalSendDropped);
+            _logger.LogError(ex, "Error during backpressure write for connection {ConnectionId}", Id);
         }
     }
 

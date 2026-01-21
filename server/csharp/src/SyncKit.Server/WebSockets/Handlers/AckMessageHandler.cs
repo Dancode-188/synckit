@@ -36,6 +36,9 @@ public class AckMessageHandler : IMessageHandler
             return Task.CompletedTask;
         }
 
+        // Record ACK received for convergence metrics
+        PerformanceMetrics.RecordAckReceived();
+
         // Process ACK through the tracker if available
         if (_ackTracker != null)
         {

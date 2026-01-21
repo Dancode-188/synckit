@@ -1,5 +1,7 @@
 using Microsoft.AspNetCore.Diagnostics.HealthChecks;
 using Microsoft.Extensions.Diagnostics.HealthChecks;
+using SyncKit.Server.Services;
+using SyncKit.Server.WebSockets;
 using System.Text.Json;
 
 namespace SyncKit.Server.Health;
@@ -104,6 +106,81 @@ public static class HealthExtensions
             },
             ResponseWriter = WriteMinimalResponse
         });
+
+        // Performance metrics endpoint for diagnostics
+        app.MapGet("/metrics", () =>
+        {
+            var broadcastMetrics = ConnectionManager.GetBroadcastMetrics();
+            var sendMetrics = Connection.GetSendMetrics();
+            var perfMetrics = PerformanceMetrics.GetMetrics();
+
+            return Results.Ok(new
+            {
+                // Delta/ACK counters for convergence tracking
+                deltas = new
+                {
+                    received = perfMetrics.DeltasReceived,
+                    broadcast = perfMetrics.DeltasBroadcast,
+                    dropped = perfMetrics.DeltasDropped,
+                    convergence = perfMetrics.Convergence
+                },
+                acks = new
+                {
+                    sent = perfMetrics.AcksSent,
+                    received = perfMetrics.AcksReceived
+                },
+                latency = new
+                {
+                    avgBroadcastMs = perfMetrics.AvgBroadcastLatencyMs,
+                    maxBroadcastMs = perfMetrics.MaxBroadcastLatencyMs,
+                    avgProcessingMs = perfMetrics.AvgProcessingLatencyMs,
+                    maxProcessingMs = perfMetrics.MaxProcessingLatencyMs
+                },
+                queue = new
+                {
+                    avgDepth = perfMetrics.AvgQueueDepth,
+                    maxDepth = perfMetrics.MaxQueueDepth
+                },
+                // Legacy counters (for backwards compatibility)
+                broadcast = new
+                {
+                    count = broadcastMetrics.BroadcastCount,
+                    totalTimeMs = broadcastMetrics.TotalTimeMs,
+                    avgTimeMs = broadcastMetrics.AvgTimeMs,
+                    maxTimeMs = broadcastMetrics.MaxTimeMs,
+                    messagesSent = broadcastMetrics.MessagesSent,
+                    messagesFailed = broadcastMetrics.MessagesFailed
+                },
+                send = new
+                {
+                    attempts = sendMetrics.SendAttempts,
+                    successes = sendMetrics.SendSuccesses,
+                    dropped = sendMetrics.SendDropped,
+                    totalTimeMs = sendMetrics.TotalSendTimeMs,
+                    maxTimeMs = sendMetrics.MaxSendTimeMs,
+                    avgQueueDepth = sendMetrics.AvgQueueDepth,
+                    maxQueueDepth = sendMetrics.MaxQueueDepth,
+                    dropRate = sendMetrics.SendAttempts > 0
+                        ? (double)sendMetrics.SendDropped / sendMetrics.SendAttempts
+                        : 0.0
+                }
+            });
+        })
+        .WithName("Metrics")
+        .WithDescription("Performance metrics for broadcast and send operations")
+        .WithTags("Diagnostics");
+
+        // Reset metrics endpoint (useful for testing individual scenarios)
+        app.MapPost("/metrics/reset", () =>
+        {
+            ConnectionManager.ResetBroadcastMetrics();
+            Connection.ResetSendMetrics();
+            PerformanceMetrics.Reset();
+            return Results.Ok(new { message = "Metrics reset" });
+        })
+        .WithName("ResetMetrics")
+        .WithDescription("Reset all performance metrics")
+        .WithTags("Diagnostics");
 
         return app;
     }

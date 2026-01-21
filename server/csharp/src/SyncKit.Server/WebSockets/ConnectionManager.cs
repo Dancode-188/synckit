@@ -1,9 +1,11 @@
 using System;
 using System.Collections.Concurrent;
+using System.Diagnostics;
 using System.Net.WebSockets;
 using System.Threading;
 using Microsoft.Extensions.Options;
 using SyncKit.Server.Configuration;
+using SyncKit.Server.Services;
 using SyncKit.Server.WebSockets.Protocol;
 
 namespace SyncKit.Server.WebSockets;
@@ -220,14 +222,50 @@ public class ConnectionManager : IConnectionManager
         }
     }
 
+    // Performance counters for diagnostics
+    private static long _totalBroadcastCount = 0;
+    private static long _totalBroadcastTimeMs = 0;
+    private static long _totalMessagesSent = 0;
+    private static long _totalMessagesFailed = 0;
+    private static long _maxBroadcastTimeMs = 0;
+
+    /// <summary>
+    /// Get broadcast performance metrics for diagnostics.
+    /// </summary>
+    public static (long BroadcastCount, long TotalTimeMs, long AvgTimeMs, long MaxTimeMs, long MessagesSent, long MessagesFailed) GetBroadcastMetrics()
+    {
+        var count = Interlocked.Read(ref _totalBroadcastCount);
+        var totalTime = Interlocked.Read(ref _totalBroadcastTimeMs);
+        var maxTime = Interlocked.Read(ref _maxBroadcastTimeMs);
+        var sent = Interlocked.Read(ref _totalMessagesSent);
+        var failed = Interlocked.Read(ref _totalMessagesFailed);
+        return (count, totalTime, count > 0 ? totalTime / count : 0, maxTime, sent, failed);
+    }
+
+    /// <summary>
+    /// Reset broadcast performance metrics.
+    /// </summary>
+    public static void ResetBroadcastMetrics()
+    {
+        Interlocked.Exchange(ref _totalBroadcastCount, 0);
+        Interlocked.Exchange(ref _totalBroadcastTimeMs, 0);
+        Interlocked.Exchange(ref _totalMessagesSent, 0);
+        Interlocked.Exchange(ref _totalMessagesFailed, 0);
+        Interlocked.Exchange(ref _maxBroadcastTimeMs, 0);
+    }
+
     /// <inheritdoc />
     public Task BroadcastToDocumentAsync(string documentId, Protocol.IMessage message, string? excludeConnectionId = null)
     {
+        var sw = Stopwatch.StartNew();
+
         if (!_documentSubscriptions.TryGetValue(documentId, out var connections))
         {
             return Task.CompletedTask;
         }
 
+        var getSubsTime = sw.ElapsedTicks;
+        var subCount = connections.Count;
         var sendCount = 0;
         var failCount = 0;
 
@@ -254,7 +292,38 @@ public class ConnectionManager : IConnectionManager
             }
         }
 
-        if (failCount > 0)
+        sw.Stop();
+        var elapsedMs = sw.ElapsedMilliseconds;
+
+        // Update performance counters
+        Interlocked.Increment(ref _totalBroadcastCount);
+        Interlocked.Add(ref _totalBroadcastTimeMs, elapsedMs);
+        Interlocked.Add(ref _totalMessagesSent, sendCount);
+        Interlocked.Add(ref _totalMessagesFailed, failCount);
+
+        // Record to centralized performance metrics for convergence tracking
+        PerformanceMetrics.RecordDeltasBroadcast(sendCount);
+        PerformanceMetrics.RecordDeltasDropped(failCount);
+        PerformanceMetrics.RecordBroadcastLatency(elapsedMs);
+
+        // Track max broadcast time (compare-and-swap loop)
+        long currentMax;
+        do
+        {
+            currentMax = Interlocked.Read(ref _maxBroadcastTimeMs);
+            if (elapsedMs <= currentMax) break;
+        } while (Interlocked.CompareExchange(ref _maxBroadcastTimeMs, elapsedMs, currentMax) != currentMax);
+
+        // Log timing breakdown for broadcasts that take > 1ms
+        if (elapsedMs > 1)
+        {
+            var getSubsTimeMs = (getSubsTime * 1000.0) / Stopwatch.Frequency;
+            _logger.LogDebug(
+                "Broadcast to document {DocumentId}: {SubCount} subs, {SendCount} sent, {FailCount} failed, " +
+                "getSubsTime={GetSubsTime:F2}ms, totalTime={TotalTime}ms",
+                documentId, subCount, sendCount, failCount, getSubsTimeMs, elapsedMs);
+        }
+        else if (failCount > 0)
         {
             _logger.LogDebug("Broadcast to document {DocumentId}: {SendCount} sent, {FailCount} failed",
                 documentId, sendCount, failCount);
