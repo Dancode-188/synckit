@@ -292,11 +292,16 @@ public class Connection : IConnection
 
         try
         {
+            // Time serialization
+            var serializeStart = Stopwatch.GetTimestamp();
+            
             // Select the correct protocol handler based on detected protocol
             var handler = Protocol == ProtocolType.Json ? _jsonHandler : _binaryHandler;
 
             // Serialize the message
             var data = handler.Serialize(message);
+            
+            var serializeUs = (Stopwatch.GetTimestamp() - serializeStart) * 1_000_000 / Stopwatch.Frequency;
 
             if (data.Length == 0)
             {
@@ -312,7 +317,7 @@ public class Connection : IConnection
 
             // Fire-and-forget async send with semaphore protection
             // This matches TypeScript's synchronous ws.send() pattern
-            _ = SendDirectAsync(message, messageType, data);
+            _ = SendDirectAsync(message, messageType, data, serializeUs);
             
             return true;
         }
@@ -328,14 +333,19 @@ public class Connection : IConnection
     /// Uses SemaphoreSlim to serialize sends (required by .NET WebSocket).
     /// This matches TypeScript's direct ws.send() pattern for low latency.
     /// </summary>
-    private async Task SendDirectAsync(IMessage message, WebSocketMessageType messageType, ReadOnlyMemory<byte> data)
+    private async Task SendDirectAsync(IMessage message, WebSocketMessageType messageType, ReadOnlyMemory<byte> data, long serializeUs)
     {
-        var sw = Stopwatch.StartNew();
+        PerformanceMetrics.IncrementPendingSends();
         
         try
         {
+            // Time semaphore wait
+            var semaphoreStart = Stopwatch.GetTimestamp();
+            
             // Acquire send lock (required because .NET WebSocket doesn't support concurrent sends)
             await _sendLock.WaitAsync(_cts.Token);
+            
+            var semaphoreWaitUs = (Stopwatch.GetTimestamp() - semaphoreStart) * 1_000_000 / Stopwatch.Frequency;
             
             try
             {
@@ -345,23 +355,28 @@ public class Connection : IConnection
                     return;
                 }
 
+                // Time WebSocket send
+                var sendStart = Stopwatch.GetTimestamp();
                 await _webSocket.SendAsync(data, messageType, true, _cts.Token);
+                var webSocketSendUs = (Stopwatch.GetTimestamp() - sendStart) * 1_000_000 / Stopwatch.Frequency;
                 
-                sw.Stop();
-                var elapsedMs = sw.ElapsedMilliseconds;
+                // Record detailed timing for CI profiling
+                PerformanceMetrics.RecordSendTiming(serializeUs, semaphoreWaitUs, webSocketSendUs);
+                
+                var totalMs = (serializeUs + semaphoreWaitUs + webSocketSendUs) / 1000;
                 Interlocked.Increment(ref _totalSendSuccesses);
-                Interlocked.Add(ref _totalSendTimeMs, elapsedMs);
+                Interlocked.Add(ref _totalSendTimeMs, totalMs);
 
                 // Track max send time (compare-and-swap loop)
                 long currentMax;
                 do
                 {
                     currentMax = Interlocked.Read(ref _maxSendTimeMs);
-                    if (elapsedMs <= currentMax) break;
-                } while (Interlocked.CompareExchange(ref _maxSendTimeMs, elapsedMs, currentMax) != currentMax);
+                    if (totalMs <= currentMax) break;
+                } while (Interlocked.CompareExchange(ref _maxSendTimeMs, totalMs, currentMax) != currentMax);
 
-                _logger.LogTrace("Sent message {MessageType} {MessageId} to connection {ConnectionId} ({ByteCount} bytes, {ElapsedMs}ms)",
-                    message.Type, message.Id, Id, data.Length, elapsedMs);
+                _logger.LogTrace("Sent message {MessageType} {MessageId} to connection {ConnectionId} ({ByteCount} bytes, {TotalMs}ms = ser:{SerUs}us + sem:{SemUs}us + ws:{WsUs}us)",
+                    message.Type, message.Id, Id, data.Length, totalMs, serializeUs, semaphoreWaitUs, webSocketSendUs);
             }
             finally
             {
@@ -381,6 +396,10 @@ public class Connection : IConnection
         {
             Interlocked.Increment(ref _totalSendDropped);
             _logger.LogError(ex, "Error sending message {MessageId} to connection {ConnectionId}", message.Id, Id);
+        }
+        finally
+        {
+            PerformanceMetrics.DecrementPendingSends();
         }
     }
 

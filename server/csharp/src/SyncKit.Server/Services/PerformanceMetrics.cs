@@ -35,6 +35,17 @@ public static class PerformanceMetrics
     private static long _totalQueueDepth = 0;
     private static long _maxQueueDepth = 0;
 
+    // Send timing breakdown (for CI profiling)
+    private static long _totalSerializeTimeUs = 0;
+    private static long _maxSerializeTimeUs = 0;
+    private static long _totalSemaphoreWaitTimeUs = 0;
+    private static long _maxSemaphoreWaitTimeUs = 0;
+    private static long _totalWebSocketSendTimeUs = 0;
+    private static long _maxWebSocketSendTimeUs = 0;
+    private static long _sendTimingSamples = 0;
+    private static long _pendingSends = 0;
+    private static long _maxPendingSends = 0;
+
     #region Delta Counters
 
     /// <summary>
@@ -145,6 +156,72 @@ public static class PerformanceMetrics
 
     #endregion
 
+    #region Send Timing Breakdown
+
+    /// <summary>
+    /// Records detailed send timing breakdown (in microseconds for precision).
+    /// </summary>
+    public static void RecordSendTiming(long serializeUs, long semaphoreWaitUs, long webSocketSendUs)
+    {
+        Interlocked.Increment(ref _sendTimingSamples);
+        Interlocked.Add(ref _totalSerializeTimeUs, serializeUs);
+        Interlocked.Add(ref _totalSemaphoreWaitTimeUs, semaphoreWaitUs);
+        Interlocked.Add(ref _totalWebSocketSendTimeUs, webSocketSendUs);
+
+        // Track max serialize time
+        long currentMax;
+        do
+        {
+            currentMax = Interlocked.Read(ref _maxSerializeTimeUs);
+            if (serializeUs <= currentMax) break;
+        } while (Interlocked.CompareExchange(ref _maxSerializeTimeUs, serializeUs, currentMax) != currentMax);
+
+        // Track max semaphore wait time
+        do
+        {
+            currentMax = Interlocked.Read(ref _maxSemaphoreWaitTimeUs);
+            if (semaphoreWaitUs <= currentMax) break;
+        } while (Interlocked.CompareExchange(ref _maxSemaphoreWaitTimeUs, semaphoreWaitUs, currentMax) != currentMax);
+
+        // Track max websocket send time
+        do
+        {
+            currentMax = Interlocked.Read(ref _maxWebSocketSendTimeUs);
+            if (webSocketSendUs <= currentMax) break;
+        } while (Interlocked.CompareExchange(ref _maxWebSocketSendTimeUs, webSocketSendUs, currentMax) != currentMax);
+    }
+
+    /// <summary>
+    /// Increments pending send counter when a fire-and-forget send starts.
+    /// </summary>
+    public static void IncrementPendingSends()
+    {
+        var current = Interlocked.Increment(ref _pendingSends);
+        
+        // Track max
+        long currentMax;
+        do
+        {
+            currentMax = Interlocked.Read(ref _maxPendingSends);
+            if (current <= currentMax) break;
+        } while (Interlocked.CompareExchange(ref _maxPendingSends, current, currentMax) != currentMax);
+    }
+
+    /// <summary>
+    /// Decrements pending send counter when a fire-and-forget send completes.
+    /// </summary>
+    public static void DecrementPendingSends()
+    {
+        Interlocked.Decrement(ref _pendingSends);
+    }
+
+    /// <summary>
+    /// Gets current pending sends count.
+    /// </summary>
+    public static long GetPendingSends() => Interlocked.Read(ref _pendingSends);
+
+    #endregion
+
     #region Metrics Retrieval
 
     /// <summary>
@@ -164,6 +241,17 @@ public static class PerformanceMetrics
         var queueDepthSamples = Interlocked.Read(ref _totalQueueDepthSamples);
         var totalQueueDepth = Interlocked.Read(ref _totalQueueDepth);
         var maxQueueDepth = Interlocked.Read(ref _maxQueueDepth);
+        
+        // Send timing breakdown
+        var sendTimingSamples = Interlocked.Read(ref _sendTimingSamples);
+        var totalSerializeUs = Interlocked.Read(ref _totalSerializeTimeUs);
+        var maxSerializeUs = Interlocked.Read(ref _maxSerializeTimeUs);
+        var totalSemaphoreWaitUs = Interlocked.Read(ref _totalSemaphoreWaitTimeUs);
+        var maxSemaphoreWaitUs = Interlocked.Read(ref _maxSemaphoreWaitTimeUs);
+        var totalWebSocketSendUs = Interlocked.Read(ref _totalWebSocketSendTimeUs);
+        var maxWebSocketSendUs = Interlocked.Read(ref _maxWebSocketSendTimeUs);
+        var pendingSends = Interlocked.Read(ref _pendingSends);
+        var maxPendingSends = Interlocked.Read(ref _maxPendingSends);
 
         return new MetricsSnapshot
         {
@@ -180,7 +268,17 @@ public static class PerformanceMetrics
             MaxQueueDepth = maxQueueDepth,
             Convergence = deltasBroadcast > 0
                 ? (double)(deltasBroadcast - deltasDropped) / deltasBroadcast
-                : 1.0
+                : 1.0,
+            // Send timing breakdown (convert from microseconds to milliseconds for display)
+            SendTimingSamples = sendTimingSamples,
+            AvgSerializeTimeUs = sendTimingSamples > 0 ? totalSerializeUs / sendTimingSamples : 0,
+            MaxSerializeTimeUs = maxSerializeUs,
+            AvgSemaphoreWaitTimeUs = sendTimingSamples > 0 ? totalSemaphoreWaitUs / sendTimingSamples : 0,
+            MaxSemaphoreWaitTimeUs = maxSemaphoreWaitUs,
+            AvgWebSocketSendTimeUs = sendTimingSamples > 0 ? totalWebSocketSendUs / sendTimingSamples : 0,
+            MaxWebSocketSendTimeUs = maxWebSocketSendUs,
+            PendingSends = pendingSends,
+            MaxPendingSends = maxPendingSends
         };
     }
 
@@ -201,6 +299,16 @@ public static class PerformanceMetrics
         Interlocked.Exchange(ref _totalQueueDepthSamples, 0);
         Interlocked.Exchange(ref _totalQueueDepth, 0);
         Interlocked.Exchange(ref _maxQueueDepth, 0);
+        // Send timing breakdown
+        Interlocked.Exchange(ref _totalSerializeTimeUs, 0);
+        Interlocked.Exchange(ref _maxSerializeTimeUs, 0);
+        Interlocked.Exchange(ref _totalSemaphoreWaitTimeUs, 0);
+        Interlocked.Exchange(ref _maxSemaphoreWaitTimeUs, 0);
+        Interlocked.Exchange(ref _totalWebSocketSendTimeUs, 0);
+        Interlocked.Exchange(ref _maxWebSocketSendTimeUs, 0);
+        Interlocked.Exchange(ref _sendTimingSamples, 0);
+        // Don't reset _pendingSends as it tracks current state
+        Interlocked.Exchange(ref _maxPendingSends, 0);
     }
 
     #endregion
@@ -273,4 +381,54 @@ public record MetricsSnapshot
     /// Should approach 1.0 (100%) for a healthy system.
     /// </summary>
     public double Convergence { get; init; }
+
+    // === Send Timing Breakdown (CI Profiling) ===
+
+    /// <summary>
+    /// Number of send timing samples collected.
+    /// </summary>
+    public long SendTimingSamples { get; init; }
+
+    /// <summary>
+    /// Average message serialization time (microseconds).
+    /// </summary>
+    public long AvgSerializeTimeUs { get; init; }
+
+    /// <summary>
+    /// Maximum message serialization time (microseconds).
+    /// </summary>
+    public long MaxSerializeTimeUs { get; init; }
+
+    /// <summary>
+    /// Average time waiting for send semaphore (microseconds).
+    /// High values indicate contention from concurrent sends.
+    /// </summary>
+    public long AvgSemaphoreWaitTimeUs { get; init; }
+
+    /// <summary>
+    /// Maximum time waiting for send semaphore (microseconds).
+    /// </summary>
+    public long MaxSemaphoreWaitTimeUs { get; init; }
+
+    /// <summary>
+    /// Average WebSocket.SendAsync time (microseconds).
+    /// This is the actual network I/O time.
+    /// </summary>
+    public long AvgWebSocketSendTimeUs { get; init; }
+
+    /// <summary>
+    /// Maximum WebSocket.SendAsync time (microseconds).
+    /// </summary>
+    public long MaxWebSocketSendTimeUs { get; init; }
+
+    /// <summary>
+    /// Current number of pending fire-and-forget sends.
+    /// </summary>
+    public long PendingSends { get; init; }
+
+    /// <summary>
+    /// Maximum concurrent pending sends observed.
+    /// High values indicate send backlog building up.
+    /// </summary>
+    public long MaxPendingSends { get; init; }
 }

@@ -164,6 +164,19 @@ public static class HealthExtensions
                     dropRate = sendMetrics.SendAttempts > 0
                         ? (double)sendMetrics.SendDropped / sendMetrics.SendAttempts
                         : 0.0
+                },
+                // Detailed send timing breakdown (for CI profiling)
+                sendTiming = new
+                {
+                    samples = perfMetrics.SendTimingSamples,
+                    avgSerializeUs = perfMetrics.AvgSerializeTimeUs,
+                    maxSerializeUs = perfMetrics.MaxSerializeTimeUs,
+                    avgSemaphoreWaitUs = perfMetrics.AvgSemaphoreWaitTimeUs,
+                    maxSemaphoreWaitUs = perfMetrics.MaxSemaphoreWaitTimeUs,
+                    avgWebSocketSendUs = perfMetrics.AvgWebSocketSendTimeUs,
+                    maxWebSocketSendUs = perfMetrics.MaxWebSocketSendTimeUs,
+                    pendingSends = perfMetrics.PendingSends,
+                    maxPendingSends = perfMetrics.MaxPendingSends
                 }
             });
         })
