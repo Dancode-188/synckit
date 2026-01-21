@@ -73,6 +73,7 @@ export type MessageType =
   | 'unsubscribe'
   | 'delta'
   | 'delta_batch'
+  | 'delta_batch_chunk'
   | 'sync_request'
   | 'sync_response'
   | 'ack'
@@ -94,6 +95,7 @@ enum MessageTypeCode {
   SYNC_RESPONSE = 0x13,
   DELTA = 0x20,
   DELTA_BATCH = 0x22,
+  DELTA_BATCH_CHUNK = 0x23,
   ACK = 0x21,
   PING = 0x30,
   PONG = 0x31,
@@ -148,6 +150,9 @@ export class WebSocketError extends Error {
 // ====================
 // WebSocket Client
 // ====================
+
+// Maximum message size before chunking (512 bytes to safely stay under Fly.io limits)
+const MAX_MESSAGE_SIZE = 512
 
 export class WebSocketClient {
   private ws: WebSocket | null = null
@@ -291,7 +296,14 @@ export class WebSocketClient {
           console.log(`[WS] readyState: ${this.ws.readyState}, bufferedAmount: ${this.ws.bufferedAmount}`)
         }
 
-        this.ws.send(encoded)
+        // Check if message needs chunking (only for delta_batch messages)
+        if (message.type === 'delta_batch' && encoded.byteLength > MAX_MESSAGE_SIZE) {
+          console.log(`[WS] Message size (${encoded.byteLength} bytes) exceeds limit (${MAX_MESSAGE_SIZE} bytes), chunking...`)
+          this.sendChunked(encoded, message.timestamp)
+        } else {
+          this.ws.send(encoded)
+        }
+
         if (shouldLog) {
           console.log(`[WS] ✓ ws.send() completed for ${message.type}`)
           console.log(`[WS] After send - Queue size: ${this.messageQueue.length}`)
@@ -313,6 +325,64 @@ export class WebSocketClient {
         console.log(`[WS] Message queued. Queue size: ${this.messageQueue.length}`)
       }
     }
+  }
+
+  /**
+   * Send large message as chunks
+   * Splits encoded binary message into smaller chunks to avoid infrastructure limits
+   */
+  private sendChunked(encodedBuffer: ArrayBuffer, timestamp: number): void {
+    // Generate unique chunk ID
+    const chunkId = `chunk-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`
+
+    // Convert to Uint8Array for easier slicing
+    const data = new Uint8Array(encodedBuffer)
+
+    // Calculate number of chunks needed
+    const totalChunks = Math.ceil(data.length / MAX_MESSAGE_SIZE)
+
+    console.log(`[WS] Splitting ${data.length} bytes into ${totalChunks} chunks of max ${MAX_MESSAGE_SIZE} bytes each`)
+
+    // Send each chunk
+    for (let i = 0; i < totalChunks; i++) {
+      const start = i * MAX_MESSAGE_SIZE
+      const end = Math.min(start + MAX_MESSAGE_SIZE, data.length)
+      const chunkData = data.slice(start, end)
+
+      // Encode chunk data as base64
+      const base64Data = this.arrayBufferToBase64(chunkData)
+
+      // Create chunk message
+      const chunkMessage: WebSocketMessage = {
+        type: 'delta_batch_chunk',
+        payload: {
+          chunkId,
+          totalChunks,
+          chunkIndex: i,
+          data: base64Data,
+        },
+        timestamp,
+      }
+
+      // Encode and send chunk
+      const chunkEncoded = this.encodeMessage(chunkMessage)
+      this.ws!.send(chunkEncoded)
+
+      console.log(`[WS] Sent chunk ${i + 1}/${totalChunks} (${chunkData.length} bytes)`)
+    }
+
+    console.log(`[WS] ✓ All ${totalChunks} chunks sent for ${chunkId}`)
+  }
+
+  /**
+   * Convert ArrayBuffer/Uint8Array to base64 string
+   */
+  private arrayBufferToBase64(buffer: Uint8Array): string {
+    let binary = ''
+    for (let i = 0; i < buffer.byteLength; i++) {
+      binary += String.fromCharCode(buffer[i]!)
+    }
+    return btoa(binary)
   }
 
   /**
@@ -789,6 +859,7 @@ export class WebSocketClient {
       sync_response: MessageTypeCode.SYNC_RESPONSE,
       delta: MessageTypeCode.DELTA,
       delta_batch: MessageTypeCode.DELTA_BATCH,
+      delta_batch_chunk: MessageTypeCode.DELTA_BATCH_CHUNK,
       ack: MessageTypeCode.ACK,
       ping: MessageTypeCode.PING,
       pong: MessageTypeCode.PONG,
@@ -814,6 +885,8 @@ export class WebSocketClient {
       [MessageTypeCode.SYNC_REQUEST]: 'sync_request',
       [MessageTypeCode.SYNC_RESPONSE]: 'sync_response',
       [MessageTypeCode.DELTA]: 'delta',
+      [MessageTypeCode.DELTA_BATCH]: 'delta_batch',
+      [MessageTypeCode.DELTA_BATCH_CHUNK]: 'delta_batch_chunk',
       [MessageTypeCode.ACK]: 'ack',
       [MessageTypeCode.PING]: 'ping',
       [MessageTypeCode.PONG]: 'pong',
