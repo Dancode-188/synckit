@@ -26,6 +26,7 @@ export enum MessageTypeCode {
   SYNC_STEP2 = 0x15,
   DELTA = 0x20,
   DELTA_BATCH = 0x22,
+  DELTA_BATCH_CHUNK = 0x23,
   ACK = 0x21,
   PING = 0x30,
   PONG = 0x31,
@@ -59,6 +60,7 @@ export enum MessageType {
   SYNC_STEP2 = 'sync_step2',
   DELTA = 'delta',
   DELTA_BATCH = 'delta_batch',
+  DELTA_BATCH_CHUNK = 'delta_batch_chunk',
   ACK = 'ack',
 
   // Awareness (presence)
@@ -157,6 +159,14 @@ export interface DeltaBatchMessage extends BaseMessage {
   deltas: any[]; // Array of delta operations
 }
 
+export interface DeltaBatchChunkMessage extends BaseMessage {
+  type: MessageType.DELTA_BATCH_CHUNK;
+  chunkId: string; // Unique ID for this chunk set
+  totalChunks: number; // Total number of chunks
+  chunkIndex: number; // Index of this chunk (0-based)
+  data: string; // Base64-encoded chunk data
+}
+
 export interface AckMessage extends BaseMessage {
   type: MessageType.ACK;
   messageId: string; // ID of message being acknowledged
@@ -206,6 +216,7 @@ export type Message =
   | SyncStep2Message
   | DeltaMessage
   | DeltaBatchMessage
+  | DeltaBatchChunkMessage
   | AckMessage
   | AwarenessUpdateMessage
   | AwarenessSubscribeMessage
@@ -227,6 +238,7 @@ const TYPE_CODE_TO_NAME: Record<number, MessageType> = {
   [MessageTypeCode.SYNC_STEP2]: MessageType.SYNC_STEP2,
   [MessageTypeCode.DELTA]: MessageType.DELTA,
   [MessageTypeCode.DELTA_BATCH]: MessageType.DELTA_BATCH,
+  [MessageTypeCode.DELTA_BATCH_CHUNK]: MessageType.DELTA_BATCH_CHUNK,
   [MessageTypeCode.ACK]: MessageType.ACK,
   [MessageTypeCode.PING]: MessageType.PING,
   [MessageTypeCode.PONG]: MessageType.PONG,
@@ -251,6 +263,7 @@ const TYPE_NAME_TO_CODE: Record<MessageType, number> = {
   [MessageType.SYNC_STEP2]: MessageTypeCode.SYNC_STEP2,
   [MessageType.DELTA]: MessageTypeCode.DELTA,
   [MessageType.DELTA_BATCH]: MessageTypeCode.DELTA_BATCH,
+  [MessageType.DELTA_BATCH_CHUNK]: MessageTypeCode.DELTA_BATCH_CHUNK,
   [MessageType.ACK]: MessageTypeCode.ACK,
   [MessageType.PING]: MessageTypeCode.PING,
   [MessageType.PONG]: MessageTypeCode.PONG,
