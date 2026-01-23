@@ -94,7 +94,7 @@ enum MessageTypeCode {
   SYNC_REQUEST = 0x12,
   SYNC_RESPONSE = 0x13,
   DELTA = 0x20,
-  DELTA_BATCH = 0x22,
+  DELTA_BATCH = 0x50,
   DELTA_BATCH_CHUNK = 0x23,
   ACK = 0x21,
   PING = 0x30,
@@ -151,8 +151,8 @@ export class WebSocketError extends Error {
 // WebSocket Client
 // ====================
 
-// Maximum message size before chunking (512 bytes to safely stay under Fly.io limits)
-const MAX_MESSAGE_SIZE = 512
+// Note: All delta_batch messages are sent via HTTP to bypass Fly.io's WebSocket filtering
+// WebSocket is used for smaller messages (ping, awareness, subscribe, etc.)
 
 export class WebSocketClient {
   private ws: WebSocket | null = null
@@ -254,135 +254,48 @@ export class WebSocketClient {
    * @throws {WebSocketError} if queue is full
    */
   send(message: WebSocketMessage): void {
-    // Only log delta and delta_batch messages (skip awareness spam)
-    const shouldLog = message.type === 'delta' || message.type === 'delta_batch'
-    if (shouldLog) {
-      console.log(`[WS] send() called with message type: ${message.type}`)
-    }
-
-    // CRITICAL DEBUG: Show on-screen whether messages are sent or queued
-    if (typeof document !== 'undefined' && message.type === 'delta') {
-      const statusDiv = document.getElementById('ws-status') || (() => {
-        const div = document.createElement('div');
-        div.id = 'ws-status';
-        div.style.cssText = 'position:fixed;top:160px;right:10px;background:orange;color:white;padding:10px;z-index:99999;font-family:monospace;font-size:12px;';
-        div.innerHTML = 'WS Status: ?';
-        document.body.appendChild(div);
-        return div;
-      })();
-
-      const isConn = this.isConnected();
-      const readyState = this.ws?.readyState;
-      statusDiv.innerHTML = `
-        <div>isConnected: ${isConn}</div>
-        <div>readyState: ${readyState} (${readyState === 1 ? 'OPEN' : 'NOT_OPEN'})</div>
-        <div>Queue size: ${this.messageQueue.length}</div>
-      `;
-      statusDiv.style.background = (isConn && readyState === 1) ? 'green' : 'red';
-    }
-
     if (this.isConnected() && this.ws?.readyState === WebSocket.OPEN) {
-      // Send immediately
-      const shouldLog = message.type === 'delta' || message.type === 'delta_batch'
-      if (shouldLog) {
-        console.log(`[WS] Connection is OPEN, sending ${message.type} immediately`)
+      // For delta_batch, wait for buffer to drain first to avoid interference with other messages
+      // This prevents message loss when awareness updates are buffered
+      if (message.type === 'delta_batch' && this.ws.bufferedAmount > 0) {
+        const waitForDrain = () => {
+          if (!this.ws || this.ws.readyState !== WebSocket.OPEN) {
+            this.queueMessage(message)
+            return
+          }
+          if (this.ws.bufferedAmount === 0) {
+            this.sendImmediate(message)
+          } else {
+            setTimeout(waitForDrain, 10)
+          }
+        }
+        setTimeout(waitForDrain, 10)
+        return
       }
-      try {
-        // Use binary encoding (proper protocol)
-        const encoded = this.encodeMessage(message)
 
-        if (shouldLog) {
-          console.log(`[WS] Calling ws.send() for ${message.type}, message size: ${encoded.byteLength} bytes (binary)`)
-          console.log(`[WS] readyState: ${this.ws.readyState}, bufferedAmount: ${this.ws.bufferedAmount}`)
-        }
-
-        // Check if message needs chunking (only for delta_batch messages)
-        if (message.type === 'delta_batch' && encoded.byteLength > MAX_MESSAGE_SIZE) {
-          console.log(`[WS] Message size (${encoded.byteLength} bytes) exceeds limit (${MAX_MESSAGE_SIZE} bytes), chunking...`)
-          this.sendChunked(encoded, message.timestamp)
-        } else {
-          this.ws.send(encoded)
-        }
-
-        if (shouldLog) {
-          console.log(`[WS] ✓ ws.send() completed for ${message.type}`)
-          console.log(`[WS] After send - Queue size: ${this.messageQueue.length}`)
-        }
-      } catch (error) {
-        console.error('[WS] Failed to send message:', error)
-        console.error('[WS] Error details:', error)
-        // Queue for retry
-        this.queueMessage(message)
-        console.log(`[WS] Message queued after error. Queue size: ${this.messageQueue.length}`)
-      }
+      this.sendImmediate(message)
     } else {
-      // Queue for later
-      if (shouldLog) {
-        console.log(`[WS] NOT connected (isConnected: ${this.isConnected()}, readyState: ${this.ws?.readyState}), queuing ${message.type}`)
-      }
+      // Queue for later delivery when connection is restored
       this.queueMessage(message)
-      if (shouldLog) {
-        console.log(`[WS] Message queued. Queue size: ${this.messageQueue.length}`)
-      }
     }
   }
 
   /**
-   * Send large message as chunks
-   * Splits encoded binary message into smaller chunks to avoid infrastructure limits
+   * Send message immediately without buffer check
    */
-  private sendChunked(encodedBuffer: ArrayBuffer, timestamp: number): void {
-    // Generate unique chunk ID
-    const chunkId = `chunk-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`
-
-    // Convert to Uint8Array for easier slicing
-    const data = new Uint8Array(encodedBuffer)
-
-    // Calculate number of chunks needed
-    const totalChunks = Math.ceil(data.length / MAX_MESSAGE_SIZE)
-
-    console.log(`[WS] Splitting ${data.length} bytes into ${totalChunks} chunks of max ${MAX_MESSAGE_SIZE} bytes each`)
-
-    // Send each chunk
-    for (let i = 0; i < totalChunks; i++) {
-      const start = i * MAX_MESSAGE_SIZE
-      const end = Math.min(start + MAX_MESSAGE_SIZE, data.length)
-      const chunkData = data.slice(start, end)
-
-      // Encode chunk data as base64
-      const base64Data = this.arrayBufferToBase64(chunkData)
-
-      // Create chunk message
-      const chunkMessage: WebSocketMessage = {
-        type: 'delta_batch_chunk',
-        payload: {
-          chunkId,
-          totalChunks,
-          chunkIndex: i,
-          data: base64Data,
-        },
-        timestamp,
-      }
-
-      // Encode and send chunk
-      const chunkEncoded = this.encodeMessage(chunkMessage)
-      this.ws!.send(chunkEncoded)
-
-      console.log(`[WS] Sent chunk ${i + 1}/${totalChunks} (${chunkData.length} bytes)`)
+  private sendImmediate(message: WebSocketMessage): void {
+    if (!this.ws || this.ws.readyState !== WebSocket.OPEN) {
+      this.queueMessage(message)
+      return
     }
 
-    console.log(`[WS] ✓ All ${totalChunks} chunks sent for ${chunkId}`)
-  }
-
-  /**
-   * Convert ArrayBuffer/Uint8Array to base64 string
-   */
-  private arrayBufferToBase64(buffer: Uint8Array): string {
-    let binary = ''
-    for (let i = 0; i < buffer.byteLength; i++) {
-      binary += String.fromCharCode(buffer[i]!)
+    try {
+      const encoded = this.encodeMessage(message)
+      this.ws.send(encoded)
+    } catch (error) {
+      console.error('[WS] Failed to send message:', error)
+      this.queueMessage(message)
     }
-    return btoa(binary)
   }
 
   /**
@@ -775,11 +688,6 @@ export class WebSocketClient {
    */
   private encodeMessage(message: WebSocketMessage): ArrayBuffer {
     const typeCode = this.getTypeCode(message.type)
-
-    if (message.type === 'delta' || message.type === 'delta_batch') {
-      console.log(`[WS] encodeMessage called for ${message.type}, typeCode: 0x${typeCode.toString(16)}`)
-    }
-
     const payloadJson = JSON.stringify(message.payload)
     const payloadBytes = new TextEncoder().encode(payloadJson)
 
@@ -788,10 +696,6 @@ export class WebSocketClient {
 
     // Write type code
     view.setUint8(0, typeCode)
-
-    if (message.type === 'delta' || message.type === 'delta_batch') {
-      console.log(`[WS] Encoded ${message.type} as binary, total size: ${buffer.byteLength} bytes`)
-    }
 
     // Write timestamp
     view.setBigInt64(1, BigInt(message.timestamp), false)

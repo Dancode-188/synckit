@@ -18,7 +18,7 @@ import type { Context } from 'hono';
 
 export const SECURITY_LIMITS = {
   // Rate limiting
-  MAX_CONNECTIONS_PER_IP: 5,
+  MAX_CONNECTIONS_PER_IP: 50, // Increased for development/testing
   MAX_MESSAGES_PER_MINUTE: 500, // Increased for real-time collaborative editing
 
   // Document limits

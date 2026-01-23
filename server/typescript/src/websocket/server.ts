@@ -228,28 +228,13 @@ export class SyncWebSocketServer {
       // Record message (SECURITY) - DISABLED WITH RATE LIMITER
       // securityManager.messageRateLimiter.recordMessage(clientIP);
 
-      // CRITICAL DEBUG: Log ALL messages before validation
-      console.log(`[PRE-VALIDATION] Message received:`, {
-        type: message.type,
-        hasId: !!message.id,
-        hasTimestamp: !!message.timestamp,
-        hasDocumentId: !!(message as any).documentId,
-        keys: Object.keys(message).slice(0, 15)
-      });
-
       // Validate message format (SECURITY)
       const validation = validateMessage(message);
       if (!validation.valid) {
-        console.error(`[VALIDATION FAILED] Type: ${message.type}, Error: ${validation.error}, Keys: ${Object.keys(message).join(',')}`);
         connection.sendError(validation.error || 'Invalid message format', {
           code: 'INVALID_MESSAGE',
         });
         return;
-      }
-
-      // Debug: Log message types being received
-      if (message.type !== 'ping' && message.type !== 'pong') {
-        console.log(`[MSG] ✅ ${connection.id} sent: ${message.type} (validated)`);
       }
 
       switch (message.type) {
@@ -575,7 +560,6 @@ export class SyncWebSocketServer {
    */
   private async handleDelta(connection: Connection, message: DeltaMessage) {
     const { documentId } = message;
-    console.log(`[DELTA] Received from ${connection.id}, state=${connection.state}, auth=${!!connection.tokenPayload}`);
 
     // Normalize payload to handle both SDK and server formats
     let delta = (message as any).delta;
@@ -1046,6 +1030,65 @@ export class SyncWebSocketServer {
       connections: this.registry.getMetrics(),
       documents: this.coordinator.getStats(),
     };
+  }
+
+  /**
+   * Process delta batch from HTTP endpoint (bypasses WebSocket)
+   * Used when WebSocket infrastructure drops large messages
+   *
+   * @param documentId - The document to apply deltas to
+   * @param deltas - Array of {field, value, timestamp?} operations
+   * @param clientId - The client ID making the request
+   * @returns Object with success status and processed delta count
+   */
+  async processDeltaBatchFromHTTP(
+    documentId: string,
+    deltas: Array<{ field: string; value: any; timestamp?: number; clock?: Record<string, number> }>,
+    clientId: string
+  ): Promise<{ success: boolean; processed: number; error?: string }> {
+    console.log(`[HTTP_DELTA] Processing ${deltas.length} deltas for ${documentId} from client ${clientId}`);
+
+    if (!deltas || !Array.isArray(deltas) || deltas.length === 0) {
+      return { success: false, processed: 0, error: 'Invalid delta batch: missing or empty deltas array' };
+    }
+
+    try {
+      // Ensure document is loaded
+      await this.coordinator.getDocument(documentId);
+
+      const authoritativeDelta: Record<string, any> = {};
+      const timestamp = Date.now();
+
+      for (const operation of deltas) {
+        const field = operation.field;
+        const value = operation.value;
+        const opTimestamp = operation.timestamp || timestamp;
+
+        const isTombstone = value !== null && typeof value === 'object' &&
+                           '__deleted' in value && value.__deleted === true;
+
+        if (isTombstone) {
+          const authoritativeValue = await this.coordinator.deleteField(documentId, field, clientId, opTimestamp);
+          authoritativeDelta[field] = authoritativeValue === null ? { __deleted: true } : authoritativeValue;
+        } else {
+          const authoritativeValue = await this.coordinator.setField(documentId, field, value, clientId, opTimestamp);
+          authoritativeDelta[field] = authoritativeValue;
+        }
+
+        if (operation.clock) {
+          this.coordinator.mergeVectorClock(documentId, operation.clock);
+        }
+      }
+
+      // Add to batch for broadcasting to WebSocket subscribers
+      this.addToBatch(documentId, authoritativeDelta);
+
+      console.log(`[HTTP_DELTA] ✓ Processed ${deltas.length} deltas for ${documentId}`);
+      return { success: true, processed: deltas.length };
+    } catch (error) {
+      console.error('[HTTP_DELTA] Error processing delta batch:', error);
+      return { success: false, processed: 0, error: 'Delta batch processing failed' };
+    }
   }
 
   /**
