@@ -28,15 +28,77 @@ export function ContentEditable({
   const isComposingRef = useRef(false);
   const lastContentRef = useRef<string>(content);
 
-  // Update content when it changes externally (not during user typing)
+  // Update content when it changes externally (including remote collaborative updates)
   useEffect(() => {
     if (ref.current) {
       const parsedHtml = parseMarkdown(content);
+
+      // Skip if content hasn't actually changed
+      if (ref.current.innerHTML === parsedHtml) {
+        return;
+      }
+
       const isCurrentlyFocused = document.activeElement === ref.current;
 
-      // Only update if element is not focused (external change)
-      // When focused, the user is editing and we shouldn't interfere
-      if (!isCurrentlyFocused && ref.current.innerHTML !== parsedHtml) {
+      if (isCurrentlyFocused) {
+        // Save cursor position before updating
+        const selection = window.getSelection();
+        let savedOffset = 0;
+
+        if (selection && selection.rangeCount > 0) {
+          const range = selection.getRangeAt(0);
+          // Calculate offset from start of contenteditable
+          const preCaretRange = range.cloneRange();
+          preCaretRange.selectNodeContents(ref.current);
+          preCaretRange.setEnd(range.startContainer, range.startOffset);
+          savedOffset = preCaretRange.toString().length;
+        }
+
+        // Update content
+        ref.current.innerHTML = parsedHtml;
+        lastContentRef.current = content;
+
+        // Restore cursor position
+        try {
+          const newSelection = window.getSelection();
+          if (newSelection) {
+            const newRange = document.createRange();
+
+            // Find the text node and offset to place cursor
+            let currentOffset = 0;
+            let targetNode: Node | null = null;
+            let targetOffset = 0;
+
+            const walker = document.createTreeWalker(
+              ref.current,
+              NodeFilter.SHOW_TEXT,
+              null
+            );
+
+            let node: Node | null;
+            while ((node = walker.nextNode())) {
+              const nodeLength = node.textContent?.length || 0;
+              if (currentOffset + nodeLength >= savedOffset) {
+                targetNode = node;
+                targetOffset = savedOffset - currentOffset;
+                break;
+              }
+              currentOffset += nodeLength;
+            }
+
+            if (targetNode) {
+              newRange.setStart(targetNode, Math.min(targetOffset, targetNode.textContent?.length || 0));
+              newRange.collapse(true);
+              newSelection.removeAllRanges();
+              newSelection.addRange(newRange);
+            }
+          }
+        } catch (e) {
+          // If cursor restoration fails, just leave cursor at default position
+          console.warn('Could not restore cursor position:', e);
+        }
+      } else {
+        // Not focused - simple update
         ref.current.innerHTML = parsedHtml;
         lastContentRef.current = content;
       }

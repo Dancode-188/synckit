@@ -100,26 +100,8 @@ export function Editor({ pageId }: EditorProps) {
       // Type guard - pageId is checked above but TS needs it here too
       if (!pageId) return;
 
-      console.log('📄 Loading document:', pageId);
-
       // Get document
       const doc = synckit.document<PageDocument>(pageId);
-      console.log('[CLIENT] Created document instance for:', pageId);
-      console.log('[CLIENT] SyncManager exists:', !!(synckit as any).syncManager);
-      console.log('[CLIENT] Network status:', synckit.getNetworkStatus());
-
-      // CRITICAL DEBUG: Show sync status on screen
-      const debugDiv = document.getElementById('sync-debug') || document.createElement('div');
-      debugDiv.id = 'sync-debug';
-      debugDiv.style.cssText = 'position:fixed;top:10px;right:10px;background:black;color:lime;padding:10px;z-index:99999;font-family:monospace;font-size:12px;';
-      debugDiv.innerHTML = `
-        <div>SyncManager: ${!!(synckit as any).syncManager ? 'EXISTS ✓' : 'MISSING ✗'}</div>
-        <div>WebSocket: ${synckit.getNetworkStatus()}</div>
-        <div>Doc ID: ${pageId}</div>
-      `;
-      if (!document.getElementById('sync-debug')) {
-        document.body.appendChild(debugDiv);
-      }
 
       // Initialize document (loads from storage)
       // For playground, check storage first to avoid sync timeout on fresh load
