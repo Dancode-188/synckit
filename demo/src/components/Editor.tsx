@@ -52,6 +52,7 @@ export function Editor({ pageId }: EditorProps) {
   const [lastSnapshotTime, setLastSnapshotTime] = useState<number | null>(null);
   const [showSnapshotDialog, setShowSnapshotDialog] = useState(false);
   const [focusedBlockId, setFocusedBlockId] = useState<string | null>(null);
+  const [pendingFocusBlockId, setPendingFocusBlockId] = useState<string | null>(null);
   const editorRef = useRef<HTMLDivElement>(null);
   const pageDataRef = useRef<PageDocument | null>(null);
   const focusedBlockIdRef = useRef<string | null>(null);
@@ -273,6 +274,22 @@ export function Editor({ pageId }: EditorProps) {
     };
   }, []);
 
+  // Clear pending focus after the block has been rendered and focused
+  useEffect(() => {
+    if (pendingFocusBlockId) {
+      // Only clear after the block actually exists in the blocks array
+      // The block won't exist immediately because SyncKit updates are async
+      const blockExists = blocks.some(b => b.id === pendingFocusBlockId);
+      if (blockExists) {
+        // Use requestAnimationFrame to ensure DOM has updated and focus has been applied
+        const frame = requestAnimationFrame(() => {
+          setPendingFocusBlockId(null);
+        });
+        return () => cancelAnimationFrame(frame);
+      }
+    }
+  }, [pendingFocusBlockId, blocks]);
+
   // Handle paste events for images
   useEffect(() => {
     const handlePaste = async (e: ClipboardEvent) => {
@@ -356,6 +373,9 @@ export function Editor({ pageId }: EditorProps) {
           await pageDoc.set(getBlockKey(newBlock.id) as any, newBlock);
           await pageDoc.set(getBlockKey(followingBlock.id) as any, followingBlock);
           await pageDoc.set('blockOrder', JSON.stringify(newOrder));
+
+          // Focus the following paragraph block so user can continue typing
+          setPendingFocusBlockId(followingBlock.id);
 
           console.log('📷 Image pasted as new block with following paragraph');
         }
@@ -874,6 +894,9 @@ export function Editor({ pageId }: EditorProps) {
         pageDoc.set('blockOrder', JSON.stringify(newBlockIds));
         pageDoc.set(getBlockKey(newBlock.id) as any, newBlock);
 
+        // Focus the new block after render
+        setPendingFocusBlockId(newBlock.id);
+
         console.log('📝 Created block above image');
         return;
       }
@@ -920,7 +943,8 @@ export function Editor({ pageId }: EditorProps) {
         pageDoc.set('blockOrder', JSON.stringify(newBlockIds));
         pageDoc.set(getBlockKey(newBlock.id) as any, newBlock);
 
-        // Focus will be handled by autoFocus prop
+        // Focus the new block after render
+        setPendingFocusBlockId(newBlock.id);
       }
 
       // Backspace at start: Delete empty block
@@ -1081,7 +1105,7 @@ export function Editor({ pageId }: EditorProps) {
                   onDrop={handleDrop(index)}
                   onDragEnd={handleDragEnd}
                   isDragging={draggedBlockId === block.id}
-                  autoFocus={index === blocks.length - 1 && blocks.length > 1}
+                  autoFocus={block.id === pendingFocusBlockId}
                   onToggleBodyChange={(body) => handleToggleBodyChange(block.id, body)}
                   onToggleStateChange={(collapsed) => handleToggleStateChange(block.id, collapsed)}
                   onDelete={() => handleBlockDelete(block.id)}
