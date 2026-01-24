@@ -35,7 +35,7 @@ export async function initializeSyncKit(): Promise<SyncKitInfo> {
   const synckit = new SyncKit({
     name: 'localwrite',
     storage: storageInfo.storage,
-    // Connect to production server for real-time collaboration
+    // Connect to Fly.io production server
     serverUrl: 'wss://synckit-localwrite.fly.dev/ws',
   });
 

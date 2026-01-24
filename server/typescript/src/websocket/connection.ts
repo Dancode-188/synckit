@@ -30,6 +30,12 @@ export enum ConnectionState {
  * - Message routing
  * - State tracking
  */
+interface ChunkBuffer {
+  chunks: (Buffer | null)[];
+  totalChunks: number;
+  receivedAt: number;
+}
+
 export class Connection extends EventEmitter {
   public readonly id: string;
   public state: ConnectionState;
@@ -43,13 +49,18 @@ export class Connection extends EventEmitter {
   private isAlive: boolean = true;
   private subscribedDocuments: Set<string> = new Set();
 
+  // Chunk reassembly buffer
+  private chunkBuffers: Map<string, ChunkBuffer> = new Map();
+  private chunkCleanupInterval?: Timer;
+
   constructor(ws: WebSocket, connectionId: string) {
     super();
     this.id = connectionId;
     this.ws = ws;
     this.state = ConnectionState.CONNECTING;
-    
+
     this.setupHandlers();
+    this.startChunkCleanup();
   }
 
   /**
@@ -111,6 +122,12 @@ export class Connection extends EventEmitter {
         hasDocumentId: !!(message as any).documentId,
         keys: Object.keys(message).slice(0, 10)
       });
+
+      // Handle chunk messages specially
+      if (message.type === MessageType.DELTA_BATCH_CHUNK) {
+        this.handleChunk(message as any);
+        return;
+      }
 
       // Emit event for message handlers
       this.emit('message', message);
@@ -252,28 +269,83 @@ export class Connection extends EventEmitter {
   }
 
   /**
+   * Handle incoming chunk message
+   */
+  private handleChunk(chunkMessage: any): void {
+    const { chunkId, totalChunks, chunkIndex, data } = chunkMessage;
+
+    console.log(`[Connection ${this.id}] Received chunk ${chunkIndex + 1}/${totalChunks} for ${chunkId}`);
+
+    // Initialize chunk buffer if first chunk
+    if (!this.chunkBuffers.has(chunkId)) {
+      this.chunkBuffers.set(chunkId, {
+        chunks: new Array(totalChunks).fill(null),
+        totalChunks,
+        receivedAt: Date.now(),
+      });
+    }
+
+    // Decode base64 data and store chunk
+    const buffer = this.chunkBuffers.get(chunkId)!;
+    buffer.chunks[chunkIndex] = Buffer.from(data, 'base64');
+
+    // Check if all chunks received
+    if (buffer.chunks.every(chunk => chunk !== null)) {
+      console.log(`[Connection ${this.id}] All chunks received for ${chunkId}, reassembling...`);
+
+      // Reassemble message
+      const completeMessage = Buffer.concat(buffer.chunks as Buffer[]);
+      this.chunkBuffers.delete(chunkId);
+
+      // Parse and emit as delta_batch
+      try {
+        const message = parseMessage(completeMessage);
+        if (message) {
+          console.log(`[Connection ${this.id}] ✅ Reassembled ${completeMessage.length} bytes into ${message.type}`);
+          this.emit('message', message);
+        }
+      } catch (error) {
+        console.error(`[Connection ${this.id}] Error parsing reassembled message:`, error);
+      }
+    }
+  }
+
+  /**
+   * Start chunk cleanup interval
+   */
+  private startChunkCleanup(): void {
+    // Clean up abandoned chunks every 30 seconds
+    this.chunkCleanupInterval = setInterval(() => {
+      const now = Date.now();
+      const timeout = 30000; // 30 seconds
+
+      for (const [chunkId, buffer] of this.chunkBuffers.entries()) {
+        if (now - buffer.receivedAt > timeout) {
+          console.log(`[Connection ${this.id}] Cleaning up abandoned chunks for ${chunkId}`);
+          this.chunkBuffers.delete(chunkId);
+        }
+      }
+    }, 30000);
+  }
+
+  /**
+   * Stop chunk cleanup interval
+   */
+  private stopChunkCleanup(): void {
+    if (this.chunkCleanupInterval) {
+      clearInterval(this.chunkCleanupInterval);
+      this.chunkCleanupInterval = undefined;
+    }
+  }
+
+  /**
    * Cleanup connection resources (fix memory leak)
    */
   cleanup() {
     this.stopHeartbeat();
-    this.handlers.clear();
+    this.stopChunkCleanup();
+    this.chunkBuffers.clear();
     this.subscribedDocuments.clear();
-  }
-
-  // Simple event emitter for connection events
-  private handlers: Map<string, Function[]> = new Map();
-
-  on(event: string, handler: Function) {
-    if (!this.handlers.has(event)) {
-      this.handlers.set(event, []);
-    }
-    this.handlers.get(event)!.push(handler);
-  }
-
-  private emit(event: string, ...args: any[]) {
-    const handlers = this.handlers.get(event);
-    if (handlers) {
-      handlers.forEach(handler => handler(...args));
-    }
+    this.removeAllListeners();
   }
 }

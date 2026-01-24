@@ -73,6 +73,7 @@ export type MessageType =
   | 'unsubscribe'
   | 'delta'
   | 'delta_batch'
+  | 'delta_batch_chunk'
   | 'sync_request'
   | 'sync_response'
   | 'ack'
@@ -93,7 +94,8 @@ enum MessageTypeCode {
   SYNC_REQUEST = 0x12,
   SYNC_RESPONSE = 0x13,
   DELTA = 0x20,
-  DELTA_BATCH = 0x22,
+  DELTA_BATCH = 0x50,
+  DELTA_BATCH_CHUNK = 0x23,
   ACK = 0x21,
   PING = 0x30,
   PONG = 0x31,
@@ -148,6 +150,9 @@ export class WebSocketError extends Error {
 // ====================
 // WebSocket Client
 // ====================
+
+// Note: All delta_batch messages are sent via HTTP to bypass Fly.io's WebSocket filtering
+// WebSocket is used for smaller messages (ping, awareness, subscribe, etc.)
 
 export class WebSocketClient {
   private ws: WebSocket | null = null
@@ -249,69 +254,47 @@ export class WebSocketClient {
    * @throws {WebSocketError} if queue is full
    */
   send(message: WebSocketMessage): void {
-    // Only log delta and delta_batch messages (skip awareness spam)
-    const shouldLog = message.type === 'delta' || message.type === 'delta_batch'
-    if (shouldLog) {
-      console.log(`[WS] send() called with message type: ${message.type}`)
-    }
-
-    // CRITICAL DEBUG: Show on-screen whether messages are sent or queued
-    if (typeof document !== 'undefined' && message.type === 'delta') {
-      const statusDiv = document.getElementById('ws-status') || (() => {
-        const div = document.createElement('div');
-        div.id = 'ws-status';
-        div.style.cssText = 'position:fixed;top:160px;right:10px;background:orange;color:white;padding:10px;z-index:99999;font-family:monospace;font-size:12px;';
-        div.innerHTML = 'WS Status: ?';
-        document.body.appendChild(div);
-        return div;
-      })();
-
-      const isConn = this.isConnected();
-      const readyState = this.ws?.readyState;
-      statusDiv.innerHTML = `
-        <div>isConnected: ${isConn}</div>
-        <div>readyState: ${readyState} (${readyState === 1 ? 'OPEN' : 'NOT_OPEN'})</div>
-        <div>Queue size: ${this.messageQueue.length}</div>
-      `;
-      statusDiv.style.background = (isConn && readyState === 1) ? 'green' : 'red';
-    }
-
     if (this.isConnected() && this.ws?.readyState === WebSocket.OPEN) {
-      // Send immediately
-      const shouldLog = message.type === 'delta' || message.type === 'delta_batch'
-      if (shouldLog) {
-        console.log(`[WS] Connection is OPEN, sending ${message.type} immediately`)
-      }
-      try {
-        // Use binary encoding (proper protocol)
-        const encoded = this.encodeMessage(message)
-
-        if (shouldLog) {
-          console.log(`[WS] Calling ws.send() for ${message.type}, message size: ${encoded.byteLength} bytes (binary)`)
-          console.log(`[WS] readyState: ${this.ws.readyState}, bufferedAmount: ${this.ws.bufferedAmount}`)
+      // For delta_batch, wait for buffer to drain first to avoid interference with other messages
+      // This prevents message loss when awareness updates are buffered
+      if (message.type === 'delta_batch' && this.ws.bufferedAmount > 0) {
+        const waitForDrain = () => {
+          if (!this.ws || this.ws.readyState !== WebSocket.OPEN) {
+            this.queueMessage(message)
+            return
+          }
+          if (this.ws.bufferedAmount === 0) {
+            this.sendImmediate(message)
+          } else {
+            setTimeout(waitForDrain, 10)
+          }
         }
-
-        this.ws.send(encoded)
-        if (shouldLog) {
-          console.log(`[WS] ✓ ws.send() completed for ${message.type}`)
-          console.log(`[WS] After send - Queue size: ${this.messageQueue.length}`)
-        }
-      } catch (error) {
-        console.error('[WS] Failed to send message:', error)
-        console.error('[WS] Error details:', error)
-        // Queue for retry
-        this.queueMessage(message)
-        console.log(`[WS] Message queued after error. Queue size: ${this.messageQueue.length}`)
+        setTimeout(waitForDrain, 10)
+        return
       }
+
+      this.sendImmediate(message)
     } else {
-      // Queue for later
-      if (shouldLog) {
-        console.log(`[WS] NOT connected (isConnected: ${this.isConnected()}, readyState: ${this.ws?.readyState}), queuing ${message.type}`)
-      }
+      // Queue for later delivery when connection is restored
       this.queueMessage(message)
-      if (shouldLog) {
-        console.log(`[WS] Message queued. Queue size: ${this.messageQueue.length}`)
-      }
+    }
+  }
+
+  /**
+   * Send message immediately without buffer check
+   */
+  private sendImmediate(message: WebSocketMessage): void {
+    if (!this.ws || this.ws.readyState !== WebSocket.OPEN) {
+      this.queueMessage(message)
+      return
+    }
+
+    try {
+      const encoded = this.encodeMessage(message)
+      this.ws.send(encoded)
+    } catch (error) {
+      console.error('[WS] Failed to send message:', error)
+      this.queueMessage(message)
     }
   }
 
@@ -705,11 +688,6 @@ export class WebSocketClient {
    */
   private encodeMessage(message: WebSocketMessage): ArrayBuffer {
     const typeCode = this.getTypeCode(message.type)
-
-    if (message.type === 'delta' || message.type === 'delta_batch') {
-      console.log(`[WS] encodeMessage called for ${message.type}, typeCode: 0x${typeCode.toString(16)}`)
-    }
-
     const payloadJson = JSON.stringify(message.payload)
     const payloadBytes = new TextEncoder().encode(payloadJson)
 
@@ -718,10 +696,6 @@ export class WebSocketClient {
 
     // Write type code
     view.setUint8(0, typeCode)
-
-    if (message.type === 'delta' || message.type === 'delta_batch') {
-      console.log(`[WS] Encoded ${message.type} as binary, total size: ${buffer.byteLength} bytes`)
-    }
 
     // Write timestamp
     view.setBigInt64(1, BigInt(message.timestamp), false)
@@ -789,6 +763,7 @@ export class WebSocketClient {
       sync_response: MessageTypeCode.SYNC_RESPONSE,
       delta: MessageTypeCode.DELTA,
       delta_batch: MessageTypeCode.DELTA_BATCH,
+      delta_batch_chunk: MessageTypeCode.DELTA_BATCH_CHUNK,
       ack: MessageTypeCode.ACK,
       ping: MessageTypeCode.PING,
       pong: MessageTypeCode.PONG,
@@ -814,6 +789,8 @@ export class WebSocketClient {
       [MessageTypeCode.SYNC_REQUEST]: 'sync_request',
       [MessageTypeCode.SYNC_RESPONSE]: 'sync_response',
       [MessageTypeCode.DELTA]: 'delta',
+      [MessageTypeCode.DELTA_BATCH]: 'delta_batch',
+      [MessageTypeCode.DELTA_BATCH_CHUNK]: 'delta_batch_chunk',
       [MessageTypeCode.ACK]: 'ack',
       [MessageTypeCode.PING]: 'ping',
       [MessageTypeCode.PONG]: 'pong',

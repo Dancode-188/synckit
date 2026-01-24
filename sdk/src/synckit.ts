@@ -40,6 +40,7 @@ export class SyncKit {
 
   // Network components (initialized only if serverUrl provided)
   private websocket?: WebSocketClient
+  private awarenessWebsocket?: WebSocketClient  // Separate connection for awareness traffic
   private syncManager?: SyncManager
   private offlineQueue?: OfflineQueue
   private networkTracker?: NetworkStateTracker
@@ -115,7 +116,7 @@ export class SyncKit {
     })
     await this.offlineQueue.init()
 
-    // Initialize WebSocket client
+    // Initialize WebSocket client (single connection for all traffic)
     this.websocket = new WebSocketClient({
       url: this.config.serverUrl,
       reconnect: {
@@ -129,16 +130,22 @@ export class SyncKit {
       },
     })
 
+    // Use same websocket for awareness (reverted to single connection)
+    this.awarenessWebsocket = this.websocket
+
     // Initialize sync manager
     this.syncManager = new SyncManager({
       websocket: this.websocket,
+      awarenessWebsocket: this.awarenessWebsocket,
       storage: this.storage,
       offlineQueue: this.offlineQueue,
     })
 
     // Connect to server
     try {
+      console.log('[SyncKit] Connecting WebSocket...')
       await this.websocket.connect()
+      console.log('[SyncKit] WebSocket connected')
     } catch (error) {
       // Connection failure is non-fatal - will retry automatically
       console.warn('Initial connection failed, will retry:', error)

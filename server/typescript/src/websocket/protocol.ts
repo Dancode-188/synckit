@@ -25,7 +25,8 @@ export enum MessageTypeCode {
   SYNC_STEP1 = 0x14,
   SYNC_STEP2 = 0x15,
   DELTA = 0x20,
-  DELTA_BATCH = 0x22,
+  DELTA_BATCH = 0x50,
+  DELTA_BATCH_CHUNK = 0x23,
   ACK = 0x21,
   PING = 0x30,
   PONG = 0x31,
@@ -59,6 +60,7 @@ export enum MessageType {
   SYNC_STEP2 = 'sync_step2',
   DELTA = 'delta',
   DELTA_BATCH = 'delta_batch',
+  DELTA_BATCH_CHUNK = 'delta_batch_chunk',
   ACK = 'ack',
 
   // Awareness (presence)
@@ -157,6 +159,14 @@ export interface DeltaBatchMessage extends BaseMessage {
   deltas: any[]; // Array of delta operations
 }
 
+export interface DeltaBatchChunkMessage extends BaseMessage {
+  type: MessageType.DELTA_BATCH_CHUNK;
+  chunkId: string; // Unique ID for this chunk set
+  totalChunks: number; // Total number of chunks
+  chunkIndex: number; // Index of this chunk (0-based)
+  data: string; // Base64-encoded chunk data
+}
+
 export interface AckMessage extends BaseMessage {
   type: MessageType.ACK;
   messageId: string; // ID of message being acknowledged
@@ -206,6 +216,7 @@ export type Message =
   | SyncStep2Message
   | DeltaMessage
   | DeltaBatchMessage
+  | DeltaBatchChunkMessage
   | AckMessage
   | AwarenessUpdateMessage
   | AwarenessSubscribeMessage
@@ -227,6 +238,7 @@ const TYPE_CODE_TO_NAME: Record<number, MessageType> = {
   [MessageTypeCode.SYNC_STEP2]: MessageType.SYNC_STEP2,
   [MessageTypeCode.DELTA]: MessageType.DELTA,
   [MessageTypeCode.DELTA_BATCH]: MessageType.DELTA_BATCH,
+  [MessageTypeCode.DELTA_BATCH_CHUNK]: MessageType.DELTA_BATCH_CHUNK,
   [MessageTypeCode.ACK]: MessageType.ACK,
   [MessageTypeCode.PING]: MessageType.PING,
   [MessageTypeCode.PONG]: MessageType.PONG,
@@ -251,6 +263,7 @@ const TYPE_NAME_TO_CODE: Record<MessageType, number> = {
   [MessageType.SYNC_STEP2]: MessageTypeCode.SYNC_STEP2,
   [MessageType.DELTA]: MessageTypeCode.DELTA,
   [MessageType.DELTA_BATCH]: MessageTypeCode.DELTA_BATCH,
+  [MessageType.DELTA_BATCH_CHUNK]: MessageTypeCode.DELTA_BATCH_CHUNK,
   [MessageType.ACK]: MessageTypeCode.ACK,
   [MessageType.PING]: MessageTypeCode.PING,
   [MessageType.PONG]: MessageTypeCode.PONG,
@@ -266,32 +279,18 @@ const TYPE_NAME_TO_CODE: Record<MessageType, number> = {
  * Parse WebSocket message (supports both binary and JSON protocols)
  */
 export function parseMessage(data: Buffer | string): Message | null {
-  console.log('[parseMessage] Called with:', {
-    dataType: typeof data,
-    length: data.length,
-    isBuffer: Buffer.isBuffer(data),
-    firstByte: typeof data === 'string' ? data.charCodeAt(0) : data[0],
-    firstChar: typeof data === 'string' ? data[0] : String.fromCharCode(data[0])
-  });
-
   // Detect protocol type
   if (typeof data === 'string') {
-    console.log('[parseMessage] → String path → parseJsonMessage');
-    // Legacy JSON protocol
     return parseJsonMessage(data);
   }
 
   // Check if Buffer contains JSON (starts with '{' = 0x7b)
   if (data.length > 0 && data[0] === 0x7b) {
-    console.log('[parseMessage] → Buffer with JSON path → converting to string');
-    // JSON protocol sent as Buffer
     const jsonString = data.toString('utf8');
-    console.log('[parseMessage] → Converted to string, calling parseJsonMessage');
     return parseJsonMessage(jsonString);
   }
 
   // Binary protocol (Buffer)
-  console.log('[parseMessage] → Binary path → parseBinaryMessage');
   return parseBinaryMessage(data);
 }
 
@@ -314,7 +313,6 @@ function parseBinaryMessage(data: Buffer): Message | null {
 
     // Read header
     const typeCode = data.readUInt8(0);
-    console.log(`[Protocol] Parsing binary message: typeCode=0x${typeCode.toString(16)}, size=${data.length}`);
     const timestamp = Number(data.readBigInt64BE(1));
     const payloadLength = data.readUInt32BE(9);
 
@@ -359,21 +357,9 @@ function parseBinaryMessage(data: Buffer): Message | null {
 function parseJsonMessage(raw: string): Message | null {
   try {
     const data = JSON.parse(raw);
-    console.log('[Protocol] Parsing JSON message:', {
-      type: data.type,
-      hasId: !!data.id,
-      hasTimestamp: !!data.timestamp,
-      hasPayload: !!data.payload,
-      payloadKeys: data.payload ? Object.keys(data.payload) : []
-    });
 
     if (!data.type || !data.id || !data.timestamp) {
-      console.error('[Protocol] Message missing required fields:', {
-        hasType: !!data.type,
-        hasId: !!data.id,
-        hasTimestamp: !!data.timestamp,
-        raw: raw.substring(0, 200)
-      });
+      console.error('[Protocol] Message missing required fields');
       return null;
     }
     // If SDK sends nested payload, flatten it
@@ -382,19 +368,11 @@ function parseJsonMessage(raw: string): Message | null {
       // Preserve message type, exclude operation type from payload
       const { type: _operationType, ...payloadWithoutType} = payload;
       const flattened = { ...rest, ...payloadWithoutType } as Message;
-      console.log('[Protocol] Flattened message:', {
-        type: flattened.type,
-        documentId: (flattened as any).documentId,
-        field: (flattened as any).field,
-        keys: Object.keys(flattened)
-      });
-      console.log('[Protocol] ✅ Returning flattened message');
       return flattened;
     }
-    console.log('[Protocol] ✅ Returning data as-is (no payload to flatten)');
     return data as Message;
   } catch (error) {
-    console.error('[Protocol] ❌ JSON parse error:', error, 'raw:', raw.substring(0, 200));
+    console.error('[Protocol] JSON parse error:', error);
     return null;
   }
 }

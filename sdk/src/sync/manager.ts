@@ -21,8 +21,11 @@ export type { Operation, VectorClock } from './queue'
 // ====================
 
 export interface SyncManagerConfig {
-  /** WebSocket client instance */
+  /** WebSocket client instance for sync/delta traffic */
   websocket: WebSocketClient
+
+  /** WebSocket client instance for awareness traffic (optional, uses main websocket if not provided) */
+  awarenessWebsocket?: WebSocketClient
 
   /** Storage adapter for persistence */
   storage: StorageAdapter
@@ -71,6 +74,7 @@ export interface SyncableDocument {
 
 export class SyncManager {
   private websocket: WebSocketClient
+  private awarenessWebsocket: WebSocketClient  // Separate connection for awareness
   private offlineQueue: OfflineQueue
   private awarenessManager: AwarenessManager
 
@@ -97,11 +101,13 @@ export class SyncManager {
 
   constructor(config: SyncManagerConfig) {
     this.websocket = config.websocket
+    // Use separate awareness websocket if provided, otherwise fall back to main websocket
+    this.awarenessWebsocket = config.awarenessWebsocket ?? config.websocket
     this.offlineQueue = config.offlineQueue
 
-    // Initialize awareness manager
+    // Initialize awareness manager with its own dedicated websocket
     this.awarenessManager = new AwarenessManager({
-      websocket: this.websocket,
+      websocket: this.awarenessWebsocket,
     })
 
     this.setupMessageHandlers()
@@ -239,8 +245,6 @@ export class SyncManager {
   async pushOperation(operation: Operation): Promise<void> {
     const { documentId } = operation
 
-    console.log(`[SDK] pushOperation called for ${documentId}, field: ${operation.field}`)
-
     if (!this.deltaBatchQueue.has(documentId)) {
       this.deltaBatchQueue.set(documentId, [])
     }
@@ -250,28 +254,21 @@ export class SyncManager {
     if (existingTimer) clearTimeout(existingTimer)
 
     const queueSize = this.deltaBatchQueue.get(documentId)!.length
-    console.log(`[SDK] Batch queue size: ${queueSize}`)
 
     if (queueSize >= this.DELTA_BATCH_MAX_SIZE) {
-      console.log(`[SDK] Max batch size reached, flushing immediately`)
       this.flushDeltaBatch(documentId)
       return
     }
 
-    console.log(`[SDK] Setting timer to flush in ${this.DELTA_BATCH_DELAY}ms`)
     const timer = setTimeout(() => this.flushDeltaBatch(documentId), this.DELTA_BATCH_DELAY)
     this.deltaBatchTimers.set(documentId, timer)
   }
 
   private flushDeltaBatch(documentId: string): void {
-    console.log(`[SDK] flushDeltaBatch called for ${documentId}`)
     const batch = this.deltaBatchQueue.get(documentId)
     if (!batch || batch.length === 0) {
-      console.log(`[SDK] No batch to flush (empty or missing)`)
       return
     }
-
-    console.log(`[SDK] Flushing batch with ${batch.length} deltas`)
 
     const timer = this.deltaBatchTimers.get(documentId)
     if (timer) {
@@ -280,7 +277,6 @@ export class SyncManager {
     }
 
     const messageId = this.generateMessageId()
-    console.log(`[SDK] Sending delta_batch message:`, { documentId, deltaCount: batch.length, messageId })
 
     this.websocket.send({
       type: 'delta_batch',
@@ -291,8 +287,6 @@ export class SyncManager {
 
     this.deltaBatchQueue.set(documentId, [])
     this.updateSyncState(documentId, { lastSyncedAt: Date.now() })
-
-    console.log(`[SDK] ✓ Delta batch sent (${batch.length} deltas)`)
   }
 
 
@@ -733,17 +727,25 @@ export class SyncManager {
     this.awarenessManager.registerAwareness(documentId, awareness)
 
     // Set up onChange callback to automatically broadcast updates to server
+    // Throttle awareness updates to max 10/second to prevent flooding
+    let lastAwarenessUpdate = 0
+    const AWARENESS_THROTTLE_MS = 100
+
     awareness.setOnChange((update) => {
-      this.websocket.send({
-        type: 'awareness_update',
-        payload: {
-          documentId,
-          clientId: update.client_id,
-          state: update.state,
-          clock: update.clock,
-        },
-        timestamp: Date.now(),
-      })
+      const now = Date.now()
+      if (now - lastAwarenessUpdate >= AWARENESS_THROTTLE_MS) {
+        lastAwarenessUpdate = now
+        this.awarenessWebsocket.send({
+          type: 'awareness_update',
+          payload: {
+            documentId,
+            clientId: update.client_id,
+            state: update.state,
+            clock: update.clock,
+          },
+          timestamp: Date.now(),
+        })
+      }
     })
   }
 
