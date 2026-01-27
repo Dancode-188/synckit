@@ -49,15 +49,6 @@ export interface DocumentSyncState {
 }
 
 // ====================
-// Conflict Types
-// ====================
-
-interface Conflict {
-  local: Operation
-  remote: Operation
-}
-
-// ====================
 // Document Interface
 // ====================
 
@@ -384,11 +375,62 @@ export class SyncManager {
       this.handleRemoteOperation(payload)
     })
 
+    // Handle delta_batch messages (including text operations from server)
+    this.websocket.on('delta_batch', (payload) => {
+      this.handleRemoteDeltaBatch(payload)
+    })
 
     // Handle errors
     this.websocket.on('error', (payload) => {
       console.error('Server error:', payload)
     })
+  }
+
+  /**
+   * Handle remote delta batch from server
+   * This handles both document field updates and text CRDT operations
+   */
+  private handleRemoteDeltaBatch(payload: any): void {
+    const { documentId, deltas, isTextOperation } = payload
+
+    if (!deltas || !Array.isArray(deltas)) {
+      console.warn('[SyncManager] Received invalid delta_batch:', payload)
+      return
+    }
+
+    for (const operation of deltas) {
+      // Handle text CRDT operations (state-based or legacy position-based)
+      if (operation.type === 'text-state' || operation.type === 'text' || isTextOperation) {
+        this.handleRemoteTextOperation(documentId, operation)
+      } else {
+        // Handle standard document field operations
+        this.handleRemoteOperation({ ...operation, documentId })
+      }
+    }
+  }
+
+  /**
+   * Handle remote text CRDT operation
+   */
+  private handleRemoteTextOperation(documentId: string, operation: any): void {
+    const document = this.documents.get(documentId)
+
+    if (!document) {
+      // Buffer the operation for when the document is registered
+      if (!this.bufferedOperations.has(documentId)) {
+        this.bufferedOperations.set(documentId, [])
+      }
+      this.bufferedOperations.get(documentId)!.push(operation)
+      return
+    }
+
+    // Apply the text operation
+    document.applyRemoteOperation(operation)
+
+    // Merge vector clocks if present
+    if (operation.clock) {
+      this.mergeVectorClocks(document, operation.clock)
+    }
   }
 
   /**
@@ -520,28 +562,21 @@ export class SyncManager {
       return
     }
 
-    // console.log('[SyncManager] ✓ Document found, applying remote operation')
+    // Trust the server's authoritative value - the server has already resolved
+    // any conflicts using LWW, so we should always apply remote operations.
+    // This ensures real-time collaborative editing works correctly.
+    document.applyRemoteOperation(operation)
 
-    // Check for conflict
-    const localOps = this.pendingOperations.get(documentId) || []
-    const conflict = this.detectConflict(document, localOps, operation)
-
-    if (conflict) {
-      // Resolve using LWW
-      const resolution = this.resolveLWW(conflict.local, operation)
-
-      if (resolution === 'remote') {
-        // Apply remote operation
-        document.applyRemoteOperation(operation)
+    // Clear any pending local operations for this field since the server
+    // has given us the authoritative value
+    const pendingOps = this.pendingOperations.get(documentId)
+    if (pendingOps) {
+      const filteredOps = pendingOps.filter(op => op.field !== operation.field)
+      if (filteredOps.length > 0) {
+        this.pendingOperations.set(documentId, filteredOps)
       } else {
-        // Keep local, re-send our version to server
-        this.pushOperation(conflict.local).catch((error) => {
-          console.error('Failed to re-send local operation:', error)
-        })
+        this.pendingOperations.delete(documentId)
       }
-    } else {
-      // No conflict, apply directly
-      document.applyRemoteOperation(operation)
     }
 
     // Merge vector clocks
@@ -549,89 +584,6 @@ export class SyncManager {
 
     // Update sync state
     this.updateSyncState(documentId, { lastSyncedAt: Date.now() })
-  }
-
-  /**
-   * Handle ACK message
-   */
-  /**
-   * Detect conflict between local and remote operations
-   */
-  private detectConflict(
-    document: SyncableDocument,
-    localOps: Operation[],
-    remoteOp: Operation
-  ): Conflict | null {
-    // Find local operation on same field
-    const localOp = localOps.find(
-      (op) => op.field === remoteOp.field && op.type === remoteOp.type
-    )
-
-    if (!localOp) {
-      return null // No conflict
-    }
-
-    // Check causality using vector clocks
-    const localClock = document.getVectorClock()
-    const remoteClock = remoteOp.clock
-
-    const localHappensAfterRemote = this.happensAfter(localClock, remoteClock)
-    const remoteHappensAfterLocal = this.happensAfter(remoteClock, localClock)
-
-    if (localHappensAfterRemote || remoteHappensAfterLocal) {
-      // Causal relationship, no conflict
-      return null
-    }
-
-    // Concurrent operations on same field = conflict
-    return {
-      local: localOp,
-      remote: remoteOp,
-    }
-  }
-
-  /**
-   * Check if clock A happens after clock B
-   */
-  private happensAfter(clockA: VectorClock, clockB: VectorClock): boolean {
-    let greater = false
-
-    // Check all clients in A
-    for (const clientId in clockA) {
-      const a = clockA[clientId] ?? 0
-      const b = clockB[clientId] ?? 0
-
-      if (a > b) {
-        greater = true
-      } else if (a < b) {
-        return false // B happened after A
-      }
-    }
-
-    // Check all clients in B that aren't in A
-    for (const clientId in clockB) {
-      if (!(clientId in clockA)) {
-        const b = clockB[clientId] ?? 0
-        if (b > 0) {
-          return false // B has events A doesn't know about
-        }
-      }
-    }
-
-    return greater
-  }
-
-  /**
-   * Resolve conflict using Last-Write-Wins
-   */
-  private resolveLWW(localOp: Operation, remoteOp: Operation): 'local' | 'remote' {
-    // Compare timestamps
-    if (localOp.timestamp !== remoteOp.timestamp) {
-      return localOp.timestamp > remoteOp.timestamp ? 'local' : 'remote'
-    }
-
-    // Timestamps equal, use client ID as tiebreaker
-    return localOp.clientId > remoteOp.clientId ? 'local' : 'remote'
   }
 
   /**

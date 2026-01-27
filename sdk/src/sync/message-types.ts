@@ -96,7 +96,25 @@ export interface FullSyncResponseMessage extends BaseMessage {
 }
 
 /**
- * Text insert operation - broadcasts text insertion to other tabs
+ * Text state message - broadcasts full CRDT state to other tabs
+ *
+ * IMPORTANT: This is the correct approach for cross-tab text sync.
+ * Position-based operations (text-insert, text-delete) are fundamentally
+ * broken because they create new CRDT nodes with different NodeIds,
+ * causing merge corruption when syncing with remote devices.
+ *
+ * State-based sync ensures all tabs have identical CRDT structures.
+ */
+export interface TextStateMessage extends BaseMessage {
+  type: 'text-state';
+  documentId: string;
+  state: string;  // JSON serialized Fugue CRDT state
+  clientId: string;
+}
+
+/**
+ * @deprecated Use TextStateMessage instead. Position-based operations
+ * break CRDT node identity and cause merge corruption.
  */
 export interface TextInsertMessage extends BaseMessage {
   type: 'text-insert';
@@ -106,7 +124,8 @@ export interface TextInsertMessage extends BaseMessage {
 }
 
 /**
- * Text delete operation - broadcasts text deletion to other tabs
+ * @deprecated Use TextStateMessage instead. Position-based operations
+ * break CRDT node identity and cause merge corruption.
  */
 export interface TextDeleteMessage extends BaseMessage {
   type: 'text-delete';
@@ -153,6 +172,7 @@ export type CrossTabMessage =
   | TabLeavingMessage
   | RequestFullSyncMessage
   | FullSyncResponseMessage
+  | TextStateMessage
   | TextInsertMessage
   | TextDeleteMessage
   | UndoAddMessage

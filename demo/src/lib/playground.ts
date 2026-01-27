@@ -12,12 +12,13 @@ import { createBlock, PageDocument, BLOCK_TYPES } from './blocks';
  */
 export async function initializePlayground(doc: SyncDocument<PageDocument>): Promise<boolean> {
   try {
-    // Check if already initialized
+    // Check if already has blocks (not just metadata like title/id)
     const data = doc.get();
-    const hasContent = data && Object.keys(data).length > 0;
+    const existingBlockOrder = data?.blockOrder ? JSON.parse(data.blockOrder as string) : [];
+    const hasBlocks = existingBlockOrder.length > 0;
 
-    if (hasContent) {
-      console.log('🌍 Playground already initialized');
+    if (hasBlocks) {
+      console.log('🌍 Playground already has blocks, skipping seed content');
       return false;
     }
 

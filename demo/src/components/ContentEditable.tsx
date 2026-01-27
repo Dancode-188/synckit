@@ -28,15 +28,97 @@ export function ContentEditable({
   const isComposingRef = useRef(false);
   const lastContentRef = useRef<string>(content);
 
-  // Update content when it changes externally (not during user typing)
+  // Update content when it changes externally (including remote CRDT updates)
+  // CRITICAL: We MUST update the DOM even while focused, otherwise the DOM and CRDT
+  // diverge, causing the diff algorithm to compute incorrect operations that
+  // overwrite remote content. We preserve cursor position to prevent jumping.
   useEffect(() => {
     if (ref.current) {
       const parsedHtml = parseMarkdown(content);
+
+      // Skip if content hasn't actually changed
+      if (ref.current.innerHTML === parsedHtml) {
+        lastContentRef.current = content;
+        return;
+      }
+
       const isCurrentlyFocused = document.activeElement === ref.current;
 
-      // Only update if element is not focused (external change)
-      // When focused, the user is editing and we shouldn't interfere
-      if (!isCurrentlyFocused && ref.current.innerHTML !== parsedHtml) {
+      if (isCurrentlyFocused) {
+        // Save cursor position before updating
+        const selection = window.getSelection();
+        let savedOffset = 0;
+        let savedNode: Node | null = null;
+
+        if (selection && selection.rangeCount > 0) {
+          const range = selection.getRangeAt(0);
+          savedOffset = range.startOffset;
+          savedNode = range.startContainer;
+
+          // Calculate absolute offset from start of content
+          // This helps restore position even when content structure changes
+          const walker = document.createTreeWalker(
+            ref.current,
+            NodeFilter.SHOW_TEXT,
+            null
+          );
+          let absoluteOffset = 0;
+          let node: Node | null;
+          while ((node = walker.nextNode())) {
+            if (node === savedNode) {
+              absoluteOffset += savedOffset;
+              break;
+            }
+            absoluteOffset += (node.textContent?.length || 0);
+          }
+
+          // Update innerHTML
+          ref.current.innerHTML = parsedHtml;
+          lastContentRef.current = content;
+
+          // Restore cursor position using absolute offset
+          try {
+            const newWalker = document.createTreeWalker(
+              ref.current,
+              NodeFilter.SHOW_TEXT,
+              null
+            );
+            let currentOffset = 0;
+            let targetNode: Node | null = null;
+            let targetOffset = 0;
+
+            while ((node = newWalker.nextNode())) {
+              const nodeLength = node.textContent?.length || 0;
+              if (currentOffset + nodeLength >= absoluteOffset) {
+                targetNode = node;
+                targetOffset = absoluteOffset - currentOffset;
+                break;
+              }
+              currentOffset += nodeLength;
+            }
+
+            if (targetNode) {
+              const newRange = document.createRange();
+              newRange.setStart(targetNode, Math.min(targetOffset, targetNode.textContent?.length || 0));
+              newRange.collapse(true);
+              selection.removeAllRanges();
+              selection.addRange(newRange);
+            }
+          } catch (e) {
+            // If cursor restoration fails, just place at end
+            const newRange = document.createRange();
+            newRange.selectNodeContents(ref.current);
+            newRange.collapse(false);
+            selection?.removeAllRanges();
+            selection?.addRange(newRange);
+          }
+        } else {
+          // No selection, just update
+          ref.current.innerHTML = parsedHtml;
+          lastContentRef.current = content;
+        }
+      } else {
+        // Not focused - simple update
         ref.current.innerHTML = parsedHtml;
         lastContentRef.current = content;
       }
@@ -53,7 +135,7 @@ export function ContentEditable({
         return;
       }
       const markdownContent = htmlToMarkdown(element);
-      // Only call onChange if content actually changed (not from prop update)
+      // Only call onChange if content actually changed
       if (markdownContent !== lastContentRef.current) {
         lastContentRef.current = markdownContent;
         onChange(markdownContent);
@@ -88,14 +170,10 @@ export function ContentEditable({
   }, [autoFocus]);
 
   const handleInput = () => {
-    console.log('[CONTENTEDITABLE] handleInput called');
     if (ref.current && !isComposingRef.current) {
       // Convert HTML back to markdown to preserve formatting
       const markdownContent = htmlToMarkdown(ref.current);
-      console.log('[CONTENTEDITABLE] Calling onChange with:', markdownContent.substring(0, 50));
       onChange(markdownContent);
-    } else {
-      console.log('[CONTENTEDITABLE] Skipped - composing or no ref');
     }
   };
 

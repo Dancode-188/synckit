@@ -169,6 +169,9 @@ export class WebSocketClient {
   private stateChangeHandlers = new Set<(state: ConnectionState) => void>()
   private oneTimeHandlers = new Map<MessageType, Set<(payload: any) => void>>()
 
+  // Visibility change handling
+  private visibilityHandler: (() => void) | null = null
+
   // Configuration with defaults (getAuthToken remains optional)
   private readonly config: InternalWebSocketConfig
 
@@ -209,6 +212,9 @@ export class WebSocketClient {
     this._state = 'connecting'
     this.emitStateChange('connecting')
 
+    // Setup visibility change detection for tab suspension handling
+    this.setupVisibilityHandler()
+
     try {
       await this.establishConnection()
       this.reconnectAttempts = 0
@@ -237,6 +243,9 @@ export class WebSocketClient {
     // Stop heartbeat
     this.stopHeartbeat()
 
+    // Remove visibility change listener
+    this.removeVisibilityHandler()
+
     // Close WebSocket
     if (this.ws) {
       this.ws.close()
@@ -258,7 +267,20 @@ export class WebSocketClient {
       // For delta_batch, wait for buffer to drain first to avoid interference with other messages
       // This prevents message loss when awareness updates are buffered
       if (message.type === 'delta_batch' && this.ws.bufferedAmount > 0) {
+        const startTime = Date.now()
+        const BUFFER_DRAIN_TIMEOUT = 5000 // 5 seconds max wait
+
         const waitForDrain = () => {
+          // Check for timeout - if buffer hasn't drained in 5 seconds,
+          // connection is likely dead. Queue and trigger reconnection.
+          if (Date.now() - startTime > BUFFER_DRAIN_TIMEOUT) {
+            console.warn('[WS] Buffer drain timeout - connection may be dead, queueing message')
+            this.queueMessage(message)
+            // Trigger connection health check
+            this.handleConnectionLost()
+            return
+          }
+
           if (!this.ws || this.ws.readyState !== WebSocket.OPEN) {
             this.queueMessage(message)
             return
@@ -639,6 +661,64 @@ export class WebSocketClient {
     if (this.config.reconnect.enabled) {
       this.reconnect()
     }
+  }
+
+  /**
+   * Setup visibility change detection
+   * When tab becomes visible after being suspended, verify connection health
+   */
+  private setupVisibilityHandler(): void {
+    if (typeof document === 'undefined') return // Not in browser
+
+    this.visibilityHandler = () => {
+      if (document.visibilityState === 'visible' && this._state === 'connected') {
+        // Tab just became visible - verify connection is still alive
+        // Browser may have suspended timers and connection could be dead
+        this.verifyConnectionHealth()
+      }
+    }
+
+    document.addEventListener('visibilitychange', this.visibilityHandler)
+  }
+
+  /**
+   * Remove visibility change listener
+   */
+  private removeVisibilityHandler(): void {
+    if (this.visibilityHandler && typeof document !== 'undefined') {
+      document.removeEventListener('visibilitychange', this.visibilityHandler)
+      this.visibilityHandler = null
+    }
+  }
+
+  /**
+   * Verify connection is still alive by sending a ping
+   */
+  private verifyConnectionHealth(): void {
+    if (!this.ws || this.ws.readyState !== WebSocket.OPEN) {
+      // Connection already known to be dead
+      this.handleConnectionLost()
+      return
+    }
+
+    // Send ping and wait for pong
+    const healthCheckTimeout = setTimeout(() => {
+      console.warn('[WS] Health check failed - no pong received after tab became visible')
+      this.handleConnectionLost()
+    }, this.config.heartbeat.timeout)
+
+    // Set up one-time pong handler for this health check
+    const pongHandler = () => {
+      clearTimeout(healthCheckTimeout)
+    }
+    this.once('pong', pongHandler)
+
+    // Send ping
+    this.send({
+      type: 'ping',
+      payload: {},
+      timestamp: Date.now(),
+    })
   }
 
   /**

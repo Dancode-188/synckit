@@ -693,11 +693,28 @@ export class SyncWebSocketServer {
 
       const clientId = connection.clientId || connection.id;
       const authoritativeDelta: Record<string, any> = {};
+      const textOperations: any[] = [];
 
       for (const operation of deltas) {
+        // Check if this is a text CRDT operation (state-based or position-based)
+        if (operation.type === 'text-state' || operation.type === 'text') {
+          // Text operations are broadcast directly to other clients
+          textOperations.push({
+            ...operation,
+            clientId: operation.clientId || clientId,
+          });
+          continue;
+        }
+
+        // Standard document field operation
         const field = operation.field;
         const value = operation.value;
         const timestamp = operation.timestamp || message.timestamp;
+
+        if (field === undefined) {
+          console.warn('[DELTA_BATCH] Skipping operation without field:', operation);
+          continue;
+        }
 
         const isTombstone = value !== null && typeof value === 'object' &&
                            '__deleted' in value && value.__deleted === true;
@@ -715,7 +732,15 @@ export class SyncWebSocketServer {
         }
       }
 
-      this.addToBatch(documentId, authoritativeDelta);
+      // Handle standard document field updates
+      if (Object.keys(authoritativeDelta).length > 0) {
+        this.addToBatch(documentId, authoritativeDelta);
+      }
+
+      // Broadcast text operations directly to other subscribers
+      if (textOperations.length > 0) {
+        this.broadcastTextOperations(documentId, textOperations, connection.id);
+      }
 
       const originalMessageId = message.messageId || message.id;
       const ack: AckMessage = {
@@ -726,10 +751,44 @@ export class SyncWebSocketServer {
       };
 
       connection.send(ack);
-      console.log(`[DELTA_BATCH] ✓ Processed ${deltas.length} deltas for ${documentId}`);
+      console.log(`[DELTA_BATCH] ✓ Processed ${deltas.length} deltas for ${documentId} (${textOperations.length} text ops)`);
     } catch (error) {
       console.error('Error handling delta batch:', error);
       connection.sendError('Delta batch application failed', { documentId });
+    }
+  }
+
+  /**
+   * Broadcast text CRDT operations to subscribers (except sender)
+   * Text operations use Fugue CRDT and need to be broadcast as-is
+   */
+  private broadcastTextOperations(documentId: string, operations: any[], senderId: string) {
+    const subscribers = this.coordinator.getSubscribers(documentId);
+    console.log(`[BROADCAST_TEXT] ${documentId} ${operations.length} ops to ${subscribers.length} subscribers (excluding ${senderId})`);
+
+    for (const connectionId of subscribers) {
+      // Don't send back to the sender
+      if (connectionId === senderId) {
+        continue;
+      }
+
+      const connection = this.registry.get(connectionId);
+      if (!connection || connection.state !== ConnectionState.AUTHENTICATED) {
+        continue;
+      }
+
+      // Send text operations as a delta_batch to other clients
+      const textBatchMessage: any = {
+        type: MessageType.DELTA_BATCH,
+        id: createMessageId(),
+        timestamp: Date.now(),
+        documentId,
+        deltas: operations,
+        isTextOperation: true, // Flag to help client identify text operations
+      };
+
+      connection.send(textBatchMessage);
+      console.log(`[BROADCAST_TEXT] Sent ${operations.length} text ops to ${connectionId}`);
     }
   }
 

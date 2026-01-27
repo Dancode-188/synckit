@@ -6,7 +6,7 @@
 import { useState, useEffect, KeyboardEvent, useCallback, useRef } from 'react';
 import { SyncDocument, SnapshotScheduler } from '@synckit-js/sdk';
 import { useSyncKit } from '../contexts/SyncKitContext';
-import { BlockComponent } from './BlockComponent';
+import { CRDTBlockComponent } from './CRDTBlockComponent';
 import { SlashMenu } from './SlashMenu';
 import { LinkDialog } from './LinkDialog';
 import { SnapshotDialog } from './SnapshotDialog';
@@ -52,6 +52,7 @@ export function Editor({ pageId }: EditorProps) {
   const [lastSnapshotTime, setLastSnapshotTime] = useState<number | null>(null);
   const [showSnapshotDialog, setShowSnapshotDialog] = useState(false);
   const [focusedBlockId, setFocusedBlockId] = useState<string | null>(null);
+  const [pendingFocusBlockId, setPendingFocusBlockId] = useState<string | null>(null);
   const editorRef = useRef<HTMLDivElement>(null);
   const pageDataRef = useRef<PageDocument | null>(null);
   const focusedBlockIdRef = useRef<string | null>(null);
@@ -100,26 +101,8 @@ export function Editor({ pageId }: EditorProps) {
       // Type guard - pageId is checked above but TS needs it here too
       if (!pageId) return;
 
-      console.log('📄 Loading document:', pageId);
-
       // Get document
       const doc = synckit.document<PageDocument>(pageId);
-      console.log('[CLIENT] Created document instance for:', pageId);
-      console.log('[CLIENT] SyncManager exists:', !!(synckit as any).syncManager);
-      console.log('[CLIENT] Network status:', synckit.getNetworkStatus());
-
-      // CRITICAL DEBUG: Show sync status on screen
-      const debugDiv = document.getElementById('sync-debug') || document.createElement('div');
-      debugDiv.id = 'sync-debug';
-      debugDiv.style.cssText = 'position:fixed;top:10px;right:10px;background:black;color:lime;padding:10px;z-index:99999;font-family:monospace;font-size:12px;';
-      debugDiv.innerHTML = `
-        <div>SyncManager: ${!!(synckit as any).syncManager ? 'EXISTS ✓' : 'MISSING ✗'}</div>
-        <div>WebSocket: ${synckit.getNetworkStatus()}</div>
-        <div>Doc ID: ${pageId}</div>
-      `;
-      if (!document.getElementById('sync-debug')) {
-        document.body.appendChild(debugDiv);
-      }
 
       // Initialize document (loads from storage)
       // For playground, check storage first to avoid sync timeout on fresh load
@@ -291,6 +274,22 @@ export function Editor({ pageId }: EditorProps) {
     };
   }, []);
 
+  // Clear pending focus after the block has been rendered and focused
+  useEffect(() => {
+    if (pendingFocusBlockId) {
+      // Only clear after the block actually exists in the blocks array
+      // The block won't exist immediately because SyncKit updates are async
+      const blockExists = blocks.some(b => b.id === pendingFocusBlockId);
+      if (blockExists) {
+        // Use requestAnimationFrame to ensure DOM has updated and focus has been applied
+        const frame = requestAnimationFrame(() => {
+          setPendingFocusBlockId(null);
+        });
+        return () => cancelAnimationFrame(frame);
+      }
+    }
+  }, [pendingFocusBlockId, blocks]);
+
   // Handle paste events for images
   useEffect(() => {
     const handlePaste = async (e: ClipboardEvent) => {
@@ -375,6 +374,9 @@ export function Editor({ pageId }: EditorProps) {
           await pageDoc.set(getBlockKey(followingBlock.id) as any, followingBlock);
           await pageDoc.set('blockOrder', JSON.stringify(newOrder));
 
+          // Focus the following paragraph block so user can continue typing
+          setPendingFocusBlockId(followingBlock.id);
+
           console.log('📷 Image pasted as new block with following paragraph');
         }
 
@@ -395,13 +397,12 @@ export function Editor({ pageId }: EditorProps) {
     };
   }, [pageDoc, snapshotScheduler]);
 
-  // Update block content
+  // Handle content changes from CRDT blocks
+  // Note: The actual content is stored in SyncText (Fugue CRDT), not in pageDoc
+  // This handler is for slash command detection and recording operations
   const handleBlockContentChange = useCallback(
     async (blockId: string, content: string) => {
       if (!pageDoc) return;
-
-      const block = (pageData as any)?.[getBlockKey(blockId)];
-      if (!block) return;
 
       // DEBUG: Log content changes
       console.log(`[CLIENT] Block ${blockId} content changed:`, content.substring(0, 50));
@@ -432,22 +433,16 @@ export function Editor({ pageId }: EditorProps) {
         setSlashMenu(null);
       }
 
-      const updatedBlock = {
-        ...block,
-        content,
-        updatedAt: Date.now(),
-      };
-
-      console.log(`[CLIENT] Calling pageDoc.set() for block ${blockId}`);
-      await pageDoc.set(getBlockKey(blockId) as any, updatedBlock);
-      console.log(`[CLIENT] pageDoc.set() completed for block ${blockId}`);
+      // Note: Content is managed by SyncText CRDT, not stored in pageDoc
+      // We only update block metadata (timestamps) here for snapshot tracking
+      // The actual content is synced via SyncText's Fugue CRDT
 
       // Record operation for snapshot scheduler
       if (snapshotScheduler) {
         snapshotScheduler.recordOperation();
       }
     },
-    [pageDoc, pageData, snapshotScheduler]
+    [pageDoc, snapshotScheduler]
   );
 
   // Delete a block
@@ -540,25 +535,38 @@ export function Editor({ pageId }: EditorProps) {
 
   // Handle slash menu selection
   const handleSlashMenuSelect = useCallback(
-    (type: BlockType) => {
-      if (!slashMenu || !pageDoc || !pageData) return;
+    async (type: BlockType) => {
+      if (!slashMenu || !pageDoc || !pageData || !pageId) return;
 
       const block = (pageData as any)[getBlockKey(slashMenu.blockId)] as Block;
       if (!block) return;
 
-      // Convert block to selected type with empty content
+      // Update block type (metadata only - content is in SyncText)
       const updatedBlock = {
         ...block,
         type,
-        content: '',
         updatedAt: Date.now(),
       };
 
-      pageDoc.set(getBlockKey(slashMenu.blockId) as any, updatedBlock);
+      await pageDoc.set(getBlockKey(slashMenu.blockId) as any, updatedBlock);
+
+      // Clear the SyncText content (remove the '/' command)
+      try {
+        const textDocId = `${pageId}:text:${slashMenu.blockId}`;
+        const text = synckit.text(textDocId);
+        await text.init();
+        const currentContent = text.get();
+        if (currentContent.length > 0) {
+          await text.delete(0, currentContent.length);
+        }
+      } catch (error) {
+        console.error('[Editor] Failed to clear SyncText content:', error);
+      }
+
       triggerBlockChangeAnimation(slashMenu.blockId);
       setSlashMenu(null);
     },
-    [slashMenu, pageDoc, pageData, triggerBlockChangeAnimation]
+    [slashMenu, pageDoc, pageData, pageId, synckit, triggerBlockChangeAnimation]
   );
 
   // Close slash menu
@@ -568,11 +576,8 @@ export function Editor({ pageId }: EditorProps) {
 
   // Handle link dialog
   const handleLinkConfirm = useCallback(
-    (url: string, text: string) => {
-      if (!linkDialog || !pageDoc || !pageData) return;
-
-      const block = (pageData as any)[getBlockKey(linkDialog.blockId)] as Block;
-      if (!block) return;
+    async (url: string, text: string) => {
+      if (!linkDialog || !pageId) return;
 
       // Create link element
       const linkElement = document.createElement('a');
@@ -598,20 +603,32 @@ export function Editor({ pageId }: EditorProps) {
       }
 
       if (targetElement) {
-        // Extract markdown from the updated DOM
+        // Extract markdown from the updated DOM and update SyncText
         const markdownContent = htmlToMarkdown(targetElement);
-        const updatedBlock = {
-          ...block,
-          content: markdownContent,
-          updatedAt: Date.now(),
-        };
 
-        pageDoc.set(getBlockKey(linkDialog.blockId) as any, updatedBlock);
+        // Update SyncText directly
+        try {
+          const textDocId = `${pageId}:text:${linkDialog.blockId}`;
+          const textCRDT = synckit.text(textDocId);
+          await textCRDT.init();
+
+          const currentContent = textCRDT.get();
+
+          // Replace entire content with the new markdown
+          if (currentContent.length > 0) {
+            await textCRDT.delete(0, currentContent.length);
+          }
+          if (markdownContent.length > 0) {
+            await textCRDT.insert(0, markdownContent);
+          }
+        } catch (error) {
+          console.error('[Editor] Failed to update SyncText with link:', error);
+        }
       }
 
       setLinkDialog(null);
     },
-    [linkDialog, pageDoc, pageData]
+    [linkDialog, pageId, synckit]
   );
 
   const handleLinkCancel = useCallback(() => {
@@ -726,15 +743,9 @@ export function Editor({ pageId }: EditorProps) {
               parent.removeChild(linkElement);
             }
 
-            // Extract markdown and save
-            const markdownContent = htmlToMarkdown(target);
-            const updatedBlock = {
-              ...currentBlock,
-              content: markdownContent,
-              updatedAt: Date.now(),
-            };
-
-            pageDoc.set(getBlockKey(blockId) as any, updatedBlock);
+            // The DOM change will be picked up by ContentEditable's MutationObserver
+            // which calls onChange -> updateContent on SyncText
+            // No need to manually update pageDoc for content (it's in SyncText now)
           } else {
             // Toggle ON: Show dialog to insert link
             const selectedText = range.toString();
@@ -801,15 +812,9 @@ export function Editor({ pageId }: EditorProps) {
           }
         }
 
-        // After DOM manipulation, extract markdown and save
-        const markdownContent = htmlToMarkdown(target);
-        const updatedBlock = {
-          ...currentBlock,
-          content: markdownContent,
-          updatedAt: Date.now(),
-        };
-
-        pageDoc.set(getBlockKey(blockId) as any, updatedBlock);
+        // The DOM change will be picked up by ContentEditable's MutationObserver
+        // which calls onChange -> updateContent on SyncText
+        // No need to manually update pageDoc for content (it's in SyncText now)
 
         return; // Don't process other shortcuts
       }
@@ -892,6 +897,9 @@ export function Editor({ pageId }: EditorProps) {
         pageDoc.set('blockOrder', JSON.stringify(newBlockIds));
         pageDoc.set(getBlockKey(newBlock.id) as any, newBlock);
 
+        // Focus the new block after render
+        setPendingFocusBlockId(newBlock.id);
+
         console.log('📝 Created block above image');
         return;
       }
@@ -903,27 +911,42 @@ export function Editor({ pageId }: EditorProps) {
         // Capture the target before any async operations (React event pooling)
         const target = e.currentTarget;
 
-        // Check for type prefix
-        const detectedType = detectBlockTypeFromPrefix(currentBlock.content);
+        // Get current content from DOM (SyncText content may not be in pageData)
+        const currentContent = target.textContent || '';
 
-        if (detectedType) {
+        // Check for type prefix
+        const detectedType = detectBlockTypeFromPrefix(currentContent);
+
+        if (detectedType && pageId) {
           // Remove prefix and convert block type
-          const cleanContent = removeTypePrefix(currentBlock.content, detectedType);
+          const cleanContent = removeTypePrefix(currentContent, detectedType);
 
           // Immediately update the DOM to show cleaned content (before async operations)
           if (target && target.textContent !== cleanContent) {
             target.textContent = cleanContent;
           }
 
+          // Update block type in pageDoc (only metadata, not content)
           const updatedBlock = {
             ...currentBlock,
             type: detectedType,
-            content: cleanContent,
             updatedAt: Date.now(),
           };
-
-          // Update SyncKit asynchronously (don't await in event handler)
           pageDoc.set(getBlockKey(blockId) as any, updatedBlock);
+
+          // Update content in SyncText (remove the prefix)
+          const textDocId = `${pageId}:text:${blockId}`;
+          const text = synckit.text(textDocId);
+          text.init().then(() => {
+            const crdtContent = text.get();
+            // Find and remove the prefix
+            const prefixLength = currentContent.length - cleanContent.length;
+            if (prefixLength > 0 && crdtContent.length >= prefixLength) {
+              text.delete(0, prefixLength);
+            }
+          }).catch(err => {
+            console.error('[Editor] Failed to update SyncText on type prefix:', err);
+          });
         }
 
         // Create new block
@@ -938,12 +961,15 @@ export function Editor({ pageId }: EditorProps) {
         pageDoc.set('blockOrder', JSON.stringify(newBlockIds));
         pageDoc.set(getBlockKey(newBlock.id) as any, newBlock);
 
-        // Focus will be handled by autoFocus prop
+        // Focus the new block after render
+        setPendingFocusBlockId(newBlock.id);
       }
 
       // Backspace at start: Delete empty block
       // Allow deletion if content is empty or only whitespace
-      if (e.key === 'Backspace' && currentBlock.content.trim() === '') {
+      // Use DOM content since SyncText content may not be in pageData
+      const domContent = e.currentTarget.textContent || '';
+      if (e.key === 'Backspace' && domContent.trim() === '') {
         e.preventDefault();
 
         if (blockIds.length > 1) {
@@ -969,7 +995,7 @@ export function Editor({ pageId }: EditorProps) {
         }
       }
     },
-    [pageDoc, pageData, triggerBlockChangeAnimation]
+    [pageDoc, pageData, pageId, synckit, triggerBlockChangeAnimation]
   );
 
   // Empty state
@@ -1089,8 +1115,9 @@ export function Editor({ pageId }: EditorProps) {
               )}
 
               <div className={changingBlocks.has(block.id) ? 'animate-block-change' : ''}>
-                <BlockComponent
+                <CRDTBlockComponent
                   block={block}
+                  pageId={pageId!}
                   blockIndex={index}
                   onContentChange={(content) => handleBlockContentChange(block.id, content)}
                   onKeyDown={(e) => handleBlockKeyDown(block.id, e)}
@@ -1099,7 +1126,7 @@ export function Editor({ pageId }: EditorProps) {
                   onDrop={handleDrop(index)}
                   onDragEnd={handleDragEnd}
                   isDragging={draggedBlockId === block.id}
-                  autoFocus={index === blocks.length - 1 && blocks.length > 1}
+                  autoFocus={block.id === pendingFocusBlockId}
                   onToggleBodyChange={(body) => handleToggleBodyChange(block.id, body)}
                   onToggleStateChange={(collapsed) => handleToggleStateChange(block.id, collapsed)}
                   onDelete={() => handleBlockDelete(block.id)}
