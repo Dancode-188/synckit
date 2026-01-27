@@ -10,7 +10,7 @@
  */
 
 import { useRef, useEffect, KeyboardEvent, useCallback } from 'react';
-import { parseMarkdown } from '../lib/markdown';
+import { parseMarkdown, htmlToMarkdown } from '../lib/markdown';
 
 interface CRDTContentEditableProps {
   /** Current content (from CRDT) */
@@ -19,6 +19,8 @@ interface CRDTContentEditableProps {
   onInsert: (position: number, text: string) => Promise<void>;
   /** Delete text at position */
   onDelete: (position: number, length: number) => Promise<void>;
+  /** Sync content after DOM changes (formatting) - converts DOM to markdown and syncs */
+  onContentSync?: (content: string) => Promise<void>;
   /** Key down handler for block-level navigation */
   onKeyDown?: (e: KeyboardEvent<HTMLDivElement>) => void;
   /** Placeholder text */
@@ -44,6 +46,30 @@ function getCursorPosition(element: HTMLElement): number {
   // Get text content up to cursor - this gives us the character position
   const textContent = preCaretRange.toString();
   return textContent.length;
+}
+
+/**
+ * Get the selection range (start and end offsets) within a contenteditable element
+ */
+function getSelectionRange(element: HTMLElement): { start: number; end: number } {
+  const selection = window.getSelection();
+  if (!selection || selection.rangeCount === 0) return { start: 0, end: 0 };
+
+  const range = selection.getRangeAt(0);
+
+  // Get start position
+  const startRange = range.cloneRange();
+  startRange.selectNodeContents(element);
+  startRange.setEnd(range.startContainer, range.startOffset);
+  const start = startRange.toString().length;
+
+  // Get end position
+  const endRange = range.cloneRange();
+  endRange.selectNodeContents(element);
+  endRange.setEnd(range.endContainer, range.endOffset);
+  const end = endRange.toString().length;
+
+  return { start, end };
 }
 
 /**
@@ -88,6 +114,7 @@ export function CRDTContentEditable({
   content,
   onInsert,
   onDelete,
+  onContentSync,
   onKeyDown,
   placeholder = '',
   className = '',
@@ -98,30 +125,98 @@ export function CRDTContentEditable({
   const lastContentRef = useRef(content);
   const pendingOperationRef = useRef(false);
   const cursorPositionRef = useRef<number | null>(null);
+  // Track selection at composition start for proper IME handling
+  const compositionSelectionRef = useRef<{ start: number; end: number } | null>(null);
 
   // Update content when it changes externally (from CRDT sync)
-  // IMPORTANT: Never update innerHTML while focused - it causes cursor jumping
+  // CRITICAL: We MUST update the DOM even while focused, otherwise the DOM and CRDT
+  // diverge, causing incorrect operations. We preserve cursor position to prevent jumping.
   useEffect(() => {
     if (!ref.current) return;
-
-    const isCurrentlyFocused = document.activeElement === ref.current;
-
-    // Don't update while user is actively editing - remote changes appear on blur
-    if (isCurrentlyFocused) {
-      lastContentRef.current = content;
-      return;
-    }
 
     const parsedHtml = parseMarkdown(content);
 
     // Skip if content hasn't actually changed
     if (ref.current.innerHTML === parsedHtml) {
+      lastContentRef.current = content;
       return;
     }
 
-    // Safe to update - not focused
-    ref.current.innerHTML = parsedHtml;
-    lastContentRef.current = content;
+    const isCurrentlyFocused = document.activeElement === ref.current;
+
+    if (isCurrentlyFocused) {
+      // Save cursor position before updating
+      const selection = window.getSelection();
+
+      if (selection && selection.rangeCount > 0) {
+        const range = selection.getRangeAt(0);
+
+        // Calculate absolute offset from start of content using TreeWalker
+        const walker = document.createTreeWalker(
+          ref.current,
+          NodeFilter.SHOW_TEXT,
+          null
+        );
+        let absoluteOffset = 0;
+        let node: Node | null;
+        while ((node = walker.nextNode())) {
+          if (node === range.startContainer) {
+            absoluteOffset += range.startOffset;
+            break;
+          }
+          absoluteOffset += (node.textContent?.length || 0);
+        }
+
+        // Update innerHTML
+        ref.current.innerHTML = parsedHtml;
+        lastContentRef.current = content;
+
+        // Restore cursor position using absolute offset
+        try {
+          const newWalker = document.createTreeWalker(
+            ref.current,
+            NodeFilter.SHOW_TEXT,
+            null
+          );
+          let currentOffset = 0;
+          let targetNode: Node | null = null;
+          let targetOffset = 0;
+
+          while ((node = newWalker.nextNode())) {
+            const nodeLength = node.textContent?.length || 0;
+            if (currentOffset + nodeLength >= absoluteOffset) {
+              targetNode = node;
+              targetOffset = absoluteOffset - currentOffset;
+              break;
+            }
+            currentOffset += nodeLength;
+          }
+
+          if (targetNode) {
+            const newRange = document.createRange();
+            newRange.setStart(targetNode, Math.min(targetOffset, targetNode.textContent?.length || 0));
+            newRange.collapse(true);
+            selection.removeAllRanges();
+            selection.addRange(newRange);
+          }
+        } catch (e) {
+          // If cursor restoration fails, place at end
+          const newRange = document.createRange();
+          newRange.selectNodeContents(ref.current);
+          newRange.collapse(false);
+          selection?.removeAllRanges();
+          selection?.addRange(newRange);
+        }
+      } else {
+        // No selection, just update
+        ref.current.innerHTML = parsedHtml;
+        lastContentRef.current = content;
+      }
+    } else {
+      // Not focused - simple update
+      ref.current.innerHTML = parsedHtml;
+      lastContentRef.current = content;
+    }
   }, [content]);
 
   // Auto-focus if requested
@@ -309,13 +404,20 @@ export function CRDTContentEditable({
           break;
         }
 
-        // Formatting operations - let them happen naturally but capture result
+        // Formatting operations - let browser apply, then sync via callback
         case 'formatBold':
         case 'formatItalic':
         case 'formatUnderline':
         case 'formatStrikeThrough': {
-          // These are handled at a higher level (keyboard shortcuts)
-          // Allow default behavior
+          // Let the browser apply the formatting, then sync on next frame
+          if (onContentSync && ref.current) {
+            requestAnimationFrame(async () => {
+              if (ref.current) {
+                const markdown = htmlToMarkdown(ref.current);
+                await onContentSync(markdown);
+              }
+            });
+          }
           break;
         }
 
@@ -327,7 +429,7 @@ export function CRDTContentEditable({
         }
       }
     },
-    [onInsert, onDelete]
+    [onInsert, onDelete, onContentSync]
   );
 
   // Restore cursor position after CRDT content update
@@ -341,6 +443,10 @@ export function CRDTContentEditable({
   // Handle composition events (IME input for CJK languages)
   const handleCompositionStart = useCallback(() => {
     isComposingRef.current = true;
+    // Save selection state at composition start - needed for replacement
+    if (ref.current) {
+      compositionSelectionRef.current = getSelectionRange(ref.current);
+    }
   }, []);
 
   const handleCompositionEnd = useCallback(
@@ -349,20 +455,32 @@ export function CRDTContentEditable({
 
       // After composition ends, sync the composed text
       if (ref.current) {
-        const position = getCursorPosition(ref.current);
         const composedText = e.data;
 
         if (composedText) {
-          // The text is already in the DOM, so we need to sync it
-          // For IME, we use replace strategy since tracking individual changes is complex
           pendingOperationRef.current = true;
-          await onInsert(position - composedText.length, composedText);
-          cursorPositionRef.current = position;
+
+          // Use saved selection from composition start
+          const savedSelection = compositionSelectionRef.current;
+          if (savedSelection && savedSelection.end > savedSelection.start) {
+            // Text was selected when composition started - delete it first
+            await onDelete(savedSelection.start, savedSelection.end - savedSelection.start);
+            // Insert composed text at start of former selection
+            await onInsert(savedSelection.start, composedText);
+            cursorPositionRef.current = savedSelection.start + composedText.length;
+          } else {
+            // No selection - insert at saved position
+            const insertPos = savedSelection?.start ?? getCursorPosition(ref.current) - composedText.length;
+            await onInsert(insertPos, composedText);
+            cursorPositionRef.current = insertPos + composedText.length;
+          }
+
           pendingOperationRef.current = false;
+          compositionSelectionRef.current = null;
         }
       }
     },
-    [onInsert]
+    [onInsert, onDelete]
   );
 
   // Handle key down for block-level navigation
