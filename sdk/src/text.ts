@@ -12,7 +12,7 @@ import type { StorageAdapter } from './storage'
 import type { SyncManager, VectorClock } from './sync/manager'
 import type { SyncableDocument, Operation } from './sync/manager'
 import type { CrossTabSync } from './sync/cross-tab'
-import type { TextInsertMessage, TextDeleteMessage } from './sync/message-types'
+import type { TextStateMessage } from './sync/message-types'
 
 export interface WasmFugueText {
   insert(position: number, text: string): string  // returns JSON NodeId
@@ -74,6 +74,10 @@ export class SyncText implements SyncableDocument {
   private vectorClock: VectorClock = {}
   private isApplyingRemote: boolean = false
   private initPromise: Promise<void> | null = null
+
+  // Merge queue to serialize remote operations and prevent race conditions
+  private mergeQueue: Promise<void> = Promise.resolve()
+  private lastMergedStateHash: string | null = null
 
   constructor(
     private readonly id: string,
@@ -160,42 +164,40 @@ export class SyncText implements SyncableDocument {
 
     // Register cross-tab message handlers
     if (this.crossTabSync) {
-      // Handle text insert from other tabs
-      this.crossTabSync.on('text-insert', async (message) => {
-        const msg = message as TextInsertMessage
-        if (msg.documentId !== this.id || !this.wasmText) return
+      // Handle text state from other tabs (state-based sync)
+      // IMPORTANT: We use state-based sync for cross-tab communication, NOT position-based.
+      // Position-based operations (text-insert, text-delete) are fundamentally broken
+      // because they create NEW Fugue nodes with DIFFERENT NodeIds in the receiving tab.
+      // This causes merge corruption when syncing with remote devices.
+      // State-based sync with mergeRemote() preserves NodeId identity across all tabs.
+      this.crossTabSync.on('text-state', (message) => {
+        const msg = message as TextStateMessage
+        console.log(`[SyncText] Cross-tab message received:`, {
+          msgDocId: msg.documentId,
+          myDocId: this.id,
+          msgClientId: msg.clientId,
+          myClientId: this.clientId,
+          hasWasm: !!this.wasmText,
+          hasState: !!msg.state
+        })
 
-        this.isApplyingRemote = true
-        try {
-          this.wasmText.insert(msg.position, msg.text)
-          this.updateLocalState()
-          await this.persist()
-          this.notifySubscribers()
-        } finally {
-          this.isApplyingRemote = false
+        if (msg.documentId !== this.id) {
+          console.log(`[SyncText] Cross-tab: wrong documentId, ignoring`)
+          return
         }
-      })
-
-      // Handle text delete from other tabs
-      this.crossTabSync.on('text-delete', async (message) => {
-        const msg = message as TextDeleteMessage
-        if (msg.documentId !== this.id || !this.wasmText) return
-
-        this.isApplyingRemote = true
-        try {
-          this.wasmText.delete(msg.position, msg.length)
-          this.updateLocalState()
-          await this.persist()
-          this.notifySubscribers()
-        } finally {
-          this.isApplyingRemote = false
+        if (!this.wasmText) {
+          console.log(`[SyncText] Cross-tab: no WASM, ignoring`)
+          return
         }
+
+        // Use the same queue mechanism as WebSocket operations
+        // This ensures cross-tab and cross-device operations don't interfere
+        this.queueMerge(msg.state, msg.clientId)
       })
 
       // Enable cross-tab sync (starts BroadcastChannel listeners)
-      // console.log('[SyncText] Enabling cross-tab sync for document:', this.id)
       this.crossTabSync.enable()
-      // console.log('[SyncText] Cross-tab sync enabled for document:', this.id)
+      console.log(`[SyncText] Cross-tab sync enabled for ${this.id}`)
     }
   }
 
@@ -259,26 +261,40 @@ export class SyncText implements SyncableDocument {
     this.notifySubscribers()
 
     // Broadcast to other tabs (if not applying a remote operation)
-    if (this.crossTabSync && !this.isApplyingRemote) {
-      // console.log('[SyncText] Broadcasting text-insert to other tabs:', { documentId: this.id, position, text })
+    // IMPORTANT: We send full CRDT state, not position-based operations.
+    // Position-based sync creates nodes with different NodeIds, breaking merges.
+    if (this.crossTabSync && !this.isApplyingRemote && this.wasmText) {
+      const state = this.wasmText.toJSON()
+      console.log(`[SyncText] Broadcasting to cross-tab for ${this.id}:`, {
+        clientId: this.clientId,
+        stateLength: state.length
+      })
       this.crossTabSync.broadcast({
-        type: 'text-insert',
+        type: 'text-state',
         documentId: this.id,
-        position,
-        text
-      } as Omit<TextInsertMessage, 'from' | 'seq' | 'timestamp'>)
+        state,
+        clientId: this.clientId
+      } as Omit<TextStateMessage, 'from' | 'seq' | 'timestamp'>)
     }
 
     // Sync (if sync manager available)
-    if (this.syncManager) {
+    // IMPORTANT: We send the full CRDT state, not position-based operations.
+    // Position-based sync is fundamentally broken for concurrent editing because
+    // positions shift when multiple clients edit simultaneously.
+    // State-based sync with merge() is the correct approach for CRDTs.
+    if (this.syncManager && this.wasmText) {
       // Increment vector clock
       this.vectorClock[this.clientId] = (this.vectorClock[this.clientId] || 0) + 1
 
+      const state = this.wasmText.toJSON()
+      console.log(`[SyncText] Sending to WebSocket for ${this.id}:`, {
+        clientId: this.clientId,
+        stateLength: state.length
+      })
+
       await this.syncManager.pushOperation({
-        type: 'text' as any,
-        operation: 'insert',
-        position,
-        value: text,
+        type: 'text-state' as any,
+        state, // Send full CRDT state
         documentId: this.id,
         clientId: this.clientId,
         timestamp: Date.now(),
@@ -323,25 +339,26 @@ export class SyncText implements SyncableDocument {
     this.notifySubscribers()
 
     // Broadcast to other tabs (if not applying a remote operation)
-    if (this.crossTabSync && !this.isApplyingRemote) {
+    // IMPORTANT: We send full CRDT state, not position-based operations.
+    // Position-based sync creates nodes with different NodeIds, breaking merges.
+    if (this.crossTabSync && !this.isApplyingRemote && this.wasmText) {
       this.crossTabSync.broadcast({
-        type: 'text-delete',
+        type: 'text-state',
         documentId: this.id,
-        position,
-        length
-      } as Omit<TextDeleteMessage, 'from' | 'seq' | 'timestamp'>)
+        state: this.wasmText.toJSON(),
+        clientId: this.clientId
+      } as Omit<TextStateMessage, 'from' | 'seq' | 'timestamp'>)
     }
 
     // Sync (if sync manager available)
-    if (this.syncManager) {
+    // Send full CRDT state for proper merge (see insert() comment)
+    if (this.syncManager && this.wasmText) {
       // Increment vector clock
       this.vectorClock[this.clientId] = (this.vectorClock[this.clientId] || 0) + 1
 
       await this.syncManager.pushOperation({
-        type: 'text' as any,
-        operation: 'delete',
-        position,
-        value: length,
+        type: 'text-state' as any,
+        state: this.wasmText.toJSON(), // Send full CRDT state
         documentId: this.id,
         clientId: this.clientId,
         timestamp: Date.now(),
@@ -528,6 +545,10 @@ export class SyncText implements SyncableDocument {
 
   /**
    * Apply remote operation from another replica
+   * Uses state-based merge for proper CRDT synchronization
+   *
+   * IMPORTANT: Operations are queued to prevent concurrent merge race conditions.
+   * Each merge must complete before the next one starts.
    */
   applyRemoteOperation(operation: Operation): void {
     if (!this.wasmText) {
@@ -535,19 +556,110 @@ export class SyncText implements SyncableDocument {
       return
     }
 
-    // Handle text operations (cast to any since we extend Operation type)
     const textOp = operation as any
-    if (textOp.type === 'text') {
-      if (textOp.operation === 'insert') {
-        this.wasmText.insert(textOp.position, textOp.value)
-      } else if (textOp.operation === 'delete') {
-        this.wasmText.delete(textOp.position, textOp.value)
-      }
 
-      // Update local state and notify subscribers
-      this.updateLocalState()
-      this.notifySubscribers()
+    // Handle state-based sync (correct approach for CRDTs)
+    if (textOp.type === 'text-state' && textOp.state) {
+      // Queue the merge operation to prevent race conditions
+      // Each merge waits for the previous one to complete
+      this.queueMerge(textOp.state, textOp.clientId)
+      return
     }
+
+    // Legacy: Handle position-based operations (deprecated, kept for compatibility)
+    if (textOp.type === 'text') {
+      console.warn('[SyncText] Received deprecated position-based operation, this may cause sync issues')
+      this.isApplyingRemote = true
+      try {
+        if (textOp.operation === 'insert') {
+          this.wasmText.insert(textOp.position, textOp.value)
+        } else if (textOp.operation === 'delete') {
+          this.wasmText.delete(textOp.position, textOp.value)
+        }
+        this.updateLocalState()
+        this.notifySubscribers()
+      } finally {
+        this.isApplyingRemote = false
+      }
+    }
+  }
+
+  /**
+   * Queue a merge operation to ensure serial execution
+   * This prevents race conditions when multiple remote updates arrive quickly
+   */
+  private queueMerge(stateJson: string, remoteClientId?: string): void {
+    console.log(`[SyncText] queueMerge called for ${this.id}:`, {
+      remoteClientId,
+      localClientId: this.clientId,
+      stateLength: stateJson?.length,
+      hasState: !!stateJson
+    })
+
+    // Skip if this is our own state (echoed back)
+    if (remoteClientId === this.clientId) {
+      console.log(`[SyncText] Skipping own state (clientId match) for ${this.id}`)
+      return
+    }
+
+    // Validate state exists
+    if (!stateJson) {
+      console.warn(`[SyncText] Skipping merge - no state provided for ${this.id}`)
+      return
+    }
+
+    // Simple hash for deduplication (djb2 algorithm)
+    const stateHash = this.hashString(stateJson)
+
+    // Skip if we just merged this exact state (deduplication)
+    if (stateHash === this.lastMergedStateHash) {
+      console.log(`[SyncText] Skipping duplicate state (hash match) for ${this.id}`)
+      return
+    }
+
+    console.log(`[SyncText] Queueing merge for ${this.id}, hash: ${stateHash}`)
+
+    // Chain this merge onto the queue
+    this.mergeQueue = this.mergeQueue
+      .then(async () => {
+        // Double-check we still have the WASM instance
+        if (!this.wasmText) {
+          console.warn(`[SyncText] WASM freed before merge for ${this.id}`)
+          return
+        }
+
+        this.isApplyingRemote = true
+        try {
+          const beforeContent = this.content
+          await this.mergeRemote(stateJson)
+          this.lastMergedStateHash = stateHash
+          const afterContent = this.content
+          console.log(`[SyncText] Merged remote state for ${this.id}:`, {
+            beforeLength: beforeContent.length,
+            afterLength: afterContent.length,
+            changed: beforeContent !== afterContent
+          })
+        } catch (err) {
+          console.error(`[SyncText] Failed to merge remote state for ${this.id}:`, err)
+        } finally {
+          this.isApplyingRemote = false
+        }
+      })
+      .catch((err) => {
+        // Ensure queue continues even if something goes wrong
+        console.error(`[SyncText] Merge queue error for ${this.id}:`, err)
+      })
+  }
+
+  /**
+   * Simple hash function for state deduplication (djb2)
+   */
+  private hashString(str: string): string {
+    let hash = 5381
+    for (let i = 0; i < str.length; i++) {
+      hash = ((hash << 5) + hash) + str.charCodeAt(i)
+    }
+    return hash.toString(36)
   }
 
   // ====================

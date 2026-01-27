@@ -375,11 +375,73 @@ export class SyncManager {
       this.handleRemoteOperation(payload)
     })
 
+    // Handle delta_batch messages (including text operations from server)
+    this.websocket.on('delta_batch', (payload) => {
+      this.handleRemoteDeltaBatch(payload)
+    })
 
     // Handle errors
     this.websocket.on('error', (payload) => {
       console.error('Server error:', payload)
     })
+  }
+
+  /**
+   * Handle remote delta batch from server
+   * This handles both document field updates and text CRDT operations
+   */
+  private handleRemoteDeltaBatch(payload: any): void {
+    const { documentId, deltas, isTextOperation } = payload
+
+    if (!deltas || !Array.isArray(deltas)) {
+      console.warn('[SyncManager] Received invalid delta_batch:', payload)
+      return
+    }
+
+    console.log(`[SyncManager] Received remote delta_batch for ${documentId}: ${deltas.length} operations (isText: ${isTextOperation})`)
+
+    for (const operation of deltas) {
+      // Handle text CRDT operations (state-based or legacy position-based)
+      if (operation.type === 'text-state' || operation.type === 'text' || isTextOperation) {
+        this.handleRemoteTextOperation(documentId, operation)
+      } else {
+        // Handle standard document field operations
+        this.handleRemoteOperation({ ...operation, documentId })
+      }
+    }
+  }
+
+  /**
+   * Handle remote text CRDT operation
+   */
+  private handleRemoteTextOperation(documentId: string, operation: any): void {
+    const document = this.documents.get(documentId)
+
+    if (!document) {
+      console.log(`[SyncManager] Text document ${documentId} not registered, buffering operation`)
+      // Buffer the operation for when the document is registered
+      if (!this.bufferedOperations.has(documentId)) {
+        this.bufferedOperations.set(documentId, [])
+      }
+      this.bufferedOperations.get(documentId)!.push(operation)
+      return
+    }
+
+    // Log the operation type and relevant fields for debugging
+    console.log(`[SyncManager] Applying remote text operation to ${documentId}:`, {
+      type: operation.type,
+      hasState: !!operation.state,
+      clientId: operation.clientId,
+      stateLength: operation.state?.length
+    })
+
+    // Apply the text operation
+    document.applyRemoteOperation(operation)
+
+    // Merge vector clocks if present
+    if (operation.clock) {
+      this.mergeVectorClocks(document, operation.clock)
+    }
   }
 
   /**

@@ -415,17 +415,38 @@ export function sanitizeRichText(html: string): string {
 // ============================================================================
 
 /**
- * Check if document is playground
+ * Check if document is playground or a playground child document
+ * Child documents include text CRDTs for blocks: playground:text:block-xxx
  */
 export function isPlaygroundDocument(documentId: string): boolean {
-  return documentId === SECURITY_LIMITS.PLAYGROUND_DOC_ID;
+  return documentId === SECURITY_LIMITS.PLAYGROUND_DOC_ID ||
+         documentId.startsWith(`${SECURITY_LIMITS.PLAYGROUND_DOC_ID}:`);
 }
 
 /**
- * Check if document is private room
+ * Check if document is private room or a room child document
+ * Child documents include text CRDTs for blocks: room:xxx:text:block-yyy
  */
 export function isPrivateRoom(documentId: string): boolean {
   return documentId.startsWith('room:');
+}
+
+/**
+ * Check if document is a page document (private page outside of rooms)
+ * Page documents include text CRDTs for blocks: {pageId}:text:block-xxx
+ * Page IDs are typically timestamps like: 1769512101803
+ */
+export function isPageDocument(documentId: string): boolean {
+  // Check if it's a timestamp-based page ID or its child document
+  const parts = documentId.split(':');
+  const baseId = parts[0];
+
+  // Page IDs are numeric timestamps (13+ digits)
+  if (/^\d{13,}/.test(baseId)) {
+    return true;
+  }
+
+  return false;
 }
 
 /**
@@ -441,17 +462,23 @@ export function extractRoomId(documentId: string): string | null {
 /**
  * Check if user can access document
  * For playground mode (no auth):
- * - Playground: everyone
- * - Private rooms: need room ID in URL (checked client-side)
+ * - Playground and child documents: everyone
+ * - Private rooms and child documents: need room ID in URL (checked client-side)
+ * - Page documents (timestamp-based IDs): accessible for demo mode
  */
 export function canAccessDocument(documentId: string): boolean {
-  // Playground is always accessible
+  // Playground and its child documents are always accessible
   if (isPlaygroundDocument(documentId)) {
     return true;
   }
 
-  // Private rooms are accessible (client controls via URL)
+  // Private rooms and their child documents are accessible (client controls via URL)
   if (isPrivateRoom(documentId)) {
+    return true;
+  }
+
+  // Page documents (timestamp-based IDs) are accessible in demo mode
+  if (isPageDocument(documentId)) {
     return true;
   }
 
