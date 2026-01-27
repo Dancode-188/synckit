@@ -398,8 +398,6 @@ export class SyncManager {
       return
     }
 
-    console.log(`[SyncManager] Received remote delta_batch for ${documentId}: ${deltas.length} operations (isText: ${isTextOperation})`)
-
     for (const operation of deltas) {
       // Handle text CRDT operations (state-based or legacy position-based)
       if (operation.type === 'text-state' || operation.type === 'text' || isTextOperation) {
@@ -418,7 +416,6 @@ export class SyncManager {
     const document = this.documents.get(documentId)
 
     if (!document) {
-      console.log(`[SyncManager] Text document ${documentId} not registered, buffering operation`)
       // Buffer the operation for when the document is registered
       if (!this.bufferedOperations.has(documentId)) {
         this.bufferedOperations.set(documentId, [])
@@ -426,14 +423,6 @@ export class SyncManager {
       this.bufferedOperations.get(documentId)!.push(operation)
       return
     }
-
-    // Log the operation type and relevant fields for debugging
-    console.log(`[SyncManager] Applying remote text operation to ${documentId}:`, {
-      type: operation.type,
-      hasState: !!operation.state,
-      clientId: operation.clientId,
-      stateLength: operation.state?.length
-    })
 
     // Apply the text operation
     document.applyRemoteOperation(operation)

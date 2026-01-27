@@ -172,23 +172,7 @@ export class SyncText implements SyncableDocument {
       // State-based sync with mergeRemote() preserves NodeId identity across all tabs.
       this.crossTabSync.on('text-state', (message) => {
         const msg = message as TextStateMessage
-        console.log(`[SyncText] Cross-tab message received:`, {
-          msgDocId: msg.documentId,
-          myDocId: this.id,
-          msgClientId: msg.clientId,
-          myClientId: this.clientId,
-          hasWasm: !!this.wasmText,
-          hasState: !!msg.state
-        })
-
-        if (msg.documentId !== this.id) {
-          console.log(`[SyncText] Cross-tab: wrong documentId, ignoring`)
-          return
-        }
-        if (!this.wasmText) {
-          console.log(`[SyncText] Cross-tab: no WASM, ignoring`)
-          return
-        }
+        if (msg.documentId !== this.id || !this.wasmText) return
 
         // Use the same queue mechanism as WebSocket operations
         // This ensures cross-tab and cross-device operations don't interfere
@@ -197,7 +181,6 @@ export class SyncText implements SyncableDocument {
 
       // Enable cross-tab sync (starts BroadcastChannel listeners)
       this.crossTabSync.enable()
-      console.log(`[SyncText] Cross-tab sync enabled for ${this.id}`)
     }
   }
 
@@ -264,15 +247,10 @@ export class SyncText implements SyncableDocument {
     // IMPORTANT: We send full CRDT state, not position-based operations.
     // Position-based sync creates nodes with different NodeIds, breaking merges.
     if (this.crossTabSync && !this.isApplyingRemote && this.wasmText) {
-      const state = this.wasmText.toJSON()
-      console.log(`[SyncText] Broadcasting to cross-tab for ${this.id}:`, {
-        clientId: this.clientId,
-        stateLength: state.length
-      })
       this.crossTabSync.broadcast({
         type: 'text-state',
         documentId: this.id,
-        state,
+        state: this.wasmText.toJSON(),
         clientId: this.clientId
       } as Omit<TextStateMessage, 'from' | 'seq' | 'timestamp'>)
     }
@@ -286,15 +264,9 @@ export class SyncText implements SyncableDocument {
       // Increment vector clock
       this.vectorClock[this.clientId] = (this.vectorClock[this.clientId] || 0) + 1
 
-      const state = this.wasmText.toJSON()
-      console.log(`[SyncText] Sending to WebSocket for ${this.id}:`, {
-        clientId: this.clientId,
-        stateLength: state.length
-      })
-
       await this.syncManager.pushOperation({
         type: 'text-state' as any,
-        state, // Send full CRDT state
+        state: this.wasmText.toJSON(),
         documentId: this.id,
         clientId: this.clientId,
         timestamp: Date.now(),
@@ -589,65 +561,36 @@ export class SyncText implements SyncableDocument {
    * This prevents race conditions when multiple remote updates arrive quickly
    */
   private queueMerge(stateJson: string, remoteClientId?: string): void {
-    console.log(`[SyncText] queueMerge called for ${this.id}:`, {
-      remoteClientId,
-      localClientId: this.clientId,
-      stateLength: stateJson?.length,
-      hasState: !!stateJson
-    })
-
     // Skip if this is our own state (echoed back)
-    if (remoteClientId === this.clientId) {
-      console.log(`[SyncText] Skipping own state (clientId match) for ${this.id}`)
-      return
-    }
+    if (remoteClientId === this.clientId) return
 
     // Validate state exists
-    if (!stateJson) {
-      console.warn(`[SyncText] Skipping merge - no state provided for ${this.id}`)
-      return
-    }
+    if (!stateJson) return
 
     // Simple hash for deduplication (djb2 algorithm)
     const stateHash = this.hashString(stateJson)
 
     // Skip if we just merged this exact state (deduplication)
-    if (stateHash === this.lastMergedStateHash) {
-      console.log(`[SyncText] Skipping duplicate state (hash match) for ${this.id}`)
-      return
-    }
-
-    console.log(`[SyncText] Queueing merge for ${this.id}, hash: ${stateHash}`)
+    if (stateHash === this.lastMergedStateHash) return
 
     // Chain this merge onto the queue
     this.mergeQueue = this.mergeQueue
       .then(async () => {
         // Double-check we still have the WASM instance
-        if (!this.wasmText) {
-          console.warn(`[SyncText] WASM freed before merge for ${this.id}`)
-          return
-        }
+        if (!this.wasmText) return
 
         this.isApplyingRemote = true
         try {
-          const beforeContent = this.content
           await this.mergeRemote(stateJson)
           this.lastMergedStateHash = stateHash
-          const afterContent = this.content
-          console.log(`[SyncText] Merged remote state for ${this.id}:`, {
-            beforeLength: beforeContent.length,
-            afterLength: afterContent.length,
-            changed: beforeContent !== afterContent
-          })
         } catch (err) {
-          console.error(`[SyncText] Failed to merge remote state for ${this.id}:`, err)
+          console.error(`[SyncText] Failed to merge remote state:`, err)
         } finally {
           this.isApplyingRemote = false
         }
       })
       .catch((err) => {
-        // Ensure queue continues even if something goes wrong
-        console.error(`[SyncText] Merge queue error for ${this.id}:`, err)
+        console.error(`[SyncText] Merge queue error:`, err)
       })
   }
 
