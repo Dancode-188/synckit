@@ -309,22 +309,23 @@ impl<'de> Deserialize<'de> for FugueText {
         // Convert Vec back to BTreeMap
         let blocks: BTreeMap<NodeId, FugueBlock> = helper.blocks.into_iter().collect();
 
-        // Rebuild rope from blocks
-        let mut text = String::new();
-        for block in blocks.values() {
-            if !block.is_deleted() {
-                text.push_str(&block.text);
-            }
-        }
-
-        Ok(Self {
-            rope: Rope::from_str(&text),
+        // CRITICAL FIX: Build rope in Fugue document order, NOT BTreeMap order!
+        // BTreeMap iteration gives causal/timestamp order (by NodeId), which differs
+        // from document order when blocks are split or inserted mid-text.
+        // We must use rebuild_rope() which correctly traverses the Fugue tree.
+        let mut fugue = Self {
+            rope: Rope::new(), // Start with empty rope
             blocks,
             clock: helper.clock,
             client_id: helper.client_id,
-            cache_valid: false,        // Cache needs rebuild after deserialization
-            cached_blocks: Vec::new(), // Will be rebuilt on first find_origins
-        })
+            cache_valid: false,
+            cached_blocks: Vec::new(),
+        };
+
+        // Rebuild rope in correct Fugue tree document order
+        fugue.rebuild_rope();
+
+        Ok(fugue)
     }
 }
 

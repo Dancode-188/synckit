@@ -56,39 +56,12 @@ export function parseMarkdown(text: string): string {
   });
 
   // Parse bold **text** or __text__
-  // Only match at word boundaries (not mid-word like "wor**d**")
-  html = html.replace(/\*\*([^*]+)\*\*/g, (match, content, offset, string) => {
-    const before = string[offset - 1];
-    const after = string[offset + match.length];
-    // Valid if preceded/followed by whitespace, punctuation, or string boundary
-    const validBefore = !before || /[\s\p{P}]/u.test(before);
-    const validAfter = !after || /[\s\p{P}]/u.test(after);
-    return (validBefore && validAfter) ? `<strong>${content}</strong>` : match;
-  });
-  html = html.replace(/__([^_]+)__/g, (match, content, offset, string) => {
-    const before = string[offset - 1];
-    const after = string[offset + match.length];
-    const validBefore = !before || /[\s\p{P}]/u.test(before);
-    const validAfter = !after || /[\s\p{P}]/u.test(after);
-    return (validBefore && validAfter) ? `<strong>${content}</strong>` : match;
-  });
+  html = html.replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>');
+  html = html.replace(/__([^_]+)__/g, '<strong>$1</strong>');
 
   // Parse italic *text* or _text_ (but not inside already processed bold)
-  // Only match at word boundaries
-  html = html.replace(/(?<!\*)\*([^*]+)\*(?!\*)/g, (match, content, offset, string) => {
-    const before = string[offset - 1];
-    const after = string[offset + match.length];
-    const validBefore = !before || /[\s\p{P}]/u.test(before);
-    const validAfter = !after || /[\s\p{P}]/u.test(after);
-    return (validBefore && validAfter) ? `<em>${content}</em>` : match;
-  });
-  html = html.replace(/(?<!_)_([^_]+)_(?!_)/g, (match, content, offset, string) => {
-    const before = string[offset - 1];
-    const after = string[offset + match.length];
-    const validBefore = !before || /[\s\p{P}]/u.test(before);
-    const validAfter = !after || /[\s\p{P}]/u.test(after);
-    return (validBefore && validAfter) ? `<em>${content}</em>` : match;
-  });
+  html = html.replace(/(?<!\*)\*([^*]+)\*(?!\*)/g, '<em>$1</em>');
+  html = html.replace(/(?<!_)_([^_]+)_(?!_)/g, '<em>$1</em>');
 
   return html;
 }

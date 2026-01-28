@@ -79,12 +79,8 @@ export class SyncText implements SyncableDocument {
   private mergeQueue: Promise<void> = Promise.resolve()
   private lastMergedStateHash: string | null = null
 
-  // Performance: Cache serialized state to avoid multiple toJSON() calls
-  private cachedStateJson: string | null = null
-
-  // Performance: Debounce cross-tab broadcasts (50ms, same as WebSocket batching)
-  private crossTabBroadcastTimer: ReturnType<typeof setTimeout> | null = null
-  private pendingCrossTabBroadcast: boolean = false
+  // Batch mode: when true, skip cross-tab broadcasts until batch ends
+  private isBatching: boolean = false
 
   constructor(
     private readonly id: string,
@@ -199,6 +195,47 @@ export class SyncText implements SyncableDocument {
   }
 
   /**
+   * Begin a batch of operations
+   * While batching, cross-tab broadcasts are deferred until endBatch() is called.
+   * This prevents interference from cross-tab sync during multi-step operations like formatting.
+   */
+  beginBatch(): void {
+    this.isBatching = true
+  }
+
+  /**
+   * End a batch of operations and broadcast the final state
+   * Call this after a sequence of related operations (e.g., delete + insert for formatting)
+   */
+  async endBatch(): Promise<void> {
+    this.isBatching = false
+
+    // Broadcast final state to other tabs
+    if (this.crossTabSync && !this.isApplyingRemote && this.wasmText) {
+      this.crossTabSync.broadcast({
+        type: 'text-state',
+        documentId: this.id,
+        state: this.wasmText.toJSON(),
+        clientId: this.clientId
+      } as Omit<TextStateMessage, 'from' | 'seq' | 'timestamp'>)
+    }
+
+    // Sync to server
+    if (this.syncManager && this.wasmText) {
+      this.vectorClock[this.clientId] = (this.vectorClock[this.clientId] || 0) + 1
+
+      await this.syncManager.pushOperation({
+        type: 'text-state' as any,
+        state: this.wasmText.toJSON(),
+        documentId: this.id,
+        clientId: this.clientId,
+        timestamp: Date.now(),
+        clock: { ...this.vectorClock }
+      } as any)
+    }
+  }
+
+  /**
    * Get the current length (in graphemes)
    */
   length(): number {
@@ -241,9 +278,6 @@ export class SyncText implements SyncableDocument {
     // Insert in WASM
     this.wasmText.insert(position, text)
 
-    // Invalidate cached state (mutation occurred)
-    this.invalidateStateCache()
-
     // Update local state
     this.updateLocalState()
 
@@ -253,23 +287,32 @@ export class SyncText implements SyncableDocument {
     // Notify subscribers
     this.notifySubscribers()
 
-    // Schedule cross-tab broadcast (debounced for performance)
+    // Broadcast to other tabs (if not applying a remote operation and not batching)
     // IMPORTANT: We send full CRDT state, not position-based operations.
     // Position-based sync creates nodes with different NodeIds, breaking merges.
-    this.scheduleCrossTabBroadcast()
+    // When batching, we defer broadcasts until endBatch() to prevent interference.
+    if (this.crossTabSync && !this.isApplyingRemote && !this.isBatching && this.wasmText) {
+      this.crossTabSync.broadcast({
+        type: 'text-state',
+        documentId: this.id,
+        state: this.wasmText.toJSON(),
+        clientId: this.clientId
+      } as Omit<TextStateMessage, 'from' | 'seq' | 'timestamp'>)
+    }
 
-    // Sync (if sync manager available)
+    // Sync (if sync manager available and not batching)
     // IMPORTANT: We send the full CRDT state, not position-based operations.
     // Position-based sync is fundamentally broken for concurrent editing because
     // positions shift when multiple clients edit simultaneously.
     // State-based sync with merge() is the correct approach for CRDTs.
-    if (this.syncManager && this.wasmText) {
+    // When batching, we defer syncs until endBatch().
+    if (this.syncManager && !this.isBatching && this.wasmText) {
       // Increment vector clock
       this.vectorClock[this.clientId] = (this.vectorClock[this.clientId] || 0) + 1
 
       await this.syncManager.pushOperation({
         type: 'text-state' as any,
-        state: this.getCachedStateJson(),
+        state: this.wasmText.toJSON(),
         documentId: this.id,
         clientId: this.clientId,
         timestamp: Date.now(),
@@ -304,9 +347,6 @@ export class SyncText implements SyncableDocument {
     // Delete in WASM
     this.wasmText.delete(position, length)
 
-    // Invalidate cached state (mutation occurred)
-    this.invalidateStateCache()
-
     // Update local state
     this.updateLocalState()
 
@@ -316,20 +356,29 @@ export class SyncText implements SyncableDocument {
     // Notify subscribers
     this.notifySubscribers()
 
-    // Schedule cross-tab broadcast (debounced for performance)
+    // Broadcast to other tabs (if not applying a remote operation and not batching)
     // IMPORTANT: We send full CRDT state, not position-based operations.
     // Position-based sync creates nodes with different NodeIds, breaking merges.
-    this.scheduleCrossTabBroadcast()
+    // When batching, we defer broadcasts until endBatch() to prevent interference.
+    if (this.crossTabSync && !this.isApplyingRemote && !this.isBatching && this.wasmText) {
+      this.crossTabSync.broadcast({
+        type: 'text-state',
+        documentId: this.id,
+        state: this.wasmText.toJSON(),
+        clientId: this.clientId
+      } as Omit<TextStateMessage, 'from' | 'seq' | 'timestamp'>)
+    }
 
-    // Sync (if sync manager available)
+    // Sync (if sync manager available and not batching)
     // Send full CRDT state for proper merge (see insert() comment)
-    if (this.syncManager && this.wasmText) {
+    // When batching, we defer syncs until endBatch().
+    if (this.syncManager && !this.isBatching && this.wasmText) {
       // Increment vector clock
       this.vectorClock[this.clientId] = (this.vectorClock[this.clientId] || 0) + 1
 
       await this.syncManager.pushOperation({
         type: 'text-state' as any,
-        state: this.getCachedStateJson(),
+        state: this.wasmText.toJSON(), // Send full CRDT state
         documentId: this.id,
         clientId: this.clientId,
         timestamp: Date.now(),
@@ -477,12 +526,6 @@ export class SyncText implements SyncableDocument {
    * Dispose and free WASM memory
    */
   dispose(): void {
-    // Clear pending cross-tab broadcast timer
-    if (this.crossTabBroadcastTimer) {
-      clearTimeout(this.crossTabBroadcastTimer)
-      this.crossTabBroadcastTimer = null
-    }
-
     if (this.syncManager) {
       this.syncManager.unregisterDocument(this.id)
     }
@@ -493,9 +536,6 @@ export class SyncText implements SyncableDocument {
       this.wasmText.free()
       this.wasmText = null
     }
-
-    // Clear cached state
-    this.cachedStateJson = null
   }
 
   // ====================
@@ -613,61 +653,6 @@ export class SyncText implements SyncableDocument {
     return hash.toString(36)
   }
 
-  /**
-   * Get cached serialized state (avoids multiple toJSON() calls per operation)
-   */
-  private getCachedStateJson(): string {
-    if (this.cachedStateJson === null && this.wasmText) {
-      this.cachedStateJson = this.wasmText.toJSON()
-    }
-    return this.cachedStateJson || ''
-  }
-
-  /**
-   * Invalidate cached state (call after mutations)
-   */
-  private invalidateStateCache(): void {
-    this.cachedStateJson = null
-  }
-
-  /**
-   * Schedule a cross-tab broadcast (debounced to reduce overhead)
-   */
-  private scheduleCrossTabBroadcast(): void {
-    if (!this.crossTabSync || this.isApplyingRemote) return
-
-    this.pendingCrossTabBroadcast = true
-
-    // If timer already running, let it handle the broadcast
-    if (this.crossTabBroadcastTimer) return
-
-    // Schedule broadcast after 50ms (matches WebSocket batch delay)
-    this.crossTabBroadcastTimer = setTimeout(() => {
-      this.flushCrossTabBroadcast()
-    }, 50)
-  }
-
-  /**
-   * Flush pending cross-tab broadcast
-   */
-  private flushCrossTabBroadcast(): void {
-    this.crossTabBroadcastTimer = null
-
-    if (!this.pendingCrossTabBroadcast || !this.crossTabSync || !this.wasmText) {
-      this.pendingCrossTabBroadcast = false
-      return
-    }
-
-    this.pendingCrossTabBroadcast = false
-
-    this.crossTabSync.broadcast({
-      type: 'text-state',
-      documentId: this.id,
-      state: this.getCachedStateJson(),
-      clientId: this.clientId
-    } as Omit<TextStateMessage, 'from' | 'seq' | 'timestamp'>)
-  }
-
   // ====================
   // Private helpers
   // ====================
@@ -697,7 +682,7 @@ export class SyncText implements SyncableDocument {
       content: this.content,
       clock: this.clock,
       updatedAt: Date.now(),
-      crdt: this.getCachedStateJson()
+      crdt: this.wasmText.toJSON()
     }
 
     await this.storage.set(this.id, data as any)

@@ -91,9 +91,33 @@ export function useBlockText(
           initializedRef.current = true;
 
           // If text is empty and we have initial content, set it
+          // Use localStorage to coordinate seeding across tabs and prevent duplication
           const currentContent = text.get();
           if (currentContent === '' && initialContent) {
-            await text.insert(0, initialContent);
+            const seedKey = `synckit:seeded:${textDocId}`;
+
+            // Check if this block has already been seeded by another tab
+            const alreadySeeded = localStorage.getItem(seedKey);
+
+            if (!alreadySeeded) {
+              // Try to claim seeding responsibility
+              const claimId = `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+              localStorage.setItem(seedKey, claimId);
+
+              // Small delay to let other tabs see our claim and for cross-tab sync
+              await new Promise(resolve => setTimeout(resolve, 150));
+
+              // Verify we still hold the claim AND content is still empty
+              const ourClaim = localStorage.getItem(seedKey) === claimId;
+              const contentAfterSync = text.get();
+
+              if (ourClaim && contentAfterSync === '') {
+                await text.insert(0, initialContent);
+              }
+            } else {
+              // Another tab already seeded - wait for cross-tab sync to receive content
+              await new Promise(resolve => setTimeout(resolve, 200));
+            }
           }
 
           // Set initial content
@@ -154,6 +178,7 @@ export function useBlockText(
       throw new Error('SyncText not initialized');
     }
 
+    // Get current content and compute diff atomically
     const currentContent = textRef.current.get();
 
     // Skip if content hasn't changed
@@ -164,13 +189,53 @@ export function useBlockText(
     // Compute the operations needed to transform current to new
     const operations = computeTextDiff(currentContent, newContent);
 
-    // Apply operations to SyncText
-    for (const op of operations) {
-      if (op.type === 'delete' && op.length !== undefined) {
-        await textRef.current.delete(op.position, op.length);
-      } else if (op.type === 'insert' && op.text !== undefined) {
-        await textRef.current.insert(op.position, op.text);
+    // Use batch mode when there are multiple operations (e.g., delete + insert for formatting)
+    // This prevents cross-tab broadcasts between operations, avoiding race conditions
+    const useBatch = operations.length > 1;
+
+    if (useBatch) {
+      textRef.current.beginBatch();
+    }
+
+    try {
+      // Apply operations to SyncText
+      for (const op of operations) {
+        // Re-check current state before each operation to catch race conditions
+        const stateBeforeOp = textRef.current.get();
+
+        if (op.type === 'delete' && op.length !== undefined) {
+          // Validate position is still valid
+          if (op.position + op.length > stateBeforeOp.length) {
+            console.warn('[useBlockText] Delete position invalid, aborting remaining ops');
+            break;
+          }
+          await textRef.current.delete(op.position, op.length);
+        } else if (op.type === 'insert' && op.text !== undefined) {
+          // Validate position is still valid
+          const stateAfterPrevOps = textRef.current.get();
+          if (op.position > stateAfterPrevOps.length) {
+            console.warn('[useBlockText] Insert position invalid, aborting remaining ops');
+            break;
+          }
+          await textRef.current.insert(op.position, op.text);
+        }
       }
+    } finally {
+      // Always end batch to ensure state is broadcast
+      if (useBatch) {
+        await textRef.current.endBatch();
+      }
+    }
+
+    // Verify final state matches expected
+    const finalContent = textRef.current.get();
+    if (finalContent !== newContent) {
+      // State diverged - this can happen with concurrent edits
+      // Log for debugging but don't throw - CRDT will eventually converge
+      console.warn('[useBlockText] Final state diverged from expected', {
+        expected: newContent.substring(0, 50),
+        actual: finalContent.substring(0, 50),
+      });
     }
   }, []);
 
