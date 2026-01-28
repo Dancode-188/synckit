@@ -1,78 +1,52 @@
 /**
  * Playground utilities
- * Handles playground initialization, seed content, and archiving
+ * Handles playground initialization and archiving
+ *
+ * NOTE: Playground seeding is now handled by the seed-playground.ts script.
+ * Run `npm run seed-playground` once before launch to populate the playground.
+ * This avoids race conditions where multiple clients try to seed simultaneously.
  */
 
 import type { SyncDocument } from '@synckit-js/sdk';
 import { createBlock, PageDocument, BLOCK_TYPES } from './blocks';
 
 /**
- * Initialize playground with welcoming seed content
- * Only runs if playground is empty
+ * Initialize playground document structure
+ *
+ * This function only sets up the document if it's completely empty.
+ * Actual seed content is populated by the seed-playground.ts script.
+ *
+ * @deprecated Use `npm run seed-playground` script instead for seeding.
+ * This function now only ensures the document has basic structure.
  */
-export async function initializePlayground(doc: SyncDocument<PageDocument>): Promise<boolean> {
+export async function initializePlayground(
+  doc: SyncDocument<PageDocument>
+): Promise<boolean> {
   try {
-    // Check if already has blocks (not just metadata like title/id)
+    // Check if already has blocks (seeded by script or has user content)
     const data = doc.get();
     const existingBlockOrder = data?.blockOrder ? JSON.parse(data.blockOrder as string) : [];
-    const hasBlocks = existingBlockOrder.length > 0;
 
-    if (hasBlocks) {
-      console.log('🌍 Playground already has blocks, skipping seed content');
+    if (existingBlockOrder.length > 0) {
+      console.log('🌍 Playground already has content');
       return false;
     }
 
-    console.log('🌱 Initializing playground with seed content...');
-
-    // Create welcome blocks
-    const welcomeHeading = createBlock(BLOCK_TYPES.HEADING_1, 'Welcome to LocalWrite! 👋');
-    const introText = createBlock(BLOCK_TYPES.PARAGRAPH, 'This is a **PUBLIC playground** - everyone here right now can edit this together! See those cursors moving? Those are real people collaborating with you.');
-
-    const tryHeading = createBlock(BLOCK_TYPES.HEADING_2, 'Try This:');
-    const tryItem1 = createBlock(BLOCK_TYPES.BULLETED_LIST, 'Type your name below ↓');
-    const tryItem2 = createBlock(BLOCK_TYPES.BULLETED_LIST, 'Press `Cmd+B` for **bold**, `Cmd+I` for *italic*');
-    const tryItem3 = createBlock(BLOCK_TYPES.BULLETED_LIST, 'Type `/` to see block options');
-    const tryItem4 = createBlock(BLOCK_TYPES.BULLETED_LIST, 'Create a private room for your team →');
-
-    const divider = createBlock(BLOCK_TYPES.PARAGRAPH, '---');
-
-    const promptHeading = createBlock(BLOCK_TYPES.HEADING_3, '💭 Community Prompt');
-    const promptText = createBlock(BLOCK_TYPES.QUOTE, 'What\'s the weirdest bug you\'ve ever encountered? Share your story below!');
+    // If completely empty, create a single empty block so users can start typing
+    // The seed-playground script should have run before this, but this is a fallback
+    console.log('🌍 Playground is empty - creating minimal structure');
 
     const emptyBlock = createBlock(BLOCK_TYPES.PARAGRAPH, '');
 
-    // Collect all blocks
-    const blocks = [
-      welcomeHeading,
-      introText,
-      tryHeading,
-      tryItem1,
-      tryItem2,
-      tryItem3,
-      tryItem4,
-      divider,
-      promptHeading,
-      promptText,
-      emptyBlock,
-    ];
-
-    // Create block order
-    const blockOrder = blocks.map(b => b.id);
-
-    // Set document metadata
     await doc.set('id', 'playground');
     await doc.set('title', 'Public Playground');
     await doc.set('icon', '🌍');
-    await doc.set('blockOrder', JSON.stringify(blockOrder));
+    await doc.set('blockOrder', JSON.stringify([emptyBlock.id]));
     await doc.set('createdAt', Date.now());
     await doc.set('updatedAt', Date.now());
+    await doc.set(`block:${emptyBlock.id}` as any, emptyBlock);
 
-    // Set all blocks
-    for (const block of blocks) {
-      await doc.set(`block:${block.id}` as any, block);
-    }
-
-    console.log('✅ Playground initialized with seed content');
+    console.log('✅ Playground initialized with empty structure');
     return true;
   } catch (error) {
     console.error('Failed to initialize playground:', error);

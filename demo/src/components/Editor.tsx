@@ -105,25 +105,24 @@ export function Editor({ pageId }: EditorProps) {
       const doc = synckit.document<PageDocument>(pageId);
 
       // Initialize document (loads from storage)
-      // For playground, check storage first to avoid sync timeout on fresh load
+      // For playground, DON'T create local blocks - let server sync provide content
+      // The seed-playground.ts script handles seeding the server
       if (pageId === 'playground') {
         console.log('🌍 Initializing playground document');
-        const storage = (synckit as any).storage;
-        if (storage) {
-          const existingDoc = await storage.get(pageId);
-          if (!existingDoc || !existingDoc.data || Object.keys(existingDoc.data).length === 0) {
-            console.log('🌱 Fresh playground - initializing with seed content before sync...');
-            // Initialize document instance without syncing
-            await doc.init();
-            // Immediately set seed content
-            await initializePlayground(doc);
-          } else {
-            // Document exists in storage, normal init
-            await doc.init();
-          }
-        } else {
-          await doc.init();
+        await doc.init();
+
+        // Wait for server sync to complete before checking if empty
+        console.log('⏳ Waiting for server sync...');
+        await new Promise(resolve => setTimeout(resolve, 2000));
+
+        // Only create minimal structure if server has nothing
+        const data = doc.get();
+        const blockOrder = data?.blockOrder ? JSON.parse(data.blockOrder as string) : [];
+        if (blockOrder.length === 0) {
+          console.log('🌱 No content from server, creating minimal structure');
           await initializePlayground(doc);
+        } else {
+          console.log(`✅ Received ${blockOrder.length} blocks from server`);
         }
       } else {
         // For non-playground documents (rooms, personal pages), just init normally

@@ -90,37 +90,24 @@ export function useBlockText(
           textRef.current = text;
           initializedRef.current = true;
 
-          // If text is empty and we have initial content, set it
-          // Use localStorage to coordinate seeding across tabs and prevent duplication
-          const currentContent = text.get();
-          if (currentContent === '' && initialContent) {
-            const seedKey = `synckit:seeded:${textDocId}`;
-
-            // Check if this block has already been seeded by another tab
-            const alreadySeeded = localStorage.getItem(seedKey);
-
-            if (!alreadySeeded) {
-              // Try to claim seeding responsibility
-              const claimId = `${Date.now()}-${Math.random().toString(36).slice(2)}`;
-              localStorage.setItem(seedKey, claimId);
-
-              // Small delay to let other tabs see our claim and for cross-tab sync
-              await new Promise(resolve => setTimeout(resolve, 150));
-
-              // Verify we still hold the claim AND content is still empty
-              const ourClaim = localStorage.getItem(seedKey) === claimId;
-              const contentAfterSync = text.get();
-
-              if (ourClaim && contentAfterSync === '') {
-                await text.insert(0, initialContent);
-              }
-            } else {
-              // Another tab already seeded - wait for cross-tab sync to receive content
-              await new Promise(resolve => setTimeout(resolve, 200));
-            }
+          // Wait a moment for any server sync to arrive
+          const isPlayground = textDocId?.startsWith('playground:');
+          if (isPlayground) {
+            // For playground, wait for server sync before checking content
+            await new Promise(resolve => setTimeout(resolve, 500));
           }
 
-          // Set initial content
+          // Check content after potential sync
+          const currentContent = text.get();
+
+          if (currentContent === '' && initialContent) {
+            // SyncText is empty after sync wait - seed it
+            // For playground, this means server didn't have content for this block
+            // For other pages, this is normal initial seeding
+            await text.insert(0, initialContent);
+          }
+
+          // Set content from SyncText
           setContent(text.get());
           setLoading(false);
 
