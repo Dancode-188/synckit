@@ -5,7 +5,6 @@ import { Sidebar } from './components/Sidebar';
 import { Editor } from './components/Editor';
 import { SearchDialog } from './components/SearchDialog';
 import { ExportDialog } from './components/ExportDialog';
-import { MemoryMonitor } from './components/MemoryMonitor';
 import { Cursors } from './components/Cursors';
 import { RoomBanner } from './components/RoomBanner';
 import { SyncKitProvider, useSyncKit } from './contexts/SyncKitContext';
@@ -382,8 +381,6 @@ function AppContent({ storageType }: { storageType: StorageType }) {
         />
       )}
 
-      {/* Memory Monitor (dev mode only) */}
-      <MemoryMonitor />
 
       {/* Live Cursors */}
       <Cursors synckit={synckit} pageId={currentPageId} />

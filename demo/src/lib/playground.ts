@@ -1,65 +1,55 @@
 /**
  * Playground utilities
- * Handles playground initialization, seed content, and archiving
+ * Handles playground initialization and archiving
+ *
+ * The playground is seeded client-side when first accessed.
+ * The block.content field is used as fallback seeding in useBlockText.
  */
 
 import type { SyncDocument } from '@synckit-js/sdk';
 import { createBlock, PageDocument, BLOCK_TYPES } from './blocks';
 
 /**
- * Initialize playground with welcoming seed content
- * Only runs if playground is empty
+ * Seed content for the playground
+ * These are used as block.content for fallback seeding in useBlockText
  */
-export async function initializePlayground(doc: SyncDocument<PageDocument>): Promise<boolean> {
+const PLAYGROUND_SEED_BLOCKS = [
+  { type: BLOCK_TYPES.HEADING_1, content: 'Welcome to the Public Playground' },
+  { type: BLOCK_TYPES.PARAGRAPH, content: 'This is a **shared space** where anyone can edit. Your changes sync in real-time across all connected users.' },
+  { type: BLOCK_TYPES.HEADING_2, content: 'Try These Features' },
+  { type: BLOCK_TYPES.BULLETED_LIST, content: 'Type `/` to see available block types' },
+  { type: BLOCK_TYPES.BULLETED_LIST, content: 'Use `**bold**` and `*italic*` for formatting' },
+  { type: BLOCK_TYPES.BULLETED_LIST, content: 'Create links with `[text](url)`' },
+  { type: BLOCK_TYPES.PARAGRAPH, content: 'Open this page in another tab or device to see real-time collaboration in action!' },
+];
+
+/**
+ * Initialize playground document structure with seed content
+ *
+ * This function sets up the playground if it's completely empty.
+ * The block.content field is used by useBlockText for fallback seeding.
+ */
+export async function initializePlayground(
+  doc: SyncDocument<PageDocument>
+): Promise<boolean> {
   try {
-    // Check if already has blocks (not just metadata like title/id)
+    // Check if already has blocks (has user content)
     const data = doc.get();
     const existingBlockOrder = data?.blockOrder ? JSON.parse(data.blockOrder as string) : [];
-    const hasBlocks = existingBlockOrder.length > 0;
 
-    if (hasBlocks) {
-      console.log('🌍 Playground already has blocks, skipping seed content');
+    if (existingBlockOrder.length > 0) {
+      console.log('🌍 Playground already has content');
       return false;
     }
 
-    console.log('🌱 Initializing playground with seed content...');
+    // Create blocks with seed content
+    console.log('🌍 Initializing playground with seed content');
 
-    // Create welcome blocks
-    const welcomeHeading = createBlock(BLOCK_TYPES.HEADING_1, 'Welcome to LocalWrite! 👋');
-    const introText = createBlock(BLOCK_TYPES.PARAGRAPH, 'This is a **PUBLIC playground** - everyone here right now can edit this together! See those cursors moving? Those are real people collaborating with you.');
-
-    const tryHeading = createBlock(BLOCK_TYPES.HEADING_2, 'Try This:');
-    const tryItem1 = createBlock(BLOCK_TYPES.BULLETED_LIST, 'Type your name below ↓');
-    const tryItem2 = createBlock(BLOCK_TYPES.BULLETED_LIST, 'Press `Cmd+B` for **bold**, `Cmd+I` for *italic*');
-    const tryItem3 = createBlock(BLOCK_TYPES.BULLETED_LIST, 'Type `/` to see block options');
-    const tryItem4 = createBlock(BLOCK_TYPES.BULLETED_LIST, 'Create a private room for your team →');
-
-    const divider = createBlock(BLOCK_TYPES.PARAGRAPH, '---');
-
-    const promptHeading = createBlock(BLOCK_TYPES.HEADING_3, '💭 Community Prompt');
-    const promptText = createBlock(BLOCK_TYPES.QUOTE, 'What\'s the weirdest bug you\'ve ever encountered? Share your story below!');
-
-    const emptyBlock = createBlock(BLOCK_TYPES.PARAGRAPH, '');
-
-    // Collect all blocks
-    const blocks = [
-      welcomeHeading,
-      introText,
-      tryHeading,
-      tryItem1,
-      tryItem2,
-      tryItem3,
-      tryItem4,
-      divider,
-      promptHeading,
-      promptText,
-      emptyBlock,
-    ];
-
-    // Create block order
+    const blocks = PLAYGROUND_SEED_BLOCKS.map(({ type, content }) =>
+      createBlock(type, content)
+    );
     const blockOrder = blocks.map(b => b.id);
 
-    // Set document metadata
     await doc.set('id', 'playground');
     await doc.set('title', 'Public Playground');
     await doc.set('icon', '🌍');
@@ -67,7 +57,6 @@ export async function initializePlayground(doc: SyncDocument<PageDocument>): Pro
     await doc.set('createdAt', Date.now());
     await doc.set('updatedAt', Date.now());
 
-    // Set all blocks
     for (const block of blocks) {
       await doc.set(`block:${block.id}` as any, block);
     }

@@ -516,6 +516,7 @@ export class SyncManager {
 
   /**
    * Handle sync response from server
+   * Applies the full server state to the local document
    */
   private handleSyncResponse(payload: any): void {
     const { documentId, state, clock } = payload
@@ -527,9 +528,23 @@ export class SyncManager {
     }
 
     // Apply server state if provided
-    if (state) {
-      // Server sent full state, apply it
-      // (This would need document-specific handling)
+    // The server sends the full document state as an object with field/value pairs
+    if (state && typeof state === 'object') {
+      // console.log(`[SyncManager] Applying server state for ${documentId}:`, Object.keys(state).length, 'fields')
+      for (const [field, value] of Object.entries(state)) {
+        // Create an operation for each field and apply it
+        const operation: Operation = {
+          type: 'set',
+          documentId,
+          field,
+          value,
+          clock: clock || {},
+          clientId: 'server',
+          timestamp: Date.now(),
+        }
+        document.applyRemoteOperation(operation)
+      }
+      // console.log(`[SyncManager] ✓ Applied ${Object.keys(state).length} fields from server state`)
     }
 
     // Merge vector clocks

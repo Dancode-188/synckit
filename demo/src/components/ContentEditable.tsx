@@ -4,7 +4,7 @@
  * Supports markdown rendering for WYSIWYG experience
  */
 
-import { useRef, useEffect, KeyboardEvent } from 'react';
+import { useRef, useEffect, KeyboardEvent, FocusEvent } from 'react';
 import { parseMarkdown, htmlToMarkdown } from '../lib/markdown';
 
 interface ContentEditableProps {
@@ -28,22 +28,75 @@ export function ContentEditable({
   const isComposingRef = useRef(false);
   const lastContentRef = useRef<string>(content);
 
+  // Track if the content change came from local editing
+  const isLocalEditRef = useRef(false);
+
+  // Flag to prevent MutationObserver feedback loop during programmatic DOM updates
+  const isUpdatingDomRef = useRef(false);
+
+  // Track if this is the first mount (DOM needs initial population)
+  const isFirstMountRef = useRef(true);
+
   // Update content when it changes externally (including remote CRDT updates)
-  // CRITICAL: We MUST update the DOM even while focused, otherwise the DOM and CRDT
-  // diverge, causing the diff algorithm to compute incorrect operations that
-  // overwrite remote content. We preserve cursor position to prevent jumping.
+  // For local edits: DON'T update DOM - user's typed content is already visible
+  // For remote updates: Apply immediately with cursor preservation for collaboration
   useEffect(() => {
     if (ref.current) {
-      const parsedHtml = parseMarkdown(content);
-
-      // Skip if content hasn't actually changed
-      if (ref.current.innerHTML === parsedHtml) {
+      if (isLocalEditRef.current) {
+        // Local edit: skip DOM update entirely
+        // The user's typed content is already in the DOM, no need to re-render
+        // Formatting will be applied on blur
         lastContentRef.current = content;
-        return;
+        isLocalEditRef.current = false;
+      } else {
+        // On first mount, ALWAYS populate DOM - it starts empty!
+        const needsInitialPopulation = isFirstMountRef.current && content;
+
+        if (needsInitialPopulation) {
+          isFirstMountRef.current = false;
+          const parsedHtml = parseMarkdown(content);
+          isUpdatingDomRef.current = true;
+          ref.current.innerHTML = parsedHtml;
+          isUpdatingDomRef.current = false;
+          lastContentRef.current = content;
+          return;
+        }
+
+        // Skip server echoes - if markdown content matches what we have, it's just
+        // the server echoing back our own change, no need to update DOM
+        if (content === lastContentRef.current) {
+          return;
+        }
+
+        // Remote update: apply immediately for real-time collaboration feel
+        const parsedHtml = parseMarkdown(content);
+
+        // Skip if DOM already has this content
+        if (ref.current.innerHTML === parsedHtml) {
+          lastContentRef.current = content;
+          return;
+        }
+
+        updateDomWithCursorPreservation(ref.current, parsedHtml, content);
       }
+    }
+  }, [content]);
 
-      const isCurrentlyFocused = document.activeElement === ref.current;
+  // Helper to update DOM while preserving cursor position
+  // Sets isUpdatingDomRef to prevent MutationObserver feedback loop
+  const updateDomWithCursorPreservation = (element: HTMLDivElement, parsedHtml: string, rawContent: string) => {
+    // Skip if content hasn't actually changed
+    if (element.innerHTML === parsedHtml) {
+      lastContentRef.current = rawContent;
+      return;
+    }
 
+    const isCurrentlyFocused = document.activeElement === element;
+
+    // Prevent MutationObserver from triggering during programmatic update
+    isUpdatingDomRef.current = true;
+
+    try {
       if (isCurrentlyFocused) {
         // Save cursor position before updating
         const selection = window.getSelection();
@@ -58,7 +111,7 @@ export function ContentEditable({
           // Calculate absolute offset from start of content
           // This helps restore position even when content structure changes
           const walker = document.createTreeWalker(
-            ref.current,
+            element,
             NodeFilter.SHOW_TEXT,
             null
           );
@@ -73,13 +126,13 @@ export function ContentEditable({
           }
 
           // Update innerHTML
-          ref.current.innerHTML = parsedHtml;
-          lastContentRef.current = content;
+          element.innerHTML = parsedHtml;
+          lastContentRef.current = rawContent;
 
           // Restore cursor position using absolute offset
           try {
             const newWalker = document.createTreeWalker(
-              ref.current,
+              element,
               NodeFilter.SHOW_TEXT,
               null
             );
@@ -103,27 +156,37 @@ export function ContentEditable({
               newRange.collapse(true);
               selection.removeAllRanges();
               selection.addRange(newRange);
+            } else {
+              // targetNode is null - cursor position exceeded new text length
+              // Place cursor at end of content
+              const newRange = document.createRange();
+              newRange.selectNodeContents(element);
+              newRange.collapse(false);
+              selection.removeAllRanges();
+              selection.addRange(newRange);
             }
           } catch (e) {
             // If cursor restoration fails, just place at end
             const newRange = document.createRange();
-            newRange.selectNodeContents(ref.current);
+            newRange.selectNodeContents(element);
             newRange.collapse(false);
             selection?.removeAllRanges();
             selection?.addRange(newRange);
           }
         } else {
           // No selection, just update
-          ref.current.innerHTML = parsedHtml;
-          lastContentRef.current = content;
+          element.innerHTML = parsedHtml;
+          lastContentRef.current = rawContent;
         }
       } else {
         // Not focused - simple update
-        ref.current.innerHTML = parsedHtml;
-        lastContentRef.current = content;
+        element.innerHTML = parsedHtml;
+        lastContentRef.current = rawContent;
       }
+    } finally {
+      isUpdatingDomRef.current = false;
     }
-  }, [content]); // Run when content prop changes
+  };
 
   // Use MutationObserver to reliably detect content changes
   useEffect(() => {
@@ -131,7 +194,8 @@ export function ContentEditable({
     if (!element) return;
 
     const observer = new MutationObserver(() => {
-      if (isComposingRef.current) {
+      // Skip during IME composition or programmatic DOM updates
+      if (isComposingRef.current || isUpdatingDomRef.current) {
         return;
       }
       const markdownContent = htmlToMarkdown(element);
@@ -171,6 +235,8 @@ export function ContentEditable({
 
   const handleInput = () => {
     if (ref.current && !isComposingRef.current) {
+      // Mark this as a local edit so we can debounce markdown parsing
+      isLocalEditRef.current = true;
       // Convert HTML back to markdown to preserve formatting
       const markdownContent = htmlToMarkdown(ref.current);
       onChange(markdownContent);
@@ -184,6 +250,8 @@ export function ContentEditable({
   const handleCompositionEnd = () => {
     isComposingRef.current = false;
     if (ref.current) {
+      // Mark this as a local edit
+      isLocalEditRef.current = true;
       const markdownContent = htmlToMarkdown(ref.current);
       onChange(markdownContent);
     }
@@ -192,6 +260,18 @@ export function ContentEditable({
   const handleKeyDown = (e: KeyboardEvent<HTMLDivElement>) => {
     if (onKeyDown) {
       onKeyDown(e);
+    }
+  };
+
+  // Apply markdown formatting when user leaves the field
+  const handleBlur = (_e: FocusEvent<HTMLDivElement>) => {
+    if (ref.current) {
+      const parsedHtml = parseMarkdown(lastContentRef.current);
+      if (ref.current.innerHTML !== parsedHtml) {
+        isUpdatingDomRef.current = true;
+        ref.current.innerHTML = parsedHtml;
+        isUpdatingDomRef.current = false;
+      }
     }
   };
 
@@ -204,6 +284,7 @@ export function ContentEditable({
       onCompositionStart={handleCompositionStart}
       onCompositionEnd={handleCompositionEnd}
       onKeyDown={handleKeyDown}
+      onBlur={handleBlur}
       className={className}
       data-placeholder={placeholder}
       style={{

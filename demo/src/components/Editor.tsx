@@ -105,25 +105,45 @@ export function Editor({ pageId }: EditorProps) {
       const doc = synckit.document<PageDocument>(pageId);
 
       // Initialize document (loads from storage)
-      // For playground, check storage first to avoid sync timeout on fresh load
+      // For playground, DON'T create local blocks - let server sync provide content
+      // The seed-playground.ts script handles seeding the server
       if (pageId === 'playground') {
         console.log('🌍 Initializing playground document');
-        const storage = (synckit as any).storage;
-        if (storage) {
-          const existingDoc = await storage.get(pageId);
-          if (!existingDoc || !existingDoc.data || Object.keys(existingDoc.data).length === 0) {
-            console.log('🌱 Fresh playground - initializing with seed content before sync...');
-            // Initialize document instance without syncing
-            await doc.init();
-            // Immediately set seed content
-            await initializePlayground(doc);
-          } else {
-            // Document exists in storage, normal init
-            await doc.init();
+        await doc.init();
+
+        // Wait for server sync to complete before checking if empty
+        console.log('⏳ Waiting for server sync...');
+        await new Promise(resolve => setTimeout(resolve, 2000));
+
+        // Check if playground needs seeding
+        const data = doc.get();
+        const blockOrder = data?.blockOrder ? JSON.parse(data.blockOrder as string) : [];
+
+        // Check if playground has proper seed content
+        // The first block should have "Welcome to the Public Playground" content
+        const existingBlocks = blockOrder.map((id: string) => (data as any)[`block:${id}`]).filter(Boolean);
+        const firstBlockContent = existingBlocks[0]?.content || '';
+        const hasProperSeedContent = firstBlockContent.includes('Welcome to the Public Playground');
+        const needsSeeding = blockOrder.length === 0 || !hasProperSeedContent;
+
+        // DIAGNOSTIC: Log detailed block content at check time
+        console.log('🔎 [Editor] Seeding check - blocks from doc.get():');
+        existingBlocks.forEach((b: Block, i: number) => {
+          console.log(`  Block ${i}: id=${b.id?.substring(0, 15)}..., type=${b.type}, content="${(b.content || '').substring(0, 50)}..." (${(b.content || '').length} chars)`);
+        });
+        console.log(`🔎 [Editor] First block content: "${firstBlockContent.substring(0, 60)}..."`);
+        console.log(`🔎 [Editor] hasProperSeedContent: ${hasProperSeedContent}, needsSeeding: ${needsSeeding}`);
+
+        if (needsSeeding) {
+          console.log('🌱 Playground needs seeding (missing proper seed content)');
+          // Clear old blocks AND blockOrder first
+          for (const blockId of blockOrder) {
+            await doc.delete(`block:${blockId}` as any);
           }
-        } else {
-          await doc.init();
+          await doc.set('blockOrder', JSON.stringify([]));
           await initializePlayground(doc);
+        } else {
+          console.log(`✅ Playground has proper seed content (${blockOrder.length} blocks)`);
         }
       } else {
         // For non-playground documents (rooms, personal pages), just init normally
@@ -164,6 +184,14 @@ export function Editor({ pageId }: EditorProps) {
           if (block) {
             loadedBlocks.push(block);
           }
+        }
+
+        // DIAGNOSTIC: Log block content for playground
+        if (pageId === 'playground') {
+          console.log('📋 [Editor] Blocks extracted from subscription:');
+          loadedBlocks.forEach((b, i) => {
+            console.log(`  Block ${i}: type=${b.type}, content="${(b.content || '').substring(0, 40)}..." (${(b.content || '').length} chars)`);
+          });
         }
 
         setBlocks(loadedBlocks);

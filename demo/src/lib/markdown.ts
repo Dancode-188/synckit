@@ -33,12 +33,23 @@ function sanitizeUrl(url: string): string {
 }
 
 /**
+ * Check if a character is a word boundary (whitespace, punctuation, or undefined)
+ */
+function isWordBoundary(char: string | undefined): boolean {
+  if (!char) return true; // Start or end of string
+  return /[\s.,;:!?'"()\[\]{}<>\/\\|@#$%^&*+=~`-]/.test(char);
+}
+
+/**
  * Parse inline markdown and convert to HTML
  * Supports:
  * - **bold** or __bold__ → <strong>bold</strong>
  * - *italic* or _italic_ → <em>italic</em>
  * - `code` → <code>code</code>
  * - [text](url) → <a href="url">text</a>
+ *
+ * NOTE: Formatting only applies at word boundaries to prevent mid-word formatting.
+ * E.g., "**bold**" works but "wor**d**" does not.
  */
 export function parseMarkdown(text: string): string {
   if (!text) return '';
@@ -55,13 +66,41 @@ export function parseMarkdown(text: string): string {
     return `<a href="${safeUrl}" class="link" target="_blank" rel="noopener noreferrer">${text}</a>`;
   });
 
-  // Parse bold **text** or __text__
-  html = html.replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>');
-  html = html.replace(/__([^_]+)__/g, '<strong>$1</strong>');
+  // Parse bold **text** or __text__ (only at word boundaries)
+  html = html.replace(/\*\*([^*]+)\*\*/g, (match, content, offset, string) => {
+    const before = string[offset - 1];
+    const after = string[offset + match.length];
+    if (isWordBoundary(before) && isWordBoundary(after)) {
+      return `<strong>${content}</strong>`;
+    }
+    return match; // Don't transform mid-word
+  });
+  html = html.replace(/__([^_]+)__/g, (match, content, offset, string) => {
+    const before = string[offset - 1];
+    const after = string[offset + match.length];
+    if (isWordBoundary(before) && isWordBoundary(after)) {
+      return `<strong>${content}</strong>`;
+    }
+    return match;
+  });
 
-  // Parse italic *text* or _text_ (but not inside already processed bold)
-  html = html.replace(/(?<!\*)\*([^*]+)\*(?!\*)/g, '<em>$1</em>');
-  html = html.replace(/(?<!_)_([^_]+)_(?!_)/g, '<em>$1</em>');
+  // Parse italic *text* or _text_ (only at word boundaries, not inside bold)
+  html = html.replace(/(?<!\*)\*([^*]+)\*(?!\*)/g, (match, content, offset, string) => {
+    const before = string[offset - 1];
+    const after = string[offset + match.length];
+    if (isWordBoundary(before) && isWordBoundary(after)) {
+      return `<em>${content}</em>`;
+    }
+    return match;
+  });
+  html = html.replace(/(?<!_)_([^_]+)_(?!_)/g, (match, content, offset, string) => {
+    const before = string[offset - 1];
+    const after = string[offset + match.length];
+    if (isWordBoundary(before) && isWordBoundary(after)) {
+      return `<em>${content}</em>`;
+    }
+    return match;
+  });
 
   return html;
 }

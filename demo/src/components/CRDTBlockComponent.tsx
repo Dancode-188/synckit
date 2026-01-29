@@ -58,12 +58,23 @@ export function CRDTBlockComponent({
   onToggleStateChange,
   onDelete,
 }: CRDTBlockComponentProps) {
+  // DIAGNOSTIC: Log what block.content we're passing to useBlockText
+  const isPlayground = pageId === 'playground';
+  if (isPlayground) {
+    console.log(`📦 [CRDTBlock] Rendering block ${block.id.substring(0, 20)}...`, {
+      type: block.type,
+      blockContent: block.content ? `"${block.content.substring(0, 40)}..."` : '(empty)',
+      blockContentLength: block.content?.length || 0,
+    });
+  }
+
   // Use CRDT-backed text content
   const {
     content,
     updateContent,
     loading,
     initialized,
+    error,
   } = useBlockText(pageId, block.id, block.content);
 
   // Track last notified content to avoid duplicate notifications
@@ -116,6 +127,17 @@ export function CRDTBlockComponent({
         <div className="h-6 bg-gray-200 dark:bg-gray-700 rounded" />
       </div>
     );
+  }
+
+  // DIAGNOSTIC: Log what content value useBlockText actually returned
+  if (isPlayground) {
+    console.log(`🎯 [CRDTBlock] AFTER useBlockText ${block.id.substring(0, 20)}...`, {
+      loading,
+      initialized,
+      crdtContent: content ? `"${content.substring(0, 40)}..."` : '(empty)',
+      crdtContentLength: content?.length || 0,
+      error: error?.message || null,
+    });
   }
 
   // Create a block with CRDT-backed content
