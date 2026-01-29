@@ -2,28 +2,38 @@
  * Playground utilities
  * Handles playground initialization and archiving
  *
- * NOTE: Playground seeding is now handled by the seed-playground.ts script.
- * Run `npm run seed-playground` once before launch to populate the playground.
- * This avoids race conditions where multiple clients try to seed simultaneously.
+ * The playground is seeded client-side when first accessed.
+ * The block.content field is used as fallback seeding in useBlockText.
  */
 
 import type { SyncDocument } from '@synckit-js/sdk';
 import { createBlock, PageDocument, BLOCK_TYPES } from './blocks';
 
 /**
- * Initialize playground document structure
+ * Seed content for the playground
+ * These are used as block.content for fallback seeding in useBlockText
+ */
+const PLAYGROUND_SEED_BLOCKS = [
+  { type: BLOCK_TYPES.HEADING_1, content: 'Welcome to the Public Playground' },
+  { type: BLOCK_TYPES.PARAGRAPH, content: 'This is a **shared space** where anyone can edit. Your changes sync in real-time across all connected users.' },
+  { type: BLOCK_TYPES.HEADING_2, content: 'Try These Features' },
+  { type: BLOCK_TYPES.BULLETED_LIST, content: 'Type `/` to see available block types' },
+  { type: BLOCK_TYPES.BULLETED_LIST, content: 'Use `**bold**` and `*italic*` for formatting' },
+  { type: BLOCK_TYPES.BULLETED_LIST, content: 'Create links with `[text](url)`' },
+  { type: BLOCK_TYPES.PARAGRAPH, content: 'Open this page in another tab or device to see real-time collaboration in action!' },
+];
+
+/**
+ * Initialize playground document structure with seed content
  *
- * This function only sets up the document if it's completely empty.
- * Actual seed content is populated by the seed-playground.ts script.
- *
- * @deprecated Use `npm run seed-playground` script instead for seeding.
- * This function now only ensures the document has basic structure.
+ * This function sets up the playground if it's completely empty.
+ * The block.content field is used by useBlockText for fallback seeding.
  */
 export async function initializePlayground(
   doc: SyncDocument<PageDocument>
 ): Promise<boolean> {
   try {
-    // Check if already has blocks (seeded by script or has user content)
+    // Check if already has blocks (has user content)
     const data = doc.get();
     const existingBlockOrder = data?.blockOrder ? JSON.parse(data.blockOrder as string) : [];
 
@@ -32,21 +42,26 @@ export async function initializePlayground(
       return false;
     }
 
-    // If completely empty, create a single empty block so users can start typing
-    // The seed-playground script should have run before this, but this is a fallback
-    console.log('🌍 Playground is empty - creating minimal structure');
+    // Create blocks with seed content
+    console.log('🌍 Initializing playground with seed content');
 
-    const emptyBlock = createBlock(BLOCK_TYPES.PARAGRAPH, '');
+    const blocks = PLAYGROUND_SEED_BLOCKS.map(({ type, content }) =>
+      createBlock(type, content)
+    );
+    const blockOrder = blocks.map(b => b.id);
 
     await doc.set('id', 'playground');
     await doc.set('title', 'Public Playground');
     await doc.set('icon', '🌍');
-    await doc.set('blockOrder', JSON.stringify([emptyBlock.id]));
+    await doc.set('blockOrder', JSON.stringify(blockOrder));
     await doc.set('createdAt', Date.now());
     await doc.set('updatedAt', Date.now());
-    await doc.set(`block:${emptyBlock.id}` as any, emptyBlock);
 
-    console.log('✅ Playground initialized with empty structure');
+    for (const block of blocks) {
+      await doc.set(`block:${block.id}` as any, block);
+    }
+
+    console.log('✅ Playground initialized with seed content');
     return true;
   } catch (error) {
     console.error('Failed to initialize playground:', error);

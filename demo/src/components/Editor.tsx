@@ -115,14 +115,35 @@ export function Editor({ pageId }: EditorProps) {
         console.log('⏳ Waiting for server sync...');
         await new Promise(resolve => setTimeout(resolve, 2000));
 
-        // Only create minimal structure if server has nothing
+        // Check if playground needs seeding
         const data = doc.get();
         const blockOrder = data?.blockOrder ? JSON.parse(data.blockOrder as string) : [];
-        if (blockOrder.length === 0) {
-          console.log('🌱 No content from server, creating minimal structure');
+
+        // Check if playground has proper seed content
+        // The first block should have "Welcome to the Public Playground" content
+        const existingBlocks = blockOrder.map((id: string) => (data as any)[`block:${id}`]).filter(Boolean);
+        const firstBlockContent = existingBlocks[0]?.content || '';
+        const hasProperSeedContent = firstBlockContent.includes('Welcome to the Public Playground');
+        const needsSeeding = blockOrder.length === 0 || !hasProperSeedContent;
+
+        // DIAGNOSTIC: Log detailed block content at check time
+        console.log('🔎 [Editor] Seeding check - blocks from doc.get():');
+        existingBlocks.forEach((b: Block, i: number) => {
+          console.log(`  Block ${i}: id=${b.id?.substring(0, 15)}..., type=${b.type}, content="${(b.content || '').substring(0, 50)}..." (${(b.content || '').length} chars)`);
+        });
+        console.log(`🔎 [Editor] First block content: "${firstBlockContent.substring(0, 60)}..."`);
+        console.log(`🔎 [Editor] hasProperSeedContent: ${hasProperSeedContent}, needsSeeding: ${needsSeeding}`);
+
+        if (needsSeeding) {
+          console.log('🌱 Playground needs seeding (missing proper seed content)');
+          // Clear old blocks AND blockOrder first
+          for (const blockId of blockOrder) {
+            await doc.delete(`block:${blockId}` as any);
+          }
+          await doc.set('blockOrder', JSON.stringify([]));
           await initializePlayground(doc);
         } else {
-          console.log(`✅ Received ${blockOrder.length} blocks from server`);
+          console.log(`✅ Playground has proper seed content (${blockOrder.length} blocks)`);
         }
       } else {
         // For non-playground documents (rooms, personal pages), just init normally
@@ -163,6 +184,14 @@ export function Editor({ pageId }: EditorProps) {
           if (block) {
             loadedBlocks.push(block);
           }
+        }
+
+        // DIAGNOSTIC: Log block content for playground
+        if (pageId === 'playground') {
+          console.log('📋 [Editor] Blocks extracted from subscription:');
+          loadedBlocks.forEach((b, i) => {
+            console.log(`  Block ${i}: type=${b.type}, content="${(b.content || '').substring(0, 40)}..." (${(b.content || '').length} chars)`);
+          });
         }
 
         setBlocks(loadedBlocks);
