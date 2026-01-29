@@ -43,9 +43,43 @@ export class OPFSStorage implements StorageAdapter {
   private channelId: string
   private changeListeners: Set<StorageChangeListener> = new Set()
 
+  // Write queue to serialize OPFS operations and prevent "Failed to create swap file" errors.
+  // Chrome's OPFS uses internal swap files during createWritable() - concurrent calls can conflict.
+  private writeQueue: Promise<void> = Promise.resolve()
+
   constructor(private readonly dirName: string = DIRECTORY_NAME) {
     // Generate unique ID for this instance to identify messages from this tab
     this.channelId = `opfs-${Math.random().toString(36).substring(2, 9)}`
+  }
+
+  /**
+   * Queue a write operation to ensure serial execution.
+   * Prevents concurrent createWritable() calls that can cause Chrome OPFS swap file conflicts.
+   */
+  private queueWrite<T>(operation: () => Promise<T>): Promise<T> {
+    // Create a new promise that will resolve/reject with the operation result
+    let resolveOp: (value: T) => void
+    let rejectOp: (error: unknown) => void
+    const resultPromise = new Promise<T>((resolve, reject) => {
+      resolveOp = resolve
+      rejectOp = reject
+    })
+
+    // Chain this operation onto the queue
+    this.writeQueue = this.writeQueue
+      .then(async () => {
+        try {
+          const result = await operation()
+          resolveOp(result)
+        } catch (error) {
+          rejectOp(error)
+        }
+      })
+      .catch(() => {
+        // Ensure queue continues even if previous operation failed
+      })
+
+    return resultPromise
   }
 
   async init(): Promise<void> {
@@ -102,21 +136,24 @@ export class OPFSStorage implements StorageAdapter {
 
   /**
    * Save metadata to .metadata.json file
+   * Uses write queue to prevent concurrent createWritable() conflicts
    */
   private async saveMetadata(): Promise<void> {
     if (!this.docsDir || !this.metadata) {
       throw new StorageError('Storage not initialized')
     }
 
-    try {
-      this.metadata.lastModified = Date.now()
-      const metaFileHandle = await this.docsDir.getFileHandle(METADATA_FILE, { create: true })
-      const writable = await metaFileHandle.createWritable()
-      await writable.write(JSON.stringify(this.metadata, null, 2))
-      await writable.close()
-    } catch (error) {
-      throw new StorageError(`Failed to save metadata: ${error}`)
-    }
+    return this.queueWrite(async () => {
+      try {
+        this.metadata!.lastModified = Date.now()
+        const metaFileHandle = await this.docsDir!.getFileHandle(METADATA_FILE, { create: true })
+        const writable = await metaFileHandle.createWritable()
+        await writable.write(JSON.stringify(this.metadata, null, 2))
+        await writable.close()
+      } catch (error) {
+        throw new StorageError(`Failed to save metadata: ${error}`)
+      }
+    })
   }
 
   /**
@@ -212,24 +249,27 @@ export class OPFSStorage implements StorageAdapter {
       throw new StorageError('Storage not initialized')
     }
 
-    try {
-      const fileName = this.getFileName(docId)
-      const fileHandle = await this.docsDir.getFileHandle(fileName, { create: true })
-      const writable = await fileHandle.createWritable()
-      await writable.write(JSON.stringify(doc, null, 2))
-      await writable.close()
-
-      // Update metadata if this is a new document
-      if (!this.metadata.documentIds.includes(docId)) {
-        this.metadata.documentIds.push(docId)
-        await this.saveMetadata()
+    // Queue the document write to prevent concurrent createWritable() conflicts
+    await this.queueWrite(async () => {
+      try {
+        const fileName = this.getFileName(docId)
+        const fileHandle = await this.docsDir!.getFileHandle(fileName, { create: true })
+        const writable = await fileHandle.createWritable()
+        await writable.write(JSON.stringify(doc, null, 2))
+        await writable.close()
+      } catch (error) {
+        throw new StorageError(`Failed to save document: ${error}`)
       }
+    })
 
-      // Broadcast change to other tabs
-      this.broadcast('set', docId)
-    } catch (error) {
-      throw new StorageError(`Failed to save document: ${error}`)
+    // Update metadata if this is a new document (saveMetadata is also queued)
+    if (!this.metadata.documentIds.includes(docId)) {
+      this.metadata.documentIds.push(docId)
+      await this.saveMetadata()
     }
+
+    // Broadcast change to other tabs
+    this.broadcast('set', docId)
   }
 
   async delete(docId: string): Promise<void> {
