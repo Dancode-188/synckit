@@ -85,8 +85,36 @@ async function seedPlayground() {
       : [];
 
     if (existingBlockOrder.length > 0) {
-      console.log(`⏭️  Playground already has ${existingBlockOrder.length} blocks, skipping seed`);
-      console.log('   (Delete the playground document on server to re-seed)');
+      console.log(`📦 Playground already has ${existingBlockOrder.length} blocks`);
+      console.log('📝 Checking SyncText content for existing blocks...');
+
+      // Seed SyncText for existing blocks that have empty content
+      let seededCount = 0;
+      for (const blockId of existingBlockOrder) {
+        const block = (existingData as any)[`block:${blockId}`];
+        if (block && block.content) {
+          const textDocId = `playground:text:${blockId}`;
+          const text = synckit.text(textDocId);
+          await text.init();
+
+          // Only insert if truly empty
+          if (text.get() === '') {
+            await text.insert(0, block.content);
+            console.log(`   ✓ Seeded: "${block.content.substring(0, 40)}${block.content.length > 40 ? '...' : ''}"`);
+            seededCount++;
+          } else {
+            console.log(`   ⏭️ Already has content: "${text.get().substring(0, 40)}..."`);
+          }
+        }
+      }
+
+      if (seededCount > 0) {
+        console.log(`✅ Seeded ${seededCount} empty SyncText documents`);
+        // Wait for sync
+        await new Promise(resolve => setTimeout(resolve, 2000));
+      } else {
+        console.log('✅ All blocks already have SyncText content');
+      }
       return;
     }
 
