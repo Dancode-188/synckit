@@ -55,6 +55,9 @@ export class SyncCoordinator {
   private documentAccessOrder: string[] = [];
   private readonly MAX_CACHED_DOCUMENTS = 1000; // Keep last 1000 documents in memory
 
+  // In-memory cache for text document CRDT states (SyncText/Fugue)
+  private textDocuments: Map<string, { crdtState: string; content: string; clock: number }> = new Map();
+
   constructor(options?: {
     storage?: StorageAdapter;
     pubsub?: RedisPubSub;
@@ -574,7 +577,7 @@ export class SyncCoordinator {
   getVectorClock(documentId: string): Record<string, number> {
     const state = this.documents.get(documentId);
     if (!state) return {};
-    
+
     try {
       const clockJson = state.vectorClock.toJSON();
       return JSON.parse(clockJson);
@@ -582,6 +585,73 @@ export class SyncCoordinator {
       console.error('Error getting vector clock:', error);
       return {};
     }
+  }
+
+  // ===================
+  // Text Document (SyncText/Fugue CRDT) Management
+  // ===================
+
+  /**
+   * Save text CRDT state
+   * Called when receiving text-state operations from clients
+   */
+  async saveTextState(
+    documentId: string,
+    crdtState: string,
+    clientId: string,
+    clock: number
+  ): Promise<void> {
+    // Update in-memory cache
+    this.textDocuments.set(documentId, {
+      crdtState,
+      content: '', // Content extraction is optional - client handles display
+      clock,
+    });
+
+    // Persist to storage if available
+    if (this.storage) {
+      try {
+        await this.storage.saveTextDocument(documentId, '', crdtState, BigInt(clock));
+      } catch (error) {
+        console.error(`[saveTextState] Failed to persist ${documentId}:`, error);
+        // Continue - in-memory state is updated even if persistence fails
+      }
+    }
+  }
+
+  /**
+   * Get text CRDT state for a document
+   * Returns cached state or loads from storage
+   */
+  async getTextState(
+    documentId: string
+  ): Promise<{ crdtState: string; content: string; clock: number } | null> {
+    // Check in-memory cache first
+    const cached = this.textDocuments.get(documentId);
+    if (cached) {
+      return cached;
+    }
+
+    // Try to load from storage
+    if (this.storage) {
+      try {
+        const stored = await this.storage.getTextDocument(documentId);
+        if (stored) {
+          const state = {
+            crdtState: stored.crdtState,
+            content: stored.content,
+            clock: Number(stored.clock),
+          };
+          // Cache for future access
+          this.textDocuments.set(documentId, state);
+          return state;
+        }
+      } catch (error) {
+        console.error(`[getTextState] Failed to load ${documentId}:`, error);
+      }
+    }
+
+    return null;
   }
 
   /**
@@ -610,6 +680,8 @@ export class SyncCoordinator {
     }
     // Clear the documents map
     this.documents.clear();
+    // Clear text documents cache
+    this.textDocuments.clear();
   }
 
   // ===================

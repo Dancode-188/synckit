@@ -51,6 +51,18 @@ export interface SnapshotEntry {
 }
 
 /**
+ * Text document state for SyncText (Fugue CRDT) persistence
+ */
+export interface TextDocumentState {
+  id: string;
+  content: string;      // Plain text content (for display/search)
+  crdtState: string;    // Full Fugue CRDT JSON state
+  clock: bigint;        // Lamport clock
+  createdAt: Date;
+  updatedAt: Date;
+}
+
+/**
  * Storage adapter interface
  */
 export interface StorageAdapter {
@@ -88,6 +100,10 @@ export interface StorageAdapter {
   getLatestSnapshot(documentId: string): Promise<SnapshotEntry | null>;
   listSnapshots(documentId: string, limit?: number): Promise<SnapshotEntry[]>;
   deleteSnapshot(snapshotId: string): Promise<boolean>;
+
+  // Text document operations (for SyncText/Fugue CRDT persistence)
+  saveTextDocument(id: string, content: string, crdtState: string, clock: bigint): Promise<TextDocumentState>;
+  getTextDocument(id: string): Promise<TextDocumentState | null>;
 
   // Maintenance
   cleanup(options?: {

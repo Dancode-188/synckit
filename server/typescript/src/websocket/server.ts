@@ -414,6 +414,9 @@ export class SyncWebSocketServer {
       const state = this.coordinator.getDocumentState(documentId);
       const vectorClock = this.coordinator.getVectorClock(documentId);
 
+      // Load text CRDT state if this is a text document
+      const textState = await this.coordinator.getTextState(documentId);
+
       // Send sync response with current state
       const response: SyncResponseMessage = {
         type: MessageType.SYNC_RESPONSE,
@@ -428,9 +431,15 @@ export class SyncWebSocketServer {
       // Add clock to response payload for SDK compatibility (SDK uses 'clock' not 'vectorClock')
       (response as any).clock = vectorClock;
 
+      // Include text CRDT state if available
+      if (textState?.crdtState) {
+        (response as any).textState = textState.crdtState;
+        (response as any).textClock = textState.clock;
+      }
+
       connection.send(response);
 
-      console.log(`[SUBSCRIBE] ✓ ${connection.id} subscribed to ${documentId}, total subscribers: ${this.coordinator.getSubscribers(documentId).length}`);
+      console.log(`[SUBSCRIBE] ✓ ${connection.id} subscribed to ${documentId}, total subscribers: ${this.coordinator.getSubscribers(documentId).length}${textState ? ' (with text state)' : ''}`);
     } catch (error) {
       console.error('[handleSubscribe] Error:', error);
       connection.sendError('Subscribe failed', { documentId });
@@ -696,9 +705,29 @@ export class SyncWebSocketServer {
       const textOperations: any[] = [];
 
       for (const operation of deltas) {
-        // Check if this is a text CRDT operation (state-based or position-based)
-        if (operation.type === 'text-state' || operation.type === 'text') {
-          // Text operations are broadcast directly to other clients
+        // Check if this is a text CRDT operation (state-based)
+        if (operation.type === 'text-state') {
+          // PERSIST: Save text CRDT state to storage
+          if (operation.state) {
+            const textDocId = operation.documentId || documentId;
+            await this.coordinator.saveTextState(
+              textDocId,
+              operation.state,
+              operation.clientId || clientId,
+              operation.timestamp || Date.now()
+            );
+          }
+
+          // RELAY: Add to broadcast list
+          textOperations.push({
+            ...operation,
+            clientId: operation.clientId || clientId,
+          });
+          continue;
+        }
+
+        // Legacy position-based text operations (deprecated, just relay)
+        if (operation.type === 'text') {
           textOperations.push({
             ...operation,
             clientId: operation.clientId || clientId,

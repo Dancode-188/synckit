@@ -7,6 +7,7 @@ import type {
   DeltaEntry,
   SessionEntry,
   SnapshotEntry,
+  TextDocumentState,
 } from './interface';
 import {
   ConnectionError,
@@ -481,6 +482,90 @@ export class PostgresAdapter implements StorageAdapter {
       return (result.rowCount || 0) > 0;
     } catch (error) {
       throw new QueryError(`Failed to delete snapshot ${snapshotId}`, error as Error);
+    }
+  }
+
+  // ==========================================================================
+  // TEXT DOCUMENT OPERATIONS (SyncText/Fugue CRDT)
+  // ==========================================================================
+
+  /**
+   * Save text document with Fugue CRDT state
+   * Uses the existing documents table with a special state format for text
+   */
+  async saveTextDocument(
+    id: string,
+    content: string,
+    crdtState: string,
+    clock: bigint
+  ): Promise<TextDocumentState> {
+    try {
+      const state = {
+        type: 'text',
+        content,
+        crdt: crdtState,
+        clock: Number(clock),
+      };
+
+      const result = await this.pool.query(
+        `INSERT INTO documents (id, state, version)
+         VALUES ($1, $2, 1)
+         ON CONFLICT (id) DO UPDATE
+         SET state = $2, updated_at = NOW()
+         RETURNING id, state, created_at as "createdAt", updated_at as "updatedAt"`,
+        [id, JSON.stringify(state)]
+      );
+
+      const row = result.rows[0];
+      const parsedState = typeof row.state === 'string' ? JSON.parse(row.state) : row.state;
+
+      return {
+        id: row.id,
+        content: parsedState.content || '',
+        crdtState: parsedState.crdt || '',
+        clock: BigInt(parsedState.clock || 0),
+        createdAt: row.createdAt,
+        updatedAt: row.updatedAt,
+      };
+    } catch (error) {
+      throw new QueryError(`Failed to save text document ${id}`, error as Error);
+    }
+  }
+
+  /**
+   * Get text document by ID
+   * Returns null if document doesn't exist or is not a text document
+   */
+  async getTextDocument(id: string): Promise<TextDocumentState | null> {
+    try {
+      const result = await this.pool.query(
+        `SELECT id, state, created_at as "createdAt", updated_at as "updatedAt"
+         FROM documents WHERE id = $1`,
+        [id]
+      );
+
+      if (!result.rows[0]) {
+        return null;
+      }
+
+      const row = result.rows[0];
+      const state = typeof row.state === 'string' ? JSON.parse(row.state) : row.state;
+
+      // Check if this is a text document
+      if (state.type !== 'text' || !state.crdt) {
+        return null;
+      }
+
+      return {
+        id: row.id,
+        content: state.content || '',
+        crdtState: state.crdt,
+        clock: BigInt(state.clock || 0),
+        createdAt: row.createdAt,
+        updatedAt: row.updatedAt,
+      };
+    } catch (error) {
+      throw new QueryError(`Failed to get text document ${id}`, error as Error);
     }
   }
 
