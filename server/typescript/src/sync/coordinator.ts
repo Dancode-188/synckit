@@ -1,6 +1,32 @@
 import { WasmDocument, WasmDelta, WasmVectorClock } from '../../wasm/synckit_core';
+import initWasm, { WasmFugueText } from '../../wasm/synckit_core';
 import type { StorageAdapter } from '../storage/interface';
 import type { RedisPubSub } from '../storage/redis';
+
+// WASM initialization state for FugueText merge support
+let wasmInitialized = false;
+let wasmInitPromise: Promise<void> | null = null;
+
+async function ensureWasmInitialized(): Promise<boolean> {
+  if (wasmInitialized) return true;
+  if (wasmInitPromise) {
+    await wasmInitPromise;
+    return wasmInitialized;
+  }
+
+  wasmInitPromise = (async () => {
+    try {
+      await initWasm();
+      wasmInitialized = true;
+    } catch (error) {
+      console.warn('[WASM] Failed to initialize FugueText WASM module:', error);
+      wasmInitialized = false;
+    }
+  })();
+
+  await wasmInitPromise;
+  return wasmInitialized;
+}
 
 /**
  * Document State - tracks in-memory document state
@@ -593,7 +619,9 @@ export class SyncCoordinator {
 
   /**
    * Save text CRDT state
-   * Called when receiving text-state operations from clients
+   * Called when receiving text-state operations from clients.
+   * Merges incoming state with existing state using the Fugue CRDT merge algorithm
+   * to prevent data loss during concurrent editing.
    */
   async saveTextState(
     documentId: string,
@@ -601,20 +629,45 @@ export class SyncCoordinator {
     clientId: string,
     clock: number
   ): Promise<void> {
-    // Update in-memory cache
+    const existing = this.textDocuments.get(documentId);
+
+    let mergedState = crdtState;
+    let mergedClock = clock;
+
+    // Merge with existing state if available (prevents overwrite data loss)
+    if (existing?.crdtState) {
+      const wasmReady = await ensureWasmInitialized();
+      if (wasmReady) {
+        try {
+          const existingText = WasmFugueText.fromJSON(existing.crdtState);
+          const incomingText = WasmFugueText.fromJSON(crdtState);
+
+          existingText.merge(incomingText);
+          mergedState = existingText.toJSON();
+          mergedClock = Math.max(existing.clock, clock);
+
+          existingText.free();
+          incomingText.free();
+        } catch (error) {
+          console.error(`[saveTextState] Merge failed for ${documentId}, using incoming state:`, error);
+          // Fallback: use incoming state (previous overwrite behavior)
+        }
+      }
+    }
+
+    // Update in-memory cache with merged state
     this.textDocuments.set(documentId, {
-      crdtState,
-      content: '', // Content extraction is optional - client handles display
-      clock,
+      crdtState: mergedState,
+      content: '',
+      clock: mergedClock,
     });
 
     // Persist to storage if available
     if (this.storage) {
       try {
-        await this.storage.saveTextDocument(documentId, '', crdtState, BigInt(clock));
+        await this.storage.saveTextDocument(documentId, '', mergedState, BigInt(mergedClock));
       } catch (error) {
         console.error(`[saveTextState] Failed to persist ${documentId}:`, error);
-        // Continue - in-memory state is updated even if persistence fails
       }
     }
   }

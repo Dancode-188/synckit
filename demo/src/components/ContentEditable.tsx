@@ -28,58 +28,40 @@ export function ContentEditable({
   const isComposingRef = useRef(false);
   const lastContentRef = useRef<string>(content);
 
-  // Track if the content change came from local editing
-  const isLocalEditRef = useRef(false);
-
   // Flag to prevent MutationObserver feedback loop during programmatic DOM updates
   const isUpdatingDomRef = useRef(false);
 
   // Track if this is the first mount (DOM needs initial population)
   const isFirstMountRef = useRef(true);
 
-  // Update content when it changes externally (including remote CRDT updates)
-  // For local edits: DON'T update DOM - user's typed content is already visible
-  // For remote updates: Apply immediately with cursor preservation for collaboration
+  // Update content when it changes (local edits, remote CRDT updates, or server sync)
+  // We ALWAYS allow DOM updates to go through to prevent DOM-CRDT divergence.
+  // For local edits, the DOM already has the user's content, so innerHTML comparison
+  // will match and we skip the update naturally — no flag needed.
+  // For remote updates, the DOM differs and we update with cursor preservation.
   useEffect(() => {
-    if (ref.current) {
-      if (isLocalEditRef.current) {
-        // Local edit: skip DOM update entirely
-        // The user's typed content is already in the DOM, no need to re-render
-        // Formatting will be applied on blur
-        lastContentRef.current = content;
-        isLocalEditRef.current = false;
-      } else {
-        // On first mount, ALWAYS populate DOM - it starts empty!
-        const needsInitialPopulation = isFirstMountRef.current && content;
+    if (!ref.current) return;
 
-        if (needsInitialPopulation) {
-          isFirstMountRef.current = false;
-          const parsedHtml = parseMarkdown(content);
-          isUpdatingDomRef.current = true;
-          ref.current.innerHTML = parsedHtml;
-          isUpdatingDomRef.current = false;
-          lastContentRef.current = content;
-          return;
-        }
+    const parsedHtml = parseMarkdown(content);
 
-        // Skip server echoes - if markdown content matches what we have, it's just
-        // the server echoing back our own change, no need to update DOM
-        if (content === lastContentRef.current) {
-          return;
-        }
-
-        // Remote update: apply immediately for real-time collaboration feel
-        const parsedHtml = parseMarkdown(content);
-
-        // Skip if DOM already has this content
-        if (ref.current.innerHTML === parsedHtml) {
-          lastContentRef.current = content;
-          return;
-        }
-
-        updateDomWithCursorPreservation(ref.current, parsedHtml, content);
-      }
+    // Skip if DOM already has this content (handles local edits and redundant updates)
+    if (ref.current.innerHTML === parsedHtml) {
+      lastContentRef.current = content;
+      return;
     }
+
+    // First mount: populate DOM directly
+    if (isFirstMountRef.current && content) {
+      isFirstMountRef.current = false;
+      isUpdatingDomRef.current = true;
+      ref.current.innerHTML = parsedHtml;
+      isUpdatingDomRef.current = false;
+      lastContentRef.current = content;
+      return;
+    }
+
+    // Update DOM with cursor preservation (works for remote updates and any content change)
+    updateDomWithCursorPreservation(ref.current, parsedHtml, content);
   }, [content]);
 
   // Helper to update DOM while preserving cursor position
@@ -235,8 +217,6 @@ export function ContentEditable({
 
   const handleInput = () => {
     if (ref.current && !isComposingRef.current) {
-      // Mark this as a local edit so we can debounce markdown parsing
-      isLocalEditRef.current = true;
       // Convert HTML back to markdown to preserve formatting
       const markdownContent = htmlToMarkdown(ref.current);
       onChange(markdownContent);
@@ -250,8 +230,6 @@ export function ContentEditable({
   const handleCompositionEnd = () => {
     isComposingRef.current = false;
     if (ref.current) {
-      // Mark this as a local edit
-      isLocalEditRef.current = true;
       const markdownContent = htmlToMarkdown(ref.current);
       onChange(markdownContent);
     }
