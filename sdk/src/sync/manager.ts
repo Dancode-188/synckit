@@ -519,7 +519,7 @@ export class SyncManager {
    * Applies the full server state to the local document
    */
   private handleSyncResponse(payload: any): void {
-    const { documentId, state, clock } = payload
+    const { documentId, state, clock, textState, textClock } = payload
 
     const document = this.documents.get(documentId)
     if (!document) {
@@ -545,6 +545,20 @@ export class SyncManager {
         document.applyRemoteOperation(operation)
       }
       // console.log(`[SyncManager] ✓ Applied ${Object.keys(state).length} fields from server state`)
+    }
+
+    // Apply text CRDT state if provided (for SyncText documents)
+    if (textState) {
+      const textOperation = {
+        type: 'text-state' as const,
+        state: textState,
+        documentId,
+        clientId: 'server',
+        timestamp: textClock || Date.now(),
+        clock: clock || {},
+      }
+      document.applyRemoteOperation(textOperation as any)
+      // console.log(`[SyncManager] ✓ Applied persisted text state for ${documentId}`)
     }
 
     // Merge vector clocks
