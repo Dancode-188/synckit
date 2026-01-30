@@ -84,14 +84,7 @@ export function useBlockText(
           // textDocId is guaranteed non-null here due to the guard at the start of useEffect
           const text = synckit.text(textDocId as string);
 
-          // DIAGNOSTIC: Log what initialContent we received
           const isPlayground = textDocId?.startsWith('playground:');
-          if (isPlayground) {
-            console.log(`🔍 [useBlockText] Initializing ${textDocId}`, {
-              initialContent: initialContent ? `"${initialContent.substring(0, 50)}..."` : '(empty)',
-              initialContentLength: initialContent?.length || 0,
-            });
-          }
 
           await text.init();
 
@@ -100,50 +93,25 @@ export function useBlockText(
           textRef.current = text;
           initializedRef.current = true;
 
-          // Wait a moment for any server sync to arrive
-          if (isPlayground) {
-            // For playground, wait for server sync before checking content
-            await new Promise(resolve => setTimeout(resolve, 500));
-          }
-
-          // Check content after potential sync
+          // Get current content after init (may have synced from server)
           const currentContent = text.get();
 
-          // DIAGNOSTIC: Log SyncText state after init
-          if (isPlayground) {
-            console.log(`🔍 [useBlockText] After init ${textDocId}`, {
-              syncTextContent: currentContent ? `"${currentContent.substring(0, 50)}..."` : '(empty)',
-              syncTextLength: currentContent?.length || 0,
-              willSeed: currentContent === '' && !!initialContent,
-            });
-          }
-
-          if (currentContent === '' && initialContent) {
-            // SyncText is empty after sync wait - seed it
-            // For playground, this means server didn't have content for this block
-            // For other pages, this is normal initial seeding
+          // Only seed for non-playground pages (user-created rooms/documents)
+          // Playground is seeded server-side via seed-playground.ts script
+          // Client-side seeding for playground causes duplication when multiple tabs connect
+          // simultaneously - each client sees empty SyncText and inserts, causing duplicates
+          if (currentContent === '' && initialContent && !isPlayground) {
             try {
               await text.insert(0, initialContent);
-              if (isPlayground) {
-                console.log(`✅ [useBlockText] Seeded ${textDocId} with "${initialContent.substring(0, 30)}..."`);
-              }
             } catch (seedErr) {
-              // CRITICAL FIX: Don't fail initialization just because persist failed
+              // Don't fail initialization just because persist failed
               // The CRDT state is valid in memory and will sync via WebSocket
               console.warn(`⚠️ [useBlockText] Seed persist failed for ${textDocId}, but CRDT state is valid:`, seedErr);
-              // Continue - the content is in memory even if storage failed
             }
           }
 
-          // Set content from SyncText (get fresh state after potential seeding)
-          const finalContent = text.get();
-          if (isPlayground) {
-            console.log(`🔍 [useBlockText] Final state ${textDocId}`, {
-              finalContent: finalContent ? `"${finalContent.substring(0, 50)}..."` : '(empty)',
-              finalLength: finalContent?.length || 0,
-            });
-          }
-          setContent(finalContent);
+          // Set content from SyncText
+          setContent(text.get());
           setLoading(false);
 
           // Subscribe to changes
@@ -156,14 +124,12 @@ export function useBlockText(
 
         await initPromiseRef.current;
       } catch (err) {
-        // DIAGNOSTIC: Log the full error
-        console.error(`❌ [useBlockText] Initialization failed for ${textDocId}:`, err);
+        console.error(`[useBlockText] Initialization failed for ${textDocId}:`, err);
         if (mounted) {
           setError(err instanceof Error ? err : new Error(String(err)));
           setLoading(false);
-          // FALLBACK: If we have initialContent, use it even though init failed
+          // Fallback: use initialContent if init failed
           if (initialContent) {
-            console.log(`🔄 [useBlockText] Using initialContent fallback for ${textDocId}`);
             setContent(initialContent);
           }
         }
