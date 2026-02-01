@@ -29,6 +29,18 @@ export const FEATURES = {
    * URL-based collaborative spaces (one document per room)
    */
   PRIVATE_ROOMS: true,
+
+  /**
+   * V1: Stage landing page
+   * Live activity dashboard with room stats and auto-join
+   */
+  STAGE: true,
+
+  /**
+   * V1: Word Wall
+   * Global shared word cloud with voting
+   */
+  WORD_WALL: true,
 } as const;
 
 // Type helper for TypeScript

@@ -1,13 +1,61 @@
 /**
- * Room management utilities
- * Handles URL-based collaborative rooms
+ * Room management and routing utilities
+ * Handles URL-based collaborative rooms and app-wide navigation
  */
 
+// ============================================================================
+// Route Detection
+// ============================================================================
+
+export type AppRoute = 'stage' | 'room' | 'wordwall' | 'playground';
+
 /**
- * Generate a random room ID
+ * Determine the current route from the URL hash
+ */
+export function getRouteFromUrl(): AppRoute {
+  const hash = window.location.hash;
+  if (!hash || hash === '#' || hash === '#/') return 'stage';
+  if (hash.match(/^#\/room\/[a-z0-9]+$/i)) return 'room';
+  if (hash === '#/wordwall') return 'wordwall';
+  if (hash === '#/playground') return 'playground';
+  return 'stage';
+}
+
+// ============================================================================
+// Navigation
+// ============================================================================
+
+export function navigateToStage(): void {
+  window.location.hash = '/';
+}
+
+export function navigateToRoom(roomId: string): void {
+  window.location.hash = `/room/${roomId}`;
+}
+
+export function navigateToWordWall(): void {
+  window.location.hash = '/wordwall';
+}
+
+export function navigateToPlayground(): void {
+  window.location.hash = '/playground';
+}
+
+/**
+ * Leave room (go back to stage)
+ */
+export function leaveRoom(): void {
+  navigateToStage();
+}
+
+// ============================================================================
+// Room Utilities
+// ============================================================================
+
+/**
+ * Generate a random room ID (6 alphanumeric chars)
  */
 export function generateRoomId(): string {
-  // Generate a short, memorable room ID (6 chars)
   const chars = 'abcdefghijklmnopqrstuvwxyz0123456789';
   let id = '';
   for (let i = 0; i < 6; i++) {
@@ -22,22 +70,8 @@ export function generateRoomId(): string {
  */
 export function getRoomIdFromUrl(): string | null {
   const hash = window.location.hash;
-  const match = hash.match(/^#\/room\/([a-z0-9]+)$/);
+  const match = hash.match(/^#\/room\/([a-z0-9]+)$/i);
   return match ? match[1] : null;
-}
-
-/**
- * Navigate to a room
- */
-export function navigateToRoom(roomId: string): void {
-  window.location.hash = `/room/${roomId}`;
-}
-
-/**
- * Leave room (go back to normal mode)
- */
-export function leaveRoom(): void {
-  window.location.hash = '';
 }
 
 /**
