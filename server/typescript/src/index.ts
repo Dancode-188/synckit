@@ -6,6 +6,7 @@ import { config } from './config';
 import { SyncWebSocketServer } from './websocket/server';
 import { auth } from './routes/auth';
 import { createSnapshotRoutes } from './routes/snapshots';
+import { createRoomRoutes } from './routes/rooms';
 import { PostgresAdapter } from './storage/postgres';
 import { RedisPubSub } from './storage/redis';
 import { getCSPHeaders } from './security/middleware';
@@ -155,6 +156,9 @@ const wsServer = new SyncWebSocketServer(
 
 // Mount snapshot routes (requires wsServer for in-memory access)
 app.route('/snapshots', createSnapshotRoutes(storage, wsServer));
+
+// Mount room stats routes (for Stage landing page)
+app.route('/rooms', createRoomRoutes(wsServer));
 
 // console.log(`🚀 SyncKit Server running on ${config.host}:${config.port}`);
 // console.log(`📊 Health check: http://${config.host}:${config.port}/health`);
