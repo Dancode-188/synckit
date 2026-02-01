@@ -33,6 +33,11 @@ export const SECURITY_LIMITS = {
 
   // Playground document ID
   PLAYGROUND_DOC_ID: 'playground',
+
+  // Word wall limits
+  WORDWALL_MAX_WORD_LENGTH: 30,
+  WORDWALL_MAX_WORDS: 200,
+  WORDWALL_SUBMISSION_COOLDOWN_MS: 5000,
 };
 
 // ============================================================================
@@ -166,6 +171,61 @@ export class MessageRateLimiter {
   /**
    * Dispose and cleanup
    */
+  dispose(): void {
+    if (this.cleanupInterval) {
+      clearInterval(this.cleanupInterval);
+    }
+    this.messages.clear();
+  }
+}
+
+/**
+ * Per-connection message rate limiter
+ * Tracks messages per connection ID per minute (sliding window).
+ * Unlike MessageRateLimiter (per-IP), this avoids rate-limiting
+ * all clients behind a shared IP (e.g., corporate NAT, conference WiFi).
+ */
+export class ConnectionRateLimiter {
+  private messages = new Map<string, number[]>(); // connectionId -> timestamps
+  private cleanupInterval: NodeJS.Timeout;
+
+  constructor() {
+    this.cleanupInterval = setInterval(() => {
+      this.cleanup();
+    }, 60000);
+  }
+
+  canSendMessage(connectionId: string): boolean {
+    const now = Date.now();
+    const timestamps = this.messages.get(connectionId) || [];
+    const recent = timestamps.filter(ts => now - ts < 60000);
+    return recent.length < SECURITY_LIMITS.MAX_MESSAGES_PER_MINUTE;
+  }
+
+  recordMessage(connectionId: string): void {
+    const now = Date.now();
+    const timestamps = this.messages.get(connectionId) || [];
+    timestamps.push(now);
+    const recent = timestamps.filter(ts => now - ts < 60000);
+    this.messages.set(connectionId, recent);
+  }
+
+  removeConnection(connectionId: string): void {
+    this.messages.delete(connectionId);
+  }
+
+  private cleanup(): void {
+    const now = Date.now();
+    for (const [id, timestamps] of this.messages.entries()) {
+      const recent = timestamps.filter(ts => now - ts < 60000);
+      if (recent.length === 0) {
+        this.messages.delete(id);
+      } else {
+        this.messages.set(id, recent);
+      }
+    }
+  }
+
   dispose(): void {
     if (this.cleanupInterval) {
       clearInterval(this.cleanupInterval);
@@ -472,6 +532,11 @@ export function canAccessDocument(documentId: string): boolean {
     return true;
   }
 
+  // Word wall document and its child documents are always accessible
+  if (documentId === 'wordwall' || documentId.startsWith('wordwall:')) {
+    return true;
+  }
+
   // Private rooms and their child documents are accessible (client controls via URL)
   if (isPrivateRoom(documentId)) {
     return true;
@@ -527,11 +592,13 @@ export function getCSPHeaders(): Record<string, string> {
 export class SecurityManager {
   public connectionLimiter: ConnectionLimiter;
   public messageRateLimiter: MessageRateLimiter;
+  public connectionRateLimiter: ConnectionRateLimiter;
   public documentLimiter: DocumentLimiter;
 
   constructor() {
     this.connectionLimiter = new ConnectionLimiter();
     this.messageRateLimiter = new MessageRateLimiter();
+    this.connectionRateLimiter = new ConnectionRateLimiter();
     this.documentLimiter = new DocumentLimiter();
   }
 
@@ -541,6 +608,7 @@ export class SecurityManager {
   dispose(): void {
     this.connectionLimiter.dispose();
     this.messageRateLimiter.dispose();
+    this.connectionRateLimiter.dispose();
     this.documentLimiter.dispose();
   }
 }

@@ -202,6 +202,8 @@ export class SyncWebSocketServer {
     connection.on('close', () => {
       // Decrement connection count for IP (SECURITY)
       securityManager.connectionLimiter.removeConnection(clientIP);
+      // Cleanup per-connection rate limiter
+      securityManager.connectionRateLimiter.removeConnection(connection.id);
       this.handleDisconnect(connection);
     });
   }
@@ -211,22 +213,16 @@ export class SyncWebSocketServer {
    */
   private async handleMessage(connection: Connection, message: Message) {
     try {
-      // Get client IP from connection
-      const clientIP = (connection as any).clientIP || 'unknown';
-
-      // Rate limiting check (SECURITY) - TEMPORARILY DISABLED
-      // Issue: Multiple clients from same IP hit rate limit, causing retry storm
-      // TODO: Fix by changing to per-connection limit or increasing significantly
-      // if (!securityManager.messageRateLimiter.canSendMessage(clientIP)) {
-      //   console.warn(`[SECURITY] Rate limit exceeded for IP: ${clientIP}`);
-      //   connection.sendError('Too many messages. Please slow down.', {
-      //     code: 'RATE_LIMIT_EXCEEDED',
-      //   });
-      //   return;
-      // }
-
-      // Record message (SECURITY) - DISABLED WITH RATE LIMITER
-      // securityManager.messageRateLimiter.recordMessage(clientIP);
+      // Per-connection rate limiting (SECURITY)
+      // Uses connection ID instead of IP to avoid shared-IP retry storms
+      if (!securityManager.connectionRateLimiter.canSendMessage(connection.id)) {
+        console.warn(`[SECURITY] Rate limit exceeded for connection: ${connection.id}`);
+        connection.sendError('Too many messages. Please slow down.', {
+          code: 'RATE_LIMIT_EXCEEDED',
+        });
+        return;
+      }
+      securityManager.connectionRateLimiter.recordMessage(connection.id);
 
       // Validate message format (SECURITY)
       const validation = validateMessage(message);
