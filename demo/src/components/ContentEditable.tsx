@@ -55,7 +55,7 @@ export function ContentEditable({
       isFirstMountRef.current = false;
       isUpdatingDomRef.current = true;
       ref.current.innerHTML = parsedHtml;
-      isUpdatingDomRef.current = false;
+      queueMicrotask(() => { isUpdatingDomRef.current = false; });
       lastContentRef.current = content;
       return;
     }
@@ -166,7 +166,7 @@ export function ContentEditable({
         lastContentRef.current = rawContent;
       }
     } finally {
-      isUpdatingDomRef.current = false;
+      queueMicrotask(() => { isUpdatingDomRef.current = false; });
     }
   };
 
@@ -219,7 +219,10 @@ export function ContentEditable({
     if (ref.current && !isComposingRef.current) {
       // Convert HTML back to markdown to preserve formatting
       const markdownContent = htmlToMarkdown(ref.current);
-      onChange(markdownContent);
+      if (markdownContent !== lastContentRef.current) {
+        lastContentRef.current = markdownContent;
+        onChange(markdownContent);
+      }
     }
   };
 
@@ -248,7 +251,7 @@ export function ContentEditable({
       if (ref.current.innerHTML !== parsedHtml) {
         isUpdatingDomRef.current = true;
         ref.current.innerHTML = parsedHtml;
-        isUpdatingDomRef.current = false;
+        queueMicrotask(() => { isUpdatingDomRef.current = false; });
       }
     }
   };

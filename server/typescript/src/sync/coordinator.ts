@@ -84,6 +84,9 @@ export class SyncCoordinator {
   // In-memory cache for text document CRDT states (SyncText/Fugue)
   private textDocuments: Map<string, { crdtState: string; content: string; clock: number }> = new Map();
 
+  // Per-document save serialization to prevent concurrent read-modify-write races
+  private textSaveLocks: Map<string, Promise<void>> = new Map();
+
   constructor(options?: {
     storage?: StorageAdapter;
     pubsub?: RedisPubSub;
@@ -624,6 +627,21 @@ export class SyncCoordinator {
    * to prevent data loss during concurrent editing.
    */
   async saveTextState(
+    documentId: string,
+    crdtState: string,
+    clientId: string,
+    clock: number
+  ): Promise<void> {
+    // Chain onto previous save for this document to prevent concurrent read-modify-write races
+    const previousSave = this.textSaveLocks.get(documentId) ?? Promise.resolve();
+    const thisSave = previousSave.then(() =>
+      this._doSaveTextState(documentId, crdtState, clientId, clock)
+    );
+    this.textSaveLocks.set(documentId, thisSave.catch(() => {})); // Don't propagate errors to next save
+    await thisSave;
+  }
+
+  private async _doSaveTextState(
     documentId: string,
     crdtState: string,
     clientId: string,

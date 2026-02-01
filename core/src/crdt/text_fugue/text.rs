@@ -531,7 +531,16 @@ impl FugueText {
         let mut current_pos = 0;
 
         // First pass: identify blocks that need splitting
-        for (id, block) in &self.blocks {
+        // CRITICAL: Must use document order (Fugue tree), NOT BTreeMap order!
+        // BTreeMap order is causal/timestamp order, which differs from document
+        // order when blocks from multiple clients are interleaved after merge.
+        let document_order = self.get_document_order();
+        for id in &document_order {
+            let block = match self.blocks.get(id) {
+                Some(b) => b,
+                None => continue,
+            };
+
             if block.is_deleted() {
                 continue;
             }
@@ -919,27 +928,95 @@ impl FugueText {
     /// assert_eq!(text1.to_string(), text2.to_string());
     /// ```
     pub fn merge(&mut self, remote: &FugueText) -> Result<(), TextError> {
-        // 1. Merge remote blocks into local BTreeMap
+        // Phase 1: Split-to-match normalization.
+        // When remote has the same block ID but shorter text, it means remote
+        // split the block (via delete). We must split our local block to match,
+        // creating explicit blocks for the split-off characters. This prevents
+        // the truncation approach from silently losing characters.
+        // Iterate until no more splits are needed (splits can cascade).
+        loop {
+            let mut splits_needed: Vec<(NodeId, usize)> = Vec::new();
+            for (remote_id, remote_block) in &remote.blocks {
+                if let Some(local_block) = self.blocks.get(remote_id) {
+                    if remote_block.len() < local_block.len() {
+                        splits_needed.push((remote_id.clone(), remote_block.len()));
+                    }
+                }
+            }
+            if splits_needed.is_empty() {
+                break;
+            }
+            for (block_id, keep_right_len) in splits_needed {
+                self.split_block_to_match(&block_id, keep_right_len);
+            }
+        }
+
+        // Phase 2: Merge remote blocks into local.
+        // After normalization, same-ID blocks have matching lengths.
+        // New remote blocks either overlap local blocks (skip + propagate deletion)
+        // or are genuinely new (insert).
+        let mut deletions_to_propagate: Vec<(String, u64, u64)> = Vec::new();
+
         for (remote_id, remote_block) in &remote.blocks {
             match self.blocks.get_mut(remote_id) {
                 Some(local_block) => {
-                    // Block exists locally - merge deletion status
+                    // Block exists locally (same ID, same length after normalization)
+                    // Merge deletion status: deleted in remote → delete locally
                     if remote_block.is_deleted() && !local_block.is_deleted() {
                         local_block.mark_deleted();
                     }
                 }
                 None => {
-                    // New block from remote - insert it
-                    self.blocks.insert(remote_id.clone(), remote_block.clone());
+                    // Block doesn't exist locally. Check if its clock range overlaps
+                    // with any local block from the same client (split piece).
+                    let remote_len = remote_block.len() as u64;
+                    if remote_len == 0 {
+                        self.blocks.insert(remote_id.clone(), remote_block.clone());
+                        continue;
+                    }
+                    let remote_start = remote_id.clock.saturating_sub(remote_len - 1);
+                    let remote_end = remote_id.clock;
+
+                    let overlaps_local = self.blocks.iter().any(|(local_id, local_block)| {
+                        if local_id.client_id != remote_id.client_id {
+                            return false;
+                        }
+                        let local_len = local_block.len() as u64;
+                        if local_len == 0 {
+                            return false;
+                        }
+                        let local_start = local_id.clock.saturating_sub(local_len - 1);
+                        let local_end = local_id.clock;
+                        remote_start <= local_end && local_start <= remote_end
+                    });
+
+                    if overlaps_local {
+                        // Split piece — don't insert (would duplicate text).
+                        // If remote deleted it, propagate deletion to local blocks.
+                        if remote_block.is_deleted() {
+                            deletions_to_propagate.push((
+                                remote_id.client_id.clone(),
+                                remote_start,
+                                remote_end,
+                            ));
+                        }
+                    } else {
+                        // Genuinely new block from remote
+                        self.blocks.insert(remote_id.clone(), remote_block.clone());
+                    }
                 }
             }
         }
 
-        // 2. Rebuild rope from blocks (Phase 1: simple O(n) rebuild)
-        // Phase 2 optimization: incremental update
+        // Phase 3: Propagate deletions for overlapping split blocks.
+        for (client_id, del_start, del_end) in deletions_to_propagate {
+            self.propagate_clock_range_deletion(&client_id, del_start, del_end);
+        }
+
+        // Phase 4: Rebuild rope from blocks
         self.rebuild_rope();
 
-        // 3. Update Lamport clock
+        // Phase 5: Update Lamport clock
         let remote_max_clock = remote
             .blocks
             .values()
@@ -949,6 +1026,113 @@ impl FugueText {
         self.clock.update(remote_max_clock);
 
         Ok(())
+    }
+
+    /// Split a local block so that only `keep_right_len` graphemes remain in the
+    /// original block ID. The left portion is split off into a new block.
+    ///
+    /// This is used during merge normalization when a remote replica has split
+    /// a block (via delete) and our local copy still has the larger unsplit version.
+    #[cfg(feature = "text-crdt")]
+    fn split_block_to_match(&mut self, block_id: &NodeId, keep_right_len: usize) {
+        use unicode_segmentation::UnicodeSegmentation;
+
+        let block = match self.blocks.get(block_id) {
+            Some(b) => b.clone(),
+            None => return,
+        };
+
+        let block_len = block.len();
+        if keep_right_len >= block_len || block_len == 0 {
+            return;
+        }
+
+        let graphemes: Vec<&str> = block.text.graphemes(true).collect();
+        let split_offset = block_len - keep_right_len;
+
+        let left_text: String = graphemes[..split_offset].join("");
+        let right_text: String = graphemes[split_offset..].join("");
+
+        let block_start_clock = block_id.clock - (block_len as u64) + 1;
+
+        // Create left block (split-off portion)
+        let left_end_clock = block_start_clock + split_offset as u64 - 1;
+        let left_id = NodeId::new(block_id.client_id.clone(), left_end_clock, 0);
+        let mut left_block = FugueBlock::new(
+            left_id.clone(),
+            left_text,
+            block.left_origin.clone(),
+            block.right_origin.clone(),
+        );
+        // Preserve deletion status on split
+        if block.is_deleted() {
+            left_block.mark_deleted();
+        }
+        self.blocks.insert(left_id, left_block);
+
+        // Update original block to keep only the right portion
+        if let Some(orig) = self.blocks.get_mut(block_id) {
+            orig.text = right_text;
+        }
+    }
+
+    /// Propagate deletion from a remote split block to overlapping local blocks.
+    ///
+    /// When remote deleted characters that local still has in a larger block,
+    /// we split the local block and mark the deleted portion.
+    fn propagate_clock_range_deletion(&mut self, client_id: &str, del_start: u64, del_end: u64) {
+        let block_ids: Vec<NodeId> = self
+            .blocks
+            .keys()
+            .filter(|id| id.client_id == client_id)
+            .cloned()
+            .collect();
+
+        for block_id in block_ids {
+            let block = match self.blocks.get(&block_id) {
+                Some(b) => b.clone(),
+                None => continue,
+            };
+
+            if block.is_deleted() {
+                continue;
+            }
+
+            let block_len = block.len() as u64;
+            if block_len == 0 {
+                continue;
+            }
+            let block_start = block_id.clock.saturating_sub(block_len - 1);
+            let block_end = block_id.clock;
+
+            // Check if this block overlaps with the deletion range
+            if block_start > del_end || block_end < del_start {
+                continue;
+            }
+
+            // Calculate which grapheme offsets within this block should be deleted
+            let overlap_start = del_start.max(block_start);
+            let overlap_end = del_end.min(block_end);
+            let offset_start = (overlap_start - block_start) as usize;
+            let offset_end = (overlap_end - block_start + 1) as usize;
+
+            if offset_start == 0 && offset_end as u64 == block_len {
+                // Entire block should be deleted
+                if let Some(b) = self.blocks.get_mut(&block_id) {
+                    b.mark_deleted();
+                }
+            } else {
+                // Partial deletion — split the block and delete the middle
+                let mut deleted_ids = Vec::new();
+                let _ = self.split_block_for_deletion(
+                    &block_id,
+                    &block,
+                    offset_start,
+                    offset_end,
+                    &mut deleted_ids,
+                );
+            }
+        }
     }
 
     /// Find CRDT origins for insertion at given position (Phase 1.5 optimized)
@@ -2149,5 +2333,151 @@ mod fugue_tree_tests {
 
         let node_6 = text.get_node_id_at_position(6).unwrap(); // 'W'
         assert_eq!(node_6.clock, 17); // First char of "World"
+    }
+
+    #[test]
+    fn test_delete_with_interleaved_concurrent_inserts() {
+        // This test catches a bug where delete() used BTreeMap iteration order
+        // instead of Fugue tree document order to calculate character positions.
+        // With interleaved blocks from multiple clients, BTreeMap order differs
+        // from document order, causing deletions to target wrong characters.
+        let mut text1 = FugueText::new("alice".to_string());
+        let mut text2 = FugueText::new("bob".to_string());
+
+        // Both start with same text
+        text1.insert(0, "AC").unwrap();
+        text2.merge(&text1).unwrap();
+
+        // Concurrent: alice inserts at end, bob inserts in middle
+        text1.insert(2, "D").unwrap(); // alice: "ACD"
+        text2.insert(1, "B").unwrap(); // bob: "ABC"
+
+        // Merge both ways — blocks are now interleaved from two clients
+        text1.merge(&text2).unwrap();
+        text2.merge(&text1).unwrap();
+
+        // Both should have same text after merge
+        let merged = text1.to_string();
+        assert_eq!(text2.to_string(), merged);
+
+        // Now delete from the merged state — this is where the bug was.
+        // With BTreeMap order, position calculation was wrong because
+        // alice's blocks and bob's blocks were grouped by client_id
+        // instead of being interleaved in document order.
+        let pre_delete = text1.to_string();
+        let del_pos = 1; // Delete second character
+        let deleted_char: String = pre_delete.chars().skip(del_pos).take(1).collect();
+        text1.delete(del_pos, 1).unwrap();
+
+        // Verify correct character was deleted
+        let after_delete = text1.to_string();
+        assert_eq!(after_delete.len(), pre_delete.len() - 1);
+
+        // The deleted character should be gone (or if it appeared multiple times,
+        // it should appear one fewer time)
+        let count_before = pre_delete.matches(&deleted_char).count();
+        let count_after = after_delete.matches(&deleted_char).count();
+        assert_eq!(
+            count_after,
+            count_before - 1,
+            "Expected '{}' to appear {} times but got {} (pre: '{}', post: '{}')",
+            deleted_char,
+            count_before - 1,
+            count_after,
+            pre_delete,
+            after_delete
+        );
+
+        // Merge delete to text2 — both clients must converge
+        text2.merge(&text1).unwrap();
+        assert_eq!(
+            text2.to_string(),
+            after_delete,
+            "Clients diverged after delete on interleaved blocks"
+        );
+    }
+
+    #[test]
+    fn test_concurrent_delete_same_block_different_positions() {
+        // Reproduces the critical merge duplication bug:
+        // Both clients split the same block differently via delete.
+        // Without clock-range overlap detection, merge() blindly adds
+        // remote split blocks whose clocks overlap local blocks,
+        // duplicating text.
+        let mut text1 = FugueText::new("alice".to_string());
+        let mut text2 = FugueText::new("bob".to_string());
+
+        // Both start with "Hello"
+        text1.insert(0, "Hello").unwrap();
+        text2.merge(&text1).unwrap();
+        assert_eq!(text1.to_string(), "Hello");
+        assert_eq!(text2.to_string(), "Hello");
+
+        // Alice deletes "e" (position 1), Bob deletes "l" (position 3)
+        text1.delete(1, 1).unwrap(); // "Hllo"
+        text2.delete(3, 1).unwrap(); // "Helo"
+
+        assert_eq!(text1.to_string(), "Hllo");
+        assert_eq!(text2.to_string(), "Helo");
+
+        // Merge both ways — must converge without duplication
+        text1.merge(&text2).unwrap();
+        text2.merge(&text1).unwrap();
+
+        let result1 = text1.to_string();
+        let result2 = text2.to_string();
+        assert_eq!(result1, result2, "Clients diverged: '{}' vs '{}'", result1, result2);
+        assert_eq!(result1, "Hlo", "Expected both deletions applied, got '{}'", result1);
+        assert_eq!(
+            result1.len(),
+            3,
+            "Should have exactly 3 characters (no duplication), got {} chars: '{}'",
+            result1.len(),
+            result1
+        );
+    }
+
+    #[test]
+    fn test_concurrent_delete_first_and_last_chars() {
+        // Edge case: delete first and last characters of a block concurrently
+        let mut text1 = FugueText::new("alice".to_string());
+        let mut text2 = FugueText::new("bob".to_string());
+
+        text1.insert(0, "ABCD").unwrap();
+        text2.merge(&text1).unwrap();
+
+        // Alice deletes 'A' (position 0), Bob deletes 'D' (position 3)
+        text1.delete(0, 1).unwrap(); // "BCD"
+        text2.delete(3, 1).unwrap(); // "ABC"
+
+        text1.merge(&text2).unwrap();
+        text2.merge(&text1).unwrap();
+
+        let result1 = text1.to_string();
+        let result2 = text2.to_string();
+        assert_eq!(result1, result2, "Clients diverged: '{}' vs '{}'", result1, result2);
+        assert_eq!(result1, "BC", "Expected 'BC', got '{}'", result1);
+    }
+
+    #[test]
+    fn test_concurrent_delete_adjacent_chars() {
+        // Both clients delete adjacent characters from the same block
+        let mut text1 = FugueText::new("alice".to_string());
+        let mut text2 = FugueText::new("bob".to_string());
+
+        text1.insert(0, "ABCDE").unwrap();
+        text2.merge(&text1).unwrap();
+
+        // Alice deletes 'B' (position 1), Bob deletes 'C' (position 2)
+        text1.delete(1, 1).unwrap(); // "ACDE"
+        text2.delete(2, 1).unwrap(); // "ABDE"
+
+        text1.merge(&text2).unwrap();
+        text2.merge(&text1).unwrap();
+
+        let result1 = text1.to_string();
+        let result2 = text2.to_string();
+        assert_eq!(result1, result2, "Clients diverged");
+        assert_eq!(result1, "ADE", "Expected 'ADE', got '{}'", result1);
     }
 }
