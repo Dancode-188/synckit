@@ -29,7 +29,7 @@ export const SECURITY_LIMITS = {
   MAX_DOCS_PER_HOUR: 10,
 
   // Message limits
-  MAX_MESSAGE_SIZE: 100_000, // 100KB per message
+  MAX_MESSAGE_SIZE: 2_000_000, // 2MB per message (text CRDT states can be large)
 
   // Playground document ID
   PLAYGROUND_DOC_ID: 'playground',

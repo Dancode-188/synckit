@@ -239,7 +239,21 @@ export class SyncManager {
     if (!this.deltaBatchQueue.has(documentId)) {
       this.deltaBatchQueue.set(documentId, [])
     }
-    this.deltaBatchQueue.get(documentId)!.push(operation)
+
+    const queue = this.deltaBatchQueue.get(documentId)!
+    const op = operation as any
+
+    // For text-state operations, replace previous text-state (full state supersedes)
+    if (op.type === 'text-state') {
+      const existingIdx = queue.findIndex((o: any) => o.type === 'text-state')
+      if (existingIdx >= 0) {
+        queue[existingIdx] = operation
+      } else {
+        queue.push(operation)
+      }
+    } else {
+      queue.push(operation)
+    }
 
     const existingTimer = this.deltaBatchTimers.get(documentId)
     if (existingTimer) clearTimeout(existingTimer)
