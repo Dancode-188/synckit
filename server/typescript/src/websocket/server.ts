@@ -707,7 +707,7 @@ export class SyncWebSocketServer {
       for (const operation of deltas) {
         // Check if this is a text CRDT operation (state-based)
         if (operation.type === 'text-state') {
-          // PERSIST: Save text CRDT state to storage
+          // PERSIST: Save and merge text CRDT state with existing state
           if (operation.state) {
             const textDocId = operation.documentId || documentId;
             await this.coordinator.saveTextState(
@@ -716,13 +716,15 @@ export class SyncWebSocketServer {
               operation.clientId || clientId,
               operation.timestamp || Date.now()
             );
-          }
 
-          // RELAY: Add to broadcast list
-          textOperations.push({
-            ...operation,
-            clientId: operation.clientId || clientId,
-          });
+            // RELAY: Broadcast the MERGED state (not raw incoming) to prevent divergence
+            const mergedState = await this.coordinator.getTextState(textDocId);
+            textOperations.push({
+              ...operation,
+              state: mergedState?.crdtState || operation.state,
+              clientId: operation.clientId || clientId,
+            });
+          }
           continue;
         }
 
