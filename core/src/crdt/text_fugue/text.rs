@@ -2426,8 +2426,16 @@ mod fugue_tree_tests {
 
         let result1 = text1.to_string();
         let result2 = text2.to_string();
-        assert_eq!(result1, result2, "Clients diverged: '{}' vs '{}'", result1, result2);
-        assert_eq!(result1, "Hlo", "Expected both deletions applied, got '{}'", result1);
+        assert_eq!(
+            result1, result2,
+            "Clients diverged: '{}' vs '{}'",
+            result1, result2
+        );
+        assert_eq!(
+            result1, "Hlo",
+            "Expected both deletions applied, got '{}'",
+            result1
+        );
         assert_eq!(
             result1.len(),
             3,
@@ -2455,7 +2463,11 @@ mod fugue_tree_tests {
 
         let result1 = text1.to_string();
         let result2 = text2.to_string();
-        assert_eq!(result1, result2, "Clients diverged: '{}' vs '{}'", result1, result2);
+        assert_eq!(
+            result1, result2,
+            "Clients diverged: '{}' vs '{}'",
+            result1, result2
+        );
         assert_eq!(result1, "BC", "Expected 'BC', got '{}'", result1);
     }
 
