@@ -80,46 +80,46 @@ export function RoomBanner({ synckit, roomId, documentId }: RoomBannerProps) {
 
   return (
     <>
-      <div className="bg-primary-500 text-white px-4 py-2 flex items-center justify-between shadow-md">
-        <div className="flex items-center gap-4">
-          <div className="flex items-center gap-2">
+      <div className="bg-primary-500 text-white px-3 sm:px-4 py-2 flex items-center justify-between shadow-md gap-2">
+        <div className="flex items-center gap-2 sm:gap-4 min-w-0">
+          <div className="flex items-center gap-2 flex-shrink-0">
             <div className="w-2 h-2 bg-green-400 rounded-full animate-pulse"></div>
-            <span className="font-medium">Collaborative Room</span>
+            <span className="font-medium text-sm sm:text-base">Room</span>
           </div>
-          <div className="text-sm opacity-90">
-            {onlineCount} {onlineCount === 1 ? 'person' : 'people'} online
+          <div className="text-xs sm:text-sm opacity-90 flex-shrink-0">
+            {onlineCount} online
           </div>
-          <div className="text-xs opacity-75 font-mono bg-white/20 px-2 py-1 rounded">
+          <div className="text-xs opacity-75 font-mono bg-white/20 px-2 py-0.5 rounded truncate">
             {roomId}
           </div>
         </div>
 
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-1.5 sm:gap-2 flex-shrink-0">
           <button
             onClick={handleCopyLink}
-            className="px-3 py-1 bg-white/20 hover:bg-white/30 rounded text-sm font-medium transition-colors flex items-center gap-2"
+            className="px-2 sm:px-3 py-1 bg-white/20 hover:bg-white/30 rounded text-sm font-medium transition-colors flex items-center gap-1.5"
           >
             {showCopied ? (
               <>
                 <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
                 </svg>
-                Copied!
+                <span className="hidden sm:inline">Copied!</span>
               </>
             ) : (
               <>
                 <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
                 </svg>
-                Share Link
+                <span className="hidden sm:inline">Share</span>
               </>
             )}
           </button>
           <button
             onClick={handleLeave}
-            className="px-3 py-1 bg-white/20 hover:bg-white/30 rounded text-sm font-medium transition-colors"
+            className="px-2 sm:px-3 py-1 bg-white/20 hover:bg-white/30 rounded text-sm font-medium transition-colors"
           >
-            Leave Room
+            Leave
           </button>
         </div>
       </div>
