@@ -46,16 +46,9 @@ primary_region = "sjc"  # San Jose, CA (change to your preferred region)
     handlers = ["tls", "http"]
     port = 443
 
-  # WebSocket configuration
-  [[services.ports]]
-    handlers = ["tls", "http"]
-    port = 443
-    
     [services.ports.http_options]
-      # Increased from 60s to 300s (5min) to accommodate WebSocket long-polling
-      # Combined with 10s heartbeat, this prevents proxy timeouts
+      # 5min idle timeout to accommodate WebSocket connections
       idle_timeout = 300
-      h2_backend = true
 
 # Concurrency configuration
 [services.concurrency]
