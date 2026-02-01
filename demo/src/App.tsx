@@ -8,6 +8,7 @@ import { ExportDialog } from './components/ExportDialog';
 import { Cursors } from './components/Cursors';
 import { RoomBanner } from './components/RoomBanner';
 import { Stage } from './components/Stage';
+import { WordWall } from './components/WordWall';
 import { SyncKitProvider, useSyncKit } from './contexts/SyncKitContext';
 import {
   getRouteFromUrl,
@@ -289,17 +290,11 @@ function AppContent() {
     return <Stage isConnected={isConnected} />;
   }
 
-  // Word Wall (placeholder until PR3)
+  // Word Wall
   if (route === 'wordwall') {
     return (
       <Layout isConnected={isConnected} route={route} roomId={null} sidebar={null}>
-        <div className="flex-1 flex items-center justify-center">
-          <div className="text-center">
-            <div className="text-6xl mb-4">🧱</div>
-            <h2 className="text-2xl font-bold text-gray-900 dark:text-gray-100 mb-2">Word Wall</h2>
-            <p className="text-gray-500 dark:text-gray-400">Coming soon</p>
-          </div>
-        </div>
+        <WordWall isConnected={isConnected} />
       </Layout>
     );
   }
