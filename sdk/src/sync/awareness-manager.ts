@@ -143,7 +143,7 @@ export class AwarenessManager {
 
     const awareness = this.awarenessInstances.get(documentId)
     if (!awareness) {
-      console.warn(`Received awareness state for unregistered document: ${documentId}`)
+      console.debug(`Received awareness state for unregistered document: ${documentId}`)
       return
     }
 
