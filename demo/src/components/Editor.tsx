@@ -799,10 +799,12 @@ export function Editor({ pageId }: EditorProps) {
             newElement.appendChild(selectedContent);
             range.insertNode(newElement);
 
-            // Select the newly formatted text
-            range.selectNodeContents(newElement);
+            // Select the newly formatted text with a fresh range
+            // (the original range is stale after DOM mutations)
+            const newRange = document.createRange();
+            newRange.selectNodeContents(newElement);
             selection.removeAllRanges();
-            selection.addRange(range);
+            selection.addRange(newRange);
           }
         }
 
