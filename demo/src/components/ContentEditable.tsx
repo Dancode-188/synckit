@@ -7,6 +7,18 @@
 import { useRef, useEffect, KeyboardEvent, FocusEvent } from 'react';
 import { parseMarkdown, htmlToMarkdown } from '../lib/markdown';
 
+/**
+ * Normalize HTML for comparison by removing insignificant differences
+ * This ensures local DOM changes match parsed markdown output
+ */
+function normalizeHtml(html: string): string {
+  // Create a temporary element to normalize the HTML
+  const temp = document.createElement('div');
+  temp.innerHTML = html;
+  // Return normalized innerHTML (browser handles whitespace/attribute normalization)
+  return temp.innerHTML;
+}
+
 interface ContentEditableProps {
   content: string;
   onChange: (content: string) => void;
@@ -44,8 +56,13 @@ export function ContentEditable({
 
     const parsedHtml = parseMarkdown(content);
 
-    // Skip if DOM already has this content (handles local edits and redundant updates)
-    if (ref.current.innerHTML === parsedHtml) {
+    // Normalize both for comparison (handles browser-specific HTML formatting differences)
+    const normalizedDom = normalizeHtml(ref.current.innerHTML);
+    const normalizedParsed = normalizeHtml(parsedHtml);
+
+    // Skip if DOM already has equivalent content (handles local edits and redundant updates)
+    // This prevents cursor jumping when local formatting produces equivalent HTML
+    if (normalizedDom === normalizedParsed) {
       lastContentRef.current = content;
       return;
     }
@@ -67,8 +84,8 @@ export function ContentEditable({
   // Helper to update DOM while preserving cursor position
   // Sets isUpdatingDomRef to prevent MutationObserver feedback loop
   const updateDomWithCursorPreservation = (element: HTMLDivElement, parsedHtml: string, rawContent: string) => {
-    // Skip if content hasn't actually changed
-    if (element.innerHTML === parsedHtml) {
+    // Skip if content hasn't actually changed (use normalized comparison)
+    if (normalizeHtml(element.innerHTML) === normalizeHtml(parsedHtml)) {
       lastContentRef.current = rawContent;
       return;
     }
