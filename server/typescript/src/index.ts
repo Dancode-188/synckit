@@ -99,6 +99,8 @@ if (config.databaseUrl && !config.databaseUrl.includes('localhost')) {
   try {
     // console.log('🔌 Connecting to PostgreSQL...');
     await storage.connect();
+    // Ensure database schema exists (safe to run multiple times)
+    await storage.ensureSchema();
     storageConnected = true;
     // console.log('✅ PostgreSQL connected');
   } catch (error) {
