@@ -81,9 +81,17 @@ export function Editor({ pageId }: EditorProps) {
   // Track subscription outside effect to prevent StrictMode duplicates
   const subscriptionRef = useRef<(() => void) | null>(null);
 
+  // Track document ref for cleanup (avoids stale closure bug)
+  const pageDocRef = useRef<SyncDocument<PageDocument> | null>(null);
+
   // Load page document when pageId changes
   useEffect(() => {
     if (!pageId) {
+      // Clear document ref and state
+      if (pageDocRef.current) {
+        (pageDocRef.current as any).dispose?.();
+        pageDocRef.current = null;
+      }
       setPageDoc(null);
       setPageData(null);
       setBlocks([]);
@@ -178,6 +186,8 @@ export function Editor({ pageId }: EditorProps) {
       // Store in ref to prevent duplicate subscriptions
       subscriptionRef.current = unsubscribe;
 
+      // Store in ref for cleanup (avoids stale closure)
+      pageDocRef.current = doc;
       setPageDoc(doc);
 
       // Set up auto-snapshots
@@ -219,11 +229,12 @@ export function Editor({ pageId }: EditorProps) {
       if (scheduler) scheduler.stop();
       if (snapshotInterval) clearInterval(snapshotInterval);
 
-      // CRITICAL: Dispose document to free memory (lazy loading)
-      // This prevents memory leaks when switching pages
-      if (pageDoc) {
+      // CRITICAL: Dispose document to unsubscribe and free memory
+      // Uses ref instead of state to avoid stale closure bug
+      if (pageDocRef.current) {
         console.log(`🧹 Disposing page document: ${pageId}`);
-        (pageDoc as any).dispose?.();
+        (pageDocRef.current as any).dispose?.();
+        pageDocRef.current = null;
       }
 
       setSnapshotScheduler(null);
@@ -799,10 +810,12 @@ export function Editor({ pageId }: EditorProps) {
             newElement.appendChild(selectedContent);
             range.insertNode(newElement);
 
-            // Select the newly formatted text
-            range.selectNodeContents(newElement);
+            // Select the newly formatted text with a fresh range
+            // (the original range may be stale after DOM mutations)
+            const newRange = document.createRange();
+            newRange.selectNodeContents(newElement);
             selection.removeAllRanges();
-            selection.addRange(range);
+            selection.addRange(newRange);
           }
         }
 

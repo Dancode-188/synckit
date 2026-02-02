@@ -120,6 +120,12 @@ export function Cursors({ synckit, pageId }: CursorProps) {
 
     return () => {
       mounted = false;
+
+      // Send leave update to remove user from room count
+      if (awarenessRef.current) {
+        awarenessRef.current.setLocalState(null).catch(() => {});
+      }
+
       if (cleanup) {
         cleanup.then(fn => fn && fn());
       }

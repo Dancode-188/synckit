@@ -1,4 +1,7 @@
 import pg from 'pg';
+import { readFileSync } from 'fs';
+import { join, dirname } from 'path';
+import { fileURLToPath } from 'url';
 import type {
   StorageAdapter,
   StorageConfig,
@@ -55,6 +58,45 @@ export class PostgresAdapter implements StorageAdapter {
     } catch (error) {
       this.connected = false;
       throw new ConnectionError('Failed to connect to PostgreSQL', error as Error);
+    }
+  }
+
+  /**
+   * Ensure database schema exists by running schema.sql
+   * Safe to call multiple times (uses IF NOT EXISTS)
+   */
+  async ensureSchema(): Promise<void> {
+    try {
+      // Schema file is at /app/src/storage/schema.sql in the Docker container
+      // Use multiple possible paths for different environments
+      const possiblePaths = [
+        join(process.cwd(), 'src', 'storage', 'schema.sql'),  // Docker: /app/src/storage/schema.sql
+        join(dirname(fileURLToPath(import.meta.url)), 'schema.sql'),  // Dev: relative to source file
+      ];
+
+      let schema: string | null = null;
+      let usedPath: string | null = null;
+
+      for (const schemaPath of possiblePaths) {
+        try {
+          schema = readFileSync(schemaPath, 'utf-8');
+          usedPath = schemaPath;
+          break;
+        } catch {
+          // Try next path
+        }
+      }
+
+      if (!schema) {
+        console.warn('⚠️  Could not find schema.sql at any expected path');
+        return;
+      }
+
+      await this.pool.query(schema);
+      console.log(`✅ Database schema verified (from ${usedPath})`);
+    } catch (error) {
+      console.warn('⚠️  Failed to ensure database schema:', error instanceof Error ? error.message : String(error));
+      // Don't throw - server can still work with existing tables
     }
   }
 
