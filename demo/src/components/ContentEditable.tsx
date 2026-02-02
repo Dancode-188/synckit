@@ -46,13 +46,21 @@ export function ContentEditable({
   // Track if this is the first mount (DOM needs initial population)
   const isFirstMountRef = useRef(true);
 
+  // Track when a local DOM change was made (formatting, typing, etc.)
+  // When set, useEffect should skip DOM updates since DOM is already correct
+  const pendingLocalChangeRef = useRef(false);
+
   // Update content when it changes (local edits, remote CRDT updates, or server sync)
-  // We ALWAYS allow DOM updates to go through to prevent DOM-CRDT divergence.
-  // For local edits, the DOM already has the user's content, so innerHTML comparison
-  // will match and we skip the update naturally — no flag needed.
-  // For remote updates, the DOM differs and we update with cursor preservation.
   useEffect(() => {
     if (!ref.current) return;
+
+    // Skip DOM updates for local changes - the DOM is already correct
+    // This prevents cursor jumping when formatting is applied via Editor.tsx
+    if (pendingLocalChangeRef.current) {
+      pendingLocalChangeRef.current = false;
+      lastContentRef.current = content;
+      return;
+    }
 
     const parsedHtml = parseMarkdown(content);
 
@@ -60,8 +68,7 @@ export function ContentEditable({
     const normalizedDom = normalizeHtml(ref.current.innerHTML);
     const normalizedParsed = normalizeHtml(parsedHtml);
 
-    // Skip if DOM already has equivalent content (handles local edits and redundant updates)
-    // This prevents cursor jumping when local formatting produces equivalent HTML
+    // Skip if DOM already has equivalent content (handles redundant updates)
     if (normalizedDom === normalizedParsed) {
       lastContentRef.current = content;
       return;
@@ -77,7 +84,7 @@ export function ContentEditable({
       return;
     }
 
-    // Update DOM with cursor preservation (works for remote updates and any content change)
+    // Update DOM with cursor preservation (for remote updates only)
     updateDomWithCursorPreservation(ref.current, parsedHtml, content);
   }, [content]);
 
@@ -200,6 +207,9 @@ export function ContentEditable({
       const markdownContent = htmlToMarkdown(element);
       // Only call onChange if content actually changed
       if (markdownContent !== lastContentRef.current) {
+        // Mark this as a local change so useEffect skips DOM updates
+        // (the DOM is already correct - we just need to sync the markdown)
+        pendingLocalChangeRef.current = true;
         lastContentRef.current = markdownContent;
         onChange(markdownContent);
       }
@@ -237,6 +247,8 @@ export function ContentEditable({
       // Convert HTML back to markdown to preserve formatting
       const markdownContent = htmlToMarkdown(ref.current);
       if (markdownContent !== lastContentRef.current) {
+        // Mark as local change so useEffect skips DOM updates
+        pendingLocalChangeRef.current = true;
         lastContentRef.current = markdownContent;
         onChange(markdownContent);
       }
