@@ -23,6 +23,7 @@ import {
 import { htmlToMarkdown } from '../lib/markdown';
 import { getImageFromClipboard, compressImage } from '../lib/images';
 import { needsArchiving, archiveOldBlocks } from '../lib/playground';
+import { getUserIdentity } from '../lib/user';
 
 interface EditorProps {
   pageId?: string;
@@ -83,6 +84,13 @@ export function Editor({ pageId }: EditorProps) {
 
   // Track document ref for cleanup (avoids stale closure bug)
   const pageDocRef = useRef<SyncDocument<PageDocument> | null>(null);
+
+  // Typing indicator refs
+  const awarenessRef = useRef<any>(null);
+  const typingTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const clientIdRef = useRef<string>(
+    localStorage.getItem('localwrite:client-id') || crypto.randomUUID()
+  );
 
   // Load page document when pageId changes
   useEffect(() => {
@@ -243,6 +251,79 @@ export function Editor({ pageId }: EditorProps) {
       setBlocks([]);
     };
   }, [pageId, synckit]);
+
+  // Initialize awareness for typing indicators
+  useEffect(() => {
+    if (!pageId || !synckit) return;
+
+    const docId = pageId; // Capture for closure
+    let mounted = true;
+
+    async function setupAwareness() {
+      try {
+        const awareness = synckit.getAwareness(docId);
+        if (!awareness) return;
+
+        await awareness.init();
+        if (!mounted) return;
+
+        awarenessRef.current = awareness;
+      } catch (error) {
+        console.error('Failed to setup awareness for typing:', error);
+      }
+    }
+
+    setupAwareness();
+
+    return () => {
+      mounted = false;
+      awarenessRef.current = null;
+      if (typingTimeoutRef.current) {
+        clearTimeout(typingTimeoutRef.current);
+      }
+    };
+  }, [pageId, synckit]);
+
+  // Notify typing via awareness (debounced)
+  const notifyTyping = useCallback(() => {
+    const awareness = awarenessRef.current;
+    if (!awareness) return;
+
+    const userIdentity = getUserIdentity(clientIdRef.current);
+
+    // Update typing state
+    awareness.setLocalState({
+      user: {
+        name: userIdentity.name,
+        color: userIdentity.color,
+      },
+      typing: {
+        isTyping: true,
+        lastTypedAt: Date.now(),
+      },
+    }).catch((err: Error) => {
+      console.error('Failed to update typing state:', err);
+    });
+
+    // Clear typing state after 2.5s of inactivity
+    if (typingTimeoutRef.current) {
+      clearTimeout(typingTimeoutRef.current);
+    }
+    typingTimeoutRef.current = setTimeout(() => {
+      if (awarenessRef.current) {
+        awarenessRef.current.setLocalState({
+          user: {
+            name: userIdentity.name,
+            color: userIdentity.color,
+          },
+          typing: {
+            isTyping: false,
+            lastTypedAt: Date.now(),
+          },
+        }).catch(() => {});
+      }
+    }, 2500);
+  }, []);
 
   // Track which block is currently focused
   useEffect(() => {
@@ -412,6 +493,9 @@ export function Editor({ pageId }: EditorProps) {
       // DEBUG: Log content changes
       console.log(`[CLIENT] Block ${blockId} content changed:`, content.substring(0, 50));
 
+      // Notify typing for live indicators
+      notifyTyping();
+
       // Check for slash command
       if (content.startsWith('/')) {
         const query = content.slice(1); // Remove the '/'
@@ -447,7 +531,7 @@ export function Editor({ pageId }: EditorProps) {
         snapshotScheduler.recordOperation();
       }
     },
-    [pageDoc, snapshotScheduler]
+    [pageDoc, snapshotScheduler, notifyTyping]
   );
 
   // Delete a block

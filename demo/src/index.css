@@ -122,4 +122,21 @@
   .group:hover .drag-handle {
     @apply opacity-100;
   }
+
+  /* Typing indicator animation */
+  .typing-dot {
+    @apply text-white font-bold text-sm;
+    animation: typingDot 1.2s ease-in-out infinite;
+  }
+
+  @keyframes typingDot {
+    0%, 60%, 100% {
+      opacity: 0.3;
+      transform: translateY(0);
+    }
+    30% {
+      opacity: 1;
+      transform: translateY(-4px);
+    }
+  }
 }
