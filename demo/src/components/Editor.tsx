@@ -24,6 +24,9 @@ import { htmlToMarkdown } from '../lib/markdown';
 import { getImageFromClipboard, compressImage } from '../lib/images';
 import { needsArchiving, archiveOldBlocks } from '../lib/playground';
 import { getUserIdentity } from '../lib/user';
+import { useMilestoneTracker } from '../hooks/useMilestoneTracker';
+import { useToast } from '../contexts/ToastContext';
+import { Confetti } from './Confetti';
 
 interface EditorProps {
   pageId?: string;
@@ -54,7 +57,9 @@ export function Editor({ pageId }: EditorProps) {
   const [showSnapshotDialog, setShowSnapshotDialog] = useState(false);
   const [focusedBlockId, setFocusedBlockId] = useState<string | null>(null);
   const [pendingFocusBlockId, setPendingFocusBlockId] = useState<string | null>(null);
+  const [showConfetti, setShowConfetti] = useState(false);
   const editorRef = useRef<HTMLDivElement>(null);
+  const { addToast } = useToast();
   const pageDataRef = useRef<PageDocument | null>(null);
   const focusedBlockIdRef = useRef<string | null>(null);
 
@@ -91,6 +96,23 @@ export function Editor({ pageId }: EditorProps) {
   const clientIdRef = useRef<string>(
     localStorage.getItem('localwrite:client-id') || crypto.randomUUID()
   );
+
+  // Milestone celebrations
+  const handleMilestone = useCallback((milestone: { emoji: string; message: string }) => {
+    setShowConfetti(true);
+    addToast({
+      message: milestone.message,
+      icon: milestone.emoji,
+      variant: 'celebration',
+      duration: 5000,
+    });
+  }, [addToast]);
+
+  useMilestoneTracker({
+    pageId,
+    blocks,
+    onMilestone: handleMilestone,
+  });
 
   // Load page document when pageId changes
   useEffect(() => {
@@ -1261,6 +1283,11 @@ export function Editor({ pageId }: EditorProps) {
           document={pageDoc}
           onClose={() => setShowSnapshotDialog(false)}
         />
+      )}
+
+      {/* Milestone Celebration Confetti */}
+      {showConfetti && (
+        <Confetti onComplete={() => setShowConfetti(false)} />
       )}
     </div>
   );
