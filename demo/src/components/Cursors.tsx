@@ -1,12 +1,15 @@
 /**
  * Live Cursors Component
  * Displays real-time cursor positions of other users
+ *
+ * NOTE: This component is READ-ONLY for awareness.
+ * Local user's cursor/typing/contributions are managed by Editor.tsx
+ * via centralized awareness state to prevent overwrites.
  */
 
 import { useEffect, useState, useRef } from 'react';
 import type { SyncKit } from '@synckit-js/sdk';
 import type { AwarenessState } from '@synckit-js/sdk';
-import { getUserIdentity } from '../lib/user';
 
 interface CursorProps {
   synckit: SyncKit;
@@ -23,11 +26,6 @@ interface TypingState {
   lastTypedAt: number;
 }
 
-interface ContributionState {
-  wordsAdded: number;
-  editsCount: number;
-}
-
 interface UserPresence {
   user?: {
     name: string;
@@ -35,23 +33,13 @@ interface UserPresence {
   };
   cursor?: CursorPosition | null;
   typing?: TypingState;
-  contributions?: ContributionState;
 }
 
 export function Cursors({ synckit, pageId }: CursorProps) {
-  const [clientId, setClientId] = useState<string>('');
   const [others, setOthers] = useState<AwarenessState[]>([]);
   const awarenessRef = useRef<any>(null);
-  const mouseListenerRef = useRef<((e: MouseEvent) => void) | null>(null);
   // Tick state to force re-renders for stale typing indicator cleanup
   const [, setTick] = useState(0);
-
-  // Get client ID on mount
-  useEffect(() => {
-    const id = localStorage.getItem('localwrite:client-id') || crypto.randomUUID();
-    localStorage.setItem('localwrite:client-id', id);
-    setClientId(id);
-  }, []);
 
   // Periodically re-render to clear stale typing indicators
   useEffect(() => {
@@ -71,12 +59,9 @@ export function Cursors({ synckit, pageId }: CursorProps) {
   // Use playground document if no page selected
   const documentId = pageId || 'playground';
 
-  // Generate user identity
-  const userIdentity = clientId ? getUserIdentity(clientId) : null;
-
-  // Set up awareness and cursor tracking
+  // Set up awareness subscription (READ-ONLY - no local state writes)
   useEffect(() => {
-    if (!userIdentity || !documentId) return;
+    if (!documentId) return;
 
     let mounted = true;
 
@@ -92,16 +77,7 @@ export function Cursors({ synckit, pageId }: CursorProps) {
 
         awarenessRef.current = awareness;
 
-        // Set initial presence
-        await awareness.setLocalState({
-          user: {
-            name: userIdentity!.name,
-            color: userIdentity!.color,
-          },
-          cursor: null,
-        });
-
-        // Subscribe to awareness changes
+        // Subscribe to awareness changes (READ-ONLY)
         const unsubscribe = awareness.subscribe(() => {
           if (!mounted) return;
 
@@ -110,36 +86,19 @@ export function Cursors({ synckit, pageId }: CursorProps) {
           const otherStates = Array.from(allStates.values()).filter(
             (state: AwarenessState) => state.client_id !== localClientId
           );
+
           setOthers(otherStates);
         });
 
-        // Track mouse movements
-        const handleMouseMove = (e: MouseEvent) => {
-          if (!mounted || !awareness) return;
+        // Initial read
+        const allStates = awareness.getStates();
+        const localClientId = awareness.getClientId();
+        const otherStates = Array.from(allStates.values()).filter(
+          (state: AwarenessState) => state.client_id !== localClientId
+        );
+        setOthers(otherStates);
 
-          awareness.setLocalState({
-            user: {
-              name: userIdentity!.name,
-              color: userIdentity!.color,
-            },
-            cursor: {
-              x: e.clientX,
-              y: e.clientY,
-            },
-          }).catch((err: Error) => {
-            console.error('Failed to update cursor position:', err);
-          });
-        };
-
-        mouseListenerRef.current = handleMouseMove;
-        window.addEventListener('mousemove', handleMouseMove);
-
-        return () => {
-          if (mouseListenerRef.current) {
-            window.removeEventListener('mousemove', mouseListenerRef.current);
-          }
-          unsubscribe();
-        };
+        return unsubscribe;
       } catch (error) {
         console.error('Failed to setup awareness:', error);
       }
@@ -149,24 +108,11 @@ export function Cursors({ synckit, pageId }: CursorProps) {
 
     return () => {
       mounted = false;
-
-      // Send leave update to remove user from room count
-      if (awarenessRef.current) {
-        awarenessRef.current.setLocalState(null).catch(() => {});
-      }
-
       if (cleanup) {
         cleanup.then(fn => fn && fn());
       }
-      if (mouseListenerRef.current) {
-        window.removeEventListener('mousemove', mouseListenerRef.current);
-      }
     };
-  }, [synckit, documentId, userIdentity]);
-
-  if (!userIdentity) {
-    return null;
-  }
+  }, [synckit, documentId]);
 
   return (
     <div className="fixed inset-0 pointer-events-none z-50">

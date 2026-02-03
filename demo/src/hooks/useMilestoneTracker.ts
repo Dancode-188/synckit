@@ -1,10 +1,11 @@
 /**
  * Milestone Tracker Hook
  * Tracks word count milestones and triggers celebrations
+ *
+ * NOTE: Uses live content map from CRDT, not stale block.content
  */
 
 import { useEffect, useRef, useCallback } from 'react';
-import { Block } from '../lib/blocks';
 
 interface Milestone {
   words: number;
@@ -54,24 +55,26 @@ function saveAchievedMilestone(pageId: string, words: number): void {
 
 interface UseMilestoneTrackerProps {
   pageId: string | undefined;
-  blocks: Block[];
+  contentMap: Map<string, string>; // Live content from CRDT (blockId -> content)
   onMilestone: (milestone: Milestone) => void;
 }
 
 export function useMilestoneTracker({
   pageId,
-  blocks,
+  contentMap,
   onMilestone,
 }: UseMilestoneTrackerProps) {
   const lastWordCountRef = useRef(0);
   const initializedRef = useRef(false);
 
-  // Calculate total word count across all blocks
+  // Calculate total word count across all content
   const calculateWordCount = useCallback(() => {
-    return blocks.reduce((total, block) => {
-      return total + countWords(block.content || '');
-    }, 0);
-  }, [blocks]);
+    let total = 0;
+    contentMap.forEach((content) => {
+      total += countWords(content);
+    });
+    return total;
+  }, [contentMap]);
 
   useEffect(() => {
     if (!pageId) return;
@@ -111,7 +114,7 @@ export function useMilestoneTracker({
     }
 
     lastWordCountRef.current = currentWordCount;
-  }, [pageId, blocks, calculateWordCount, onMilestone]);
+  }, [pageId, contentMap, calculateWordCount, onMilestone]);
 
   return {
     wordCount: calculateWordCount(),

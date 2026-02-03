@@ -11,7 +11,7 @@
  * - Remote changes merge automatically without overwriting
  */
 
-import { KeyboardEvent, useCallback, useEffect, useRef } from 'react';
+import { KeyboardEvent, useCallback } from 'react';
 import { BlockComponent } from './BlockComponent';
 import { useBlockText } from '../hooks/useBlockText';
 import { Block } from '../lib/blocks';
@@ -77,27 +77,19 @@ export function CRDTBlockComponent({
     error,
   } = useBlockText(pageId, block.id, block.content);
 
-  // Track last notified content to avoid duplicate notifications
-  const lastNotifiedContentRef = useRef(content);
-
-  // Notify parent when content changes (for slash commands, etc.)
-  useEffect(() => {
-    if (initialized && content !== lastNotifiedContentRef.current) {
-      lastNotifiedContentRef.current = content;
-      if (onContentChange) {
-        onContentChange(content);
-      }
-    }
-  }, [content, initialized, onContentChange]);
+  // NOTE: We intentionally DO NOT call onContentChange in a useEffect that watches `content`
+  // because that would fire for BOTH local and remote changes. We only want to notify
+  // for LOCAL changes (user typing), which happens in handleContentChange below.
+  // This is important for:
+  // - Replay recording: only records local user's edits with correct attribution
+  // - Typing indicators: only shows when local user is typing
+  // - Contribution tracking: only counts local user's contributions
 
   // Handle content changes from the editable
   const handleContentChange = useCallback(
     async (newContent: string) => {
       // Skip if still loading - SyncText not ready yet
-      if (loading) {
-        console.log('[CRDTBlockComponent] Skipping update - still loading');
-        return;
-      }
+      if (loading) return;
 
       try {
         // Update CRDT (will be converted to operations via diff)
