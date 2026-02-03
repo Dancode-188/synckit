@@ -31,6 +31,8 @@ import { Confetti } from './Confetti';
 import { ContributionStats, ContributorData } from './ContributionStats';
 import { ReactionPicker } from './ReactionPicker';
 import { FloatingReaction } from './FloatingReaction';
+import { ReplayOverlay } from './ReplayOverlay';
+import { useOperationRecorder } from '../hooks/useOperationRecorder';
 
 interface EditorProps {
   pageId?: string;
@@ -65,6 +67,7 @@ export function Editor({ pageId }: EditorProps) {
   const [contributors, setContributors] = useState<ContributorData[]>([]);
   const [reactionPicker, setReactionPicker] = useState<{ x: number; y: number } | null>(null);
   const [floatingReactions, setFloatingReactions] = useState<Array<{ id: string; emoji: string; position: { x: number; y: number } }>>([]);
+  const [showReplay, setShowReplay] = useState(false);
   const editorRef = useRef<HTMLDivElement>(null);
   const { addToast } = useToast();
   const pageDataRef = useRef<PageDocument | null>(null);
@@ -147,6 +150,14 @@ export function Editor({ pageId }: EditorProps) {
   const { stats: localContributionStats, trackContentChange } = useContributionTracker({
     pageId,
     onContributionChange: handleContributionChange,
+  });
+
+  // Operation recording for replay
+  const { recordContentChange, getSession, hasRecording } = useOperationRecorder({
+    pageId,
+    blocks,
+    userName: userIdentity?.name || 'Anonymous',
+    userColor: userIdentity?.color || '#888888',
   });
 
   // Collect contributions from other users via awareness
@@ -649,6 +660,9 @@ export function Editor({ pageId }: EditorProps) {
       // Track contributions
       trackContentChange(blockId, content);
 
+      // Record for replay
+      recordContentChange(blockId, content);
+
       // Check for slash command
       if (content.startsWith('/')) {
         const query = content.slice(1); // Remove the '/'
@@ -684,7 +698,7 @@ export function Editor({ pageId }: EditorProps) {
         snapshotScheduler.recordOperation();
       }
     },
-    [pageDoc, snapshotScheduler, notifyTyping, trackContentChange]
+    [pageDoc, snapshotScheduler, notifyTyping, trackContentChange, recordContentChange]
   );
 
   // Delete a block
@@ -1343,6 +1357,15 @@ export function Editor({ pageId }: EditorProps) {
                 >
                   ↺ Restore
                 </button>
+                {hasRecording() && (
+                  <button
+                    onClick={() => setShowReplay(true)}
+                    className="px-2 py-0.5 bg-purple-500 hover:bg-purple-600 text-white rounded text-xs hover:scale-105 active:scale-95 transition-all duration-150"
+                    title="Watch document creation replay"
+                  >
+                    🎬 Replay
+                  </button>
+                )}
               </div>
             )}
           </div>
@@ -1447,6 +1470,15 @@ export function Editor({ pageId }: EditorProps) {
           onComplete={() => handleReactionComplete(reaction.id)}
         />
       ))}
+
+      {/* Time-Lapse Replay Overlay */}
+      {showReplay && (
+        <ReplayOverlay
+          session={getSession()!}
+          blocks={blocks}
+          onClose={() => setShowReplay(false)}
+        />
+      )}
     </div>
   );
 }
