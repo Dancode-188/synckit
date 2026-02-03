@@ -91,7 +91,7 @@ export function Stage({ isConnected }: StageProps) {
   const handleCreateRoom = () => {
     const roomId = generateRoomId();
     addRecentRoom({ id: roomId, isPrivate: true });
-    navigateToRoom(roomId);
+    navigateToRoom(roomId, true); // Pass isPrivate=true for URL prefix
   };
 
   // Remove a room from recent history
@@ -103,7 +103,7 @@ export function Stage({ isConnected }: StageProps) {
   // Join a recent room
   const handleJoinRecentRoom = (room: RecentRoom) => {
     addRecentRoom({ id: room.id, isPrivate: room.isPrivate }); // Updates visitedAt
-    navigateToRoom(room.id);
+    navigateToRoom(room.id, room.isPrivate);
   };
 
   return (

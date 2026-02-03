@@ -15,7 +15,8 @@ export type AppRoute = 'stage' | 'room' | 'wordwall' | 'playground';
 export function getRouteFromUrl(): AppRoute {
   const hash = window.location.hash;
   if (!hash || hash === '#' || hash === '#/') return 'stage';
-  if (hash.match(/^#\/room\/[a-z0-9]+$/i)) return 'room';
+  // Both public rooms (#/room/...) and private rooms (#/proom/...) use 'room' route
+  if (hash.match(/^#\/p?room\/[a-z0-9]+$/i)) return 'room';
   if (hash === '#/wordwall') return 'wordwall';
   if (hash === '#/playground') return 'playground';
   return 'stage';
@@ -29,8 +30,8 @@ export function navigateToStage(): void {
   window.location.hash = '/';
 }
 
-export function navigateToRoom(roomId: string): void {
-  window.location.hash = `/room/${roomId}`;
+export function navigateToRoom(roomId: string, isPrivate: boolean = false): void {
+  window.location.hash = isPrivate ? `/proom/${roomId}` : `/room/${roomId}`;
 }
 
 export function navigateToWordWall(): void {
@@ -66,27 +67,35 @@ export function generateRoomId(): string {
 
 /**
  * Get room ID from URL hash
- * Format: #/room/abc123
+ * Format: #/room/abc123 (public) or #/proom/abc123 (private)
  */
 export function getRoomIdFromUrl(): string | null {
   const hash = window.location.hash;
-  const match = hash.match(/^#\/room\/([a-z0-9]+)$/i);
+  const match = hash.match(/^#\/p?room\/([a-z0-9]+)$/i);
   return match ? match[1] : null;
+}
+
+/**
+ * Check if current URL is a private room
+ */
+export function isPrivateRoomUrl(): boolean {
+  return window.location.hash.startsWith('#/proom/');
 }
 
 /**
  * Get shareable room URL
  */
-export function getRoomUrl(roomId: string): string {
+export function getRoomUrl(roomId: string, isPrivate: boolean = false): string {
   const baseUrl = window.location.origin + window.location.pathname;
-  return `${baseUrl}#/room/${roomId}`;
+  return `${baseUrl}#/${isPrivate ? 'proom' : 'room'}/${roomId}`;
 }
 
 /**
  * Convert room ID to document ID for SyncKit
+ * Uses 'room:' prefix for public rooms, 'proom:' for private rooms
  */
-export function roomToDocumentId(roomId: string): string {
-  return `room:${roomId}`;
+export function roomToDocumentId(roomId: string, isPrivate: boolean = false): string {
+  return isPrivate ? `proom:${roomId}` : `room:${roomId}`;
 }
 
 /**

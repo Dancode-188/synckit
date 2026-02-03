@@ -14,6 +14,7 @@ import {
   getRouteFromUrl,
   getRoomIdFromUrl,
   roomToDocumentId,
+  isPrivateRoomUrl,
   type AppRoute,
 } from './lib/rooms';
 import { ThemeProvider } from './contexts/ThemeContext';
@@ -71,7 +72,8 @@ function AppContent() {
       setRoomId(id);
 
       if (route === 'room' && id) {
-        const roomDocId = roomToDocumentId(id);
+        const isPrivate = isPrivateRoomUrl();
+        const roomDocId = roomToDocumentId(id, isPrivate);
         setCurrentPageId(roomDocId);
 
         try {
