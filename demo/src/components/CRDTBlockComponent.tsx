@@ -89,10 +89,7 @@ export function CRDTBlockComponent({
   const handleContentChange = useCallback(
     async (newContent: string) => {
       // Skip if still loading - SyncText not ready yet
-      if (loading) {
-        console.log('[CRDTBlockComponent] Skipping update - still loading');
-        return;
-      }
+      if (loading) return;
 
       try {
         // Update CRDT (will be converted to operations via diff)

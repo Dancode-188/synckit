@@ -86,6 +86,7 @@ export function Cursors({ synckit, pageId }: CursorProps) {
           const otherStates = Array.from(allStates.values()).filter(
             (state: AwarenessState) => state.client_id !== localClientId
           );
+
           setOthers(otherStates);
         });
 

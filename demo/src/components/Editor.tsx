@@ -3,7 +3,7 @@
  * Main document editor with SyncKit integration
  */
 
-import { useState, useEffect, KeyboardEvent, useCallback, useRef } from 'react';
+import { useState, useEffect, KeyboardEvent, useCallback, useRef, useMemo } from 'react';
 import { SyncDocument, SnapshotScheduler } from '@synckit-js/sdk';
 import { useSyncKit } from '../contexts/SyncKitContext';
 import { CRDTBlockComponent } from './CRDTBlockComponent';
@@ -128,7 +128,8 @@ export function Editor({ pageId }: EditorProps) {
   });
 
   // User identity and centralized awareness state management
-  const userIdentity = getUserIdentity(clientIdRef.current);
+  // Memoize to prevent useEffect re-runs (getUserIdentity returns new object each call)
+  const userIdentity = useMemo(() => getUserIdentity(clientIdRef.current), []);
   const contributionUpdateTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Centralized awareness state update - MERGES partial updates instead of overwriting
@@ -727,9 +728,6 @@ export function Editor({ pageId }: EditorProps) {
   const handleBlockContentChange = useCallback(
     async (blockId: string, content: string) => {
       if (!pageDoc) return;
-
-      // DEBUG: Log content changes
-      console.log(`[CLIENT] Block ${blockId} content changed:`, content.substring(0, 50));
 
       // Update live content map for milestone tracking
       setLiveContent(prev => new Map(prev).set(blockId, content));
