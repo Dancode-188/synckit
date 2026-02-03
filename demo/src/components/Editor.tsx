@@ -68,10 +68,13 @@ export function Editor({ pageId }: EditorProps) {
   const [reactionPicker, setReactionPicker] = useState<{ x: number; y: number } | null>(null);
   const [floatingReactions, setFloatingReactions] = useState<Array<{ id: string; emoji: string; position: { x: number; y: number } }>>([]);
   const [showReplay, setShowReplay] = useState(false);
+  const [awarenessReady, setAwarenessReady] = useState(false);
+  const [liveContent, setLiveContent] = useState<Map<string, string>>(new Map());
   const editorRef = useRef<HTMLDivElement>(null);
   const { addToast } = useToast();
   const pageDataRef = useRef<PageDocument | null>(null);
   const focusedBlockIdRef = useRef<string | null>(null);
+  const localAwarenessStateRef = useRef<Record<string, unknown>>({});
 
   // Keep refs in sync with state
   useEffect(() => {
@@ -120,13 +123,34 @@ export function Editor({ pageId }: EditorProps) {
 
   useMilestoneTracker({
     pageId,
-    blocks,
+    contentMap: liveContent,
     onMilestone: handleMilestone,
   });
 
-  // Contribution tracking
+  // User identity and centralized awareness state management
   const userIdentity = getUserIdentity(clientIdRef.current);
   const contributionUpdateTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Centralized awareness state update - MERGES partial updates instead of overwriting
+  const updateAwarenessState = useCallback((partial: Record<string, unknown>) => {
+    const awareness = awarenessRef.current;
+    if (!awareness || !userIdentity) return;
+
+    // Merge with existing state
+    const newState = {
+      ...localAwarenessStateRef.current,
+      ...partial,
+      user: {
+        name: userIdentity.name,
+        color: userIdentity.color,
+      },
+    };
+    localAwarenessStateRef.current = newState;
+
+    awareness.setLocalState(newState).catch((err: Error) => {
+      console.error('Failed to update awareness state:', err);
+    });
+  }, [userIdentity]);
 
   const handleContributionChange = useCallback((stats: { wordsAdded: number; editsCount: number }) => {
     // Debounce awareness updates to every 2 seconds
@@ -134,18 +158,9 @@ export function Editor({ pageId }: EditorProps) {
       clearTimeout(contributionUpdateTimeoutRef.current);
     }
     contributionUpdateTimeoutRef.current = setTimeout(() => {
-      const awareness = awarenessRef.current;
-      if (awareness && userIdentity) {
-        awareness.setLocalState({
-          user: {
-            name: userIdentity.name,
-            color: userIdentity.color,
-          },
-          contributions: stats,
-        }).catch(() => {});
-      }
+      updateAwarenessState({ contributions: stats });
     }, 2000);
-  }, [userIdentity]);
+  }, [updateAwarenessState]);
 
   const { stats: localContributionStats, trackContentChange } = useContributionTracker({
     pageId,
@@ -160,27 +175,55 @@ export function Editor({ pageId }: EditorProps) {
     userColor: userIdentity?.color || '#888888',
   });
 
-  // Collect contributions from other users via awareness
+  // Track seen remote reactions to avoid duplicates
+  const seenReactionsRef = useRef<Set<string>>(new Set());
+
+  // Collect contributions and reactions from other users via awareness
   useEffect(() => {
+    if (!awarenessReady) return; // Wait for awareness to be ready
+
     const awareness = awarenessRef.current;
     if (!awareness) return;
 
-    const updateContributors = () => {
+    const updateFromAwareness = () => {
       const allStates = awareness.getStates();
       const localClientId = awareness.getClientId();
       const otherContributors: ContributorData[] = [];
 
       allStates.forEach((state: any) => {
-        if (state.client_id !== localClientId && state.state?.contributions) {
-          const presence = state.state;
-          if (presence.user && presence.contributions) {
-            otherContributors.push({
-              clientId: state.client_id,
-              userName: presence.user.name,
-              userColor: presence.user.color,
-              wordsAdded: presence.contributions.wordsAdded || 0,
-              editsCount: presence.contributions.editsCount || 0,
-            });
+        if (state.client_id === localClientId) return;
+
+        const presence = state.state;
+        if (!presence) return;
+
+        // Collect contributions
+        if (presence.user && presence.contributions) {
+          otherContributors.push({
+            clientId: state.client_id,
+            userName: presence.user.name,
+            userColor: presence.user.color,
+            wordsAdded: presence.contributions.wordsAdded || 0,
+            editsCount: presence.contributions.editsCount || 0,
+          });
+        }
+
+        // Handle remote reactions (Fix 6)
+        if (presence.reaction && Date.now() - presence.reaction.timestamp < 2000) {
+          const reactionId = `${state.client_id}-${presence.reaction.timestamp}`;
+          if (!seenReactionsRef.current.has(reactionId)) {
+            seenReactionsRef.current.add(reactionId);
+            setFloatingReactions((prev) => [
+              ...prev,
+              {
+                id: reactionId,
+                emoji: presence.reaction.emoji,
+                position: presence.reaction.position,
+              },
+            ]);
+            // Clean up seen reactions after animation
+            setTimeout(() => {
+              seenReactionsRef.current.delete(reactionId);
+            }, 3000);
           }
         }
       });
@@ -190,11 +233,11 @@ export function Editor({ pageId }: EditorProps) {
 
     // Subscribe to awareness changes
     const unsubscribe = awareness.subscribe(() => {
-      updateContributors();
+      updateFromAwareness();
     });
 
     // Initial update
-    updateContributors();
+    updateFromAwareness();
 
     return () => {
       unsubscribe();
@@ -202,7 +245,7 @@ export function Editor({ pageId }: EditorProps) {
         clearTimeout(contributionUpdateTimeoutRef.current);
       }
     };
-  }, [pageId]);
+  }, [awarenessReady, pageId]);
 
   // Selection change detection for reactions
   useEffect(() => {
@@ -233,20 +276,36 @@ export function Editor({ pageId }: EditorProps) {
     return () => document.removeEventListener('selectionchange', handleSelectionChange);
   }, []);
 
-  // Handle reaction selection
+  // Handle reaction selection - now broadcasts to other users
   const handleReaction = useCallback((emoji: string) => {
     if (!reactionPicker) return;
 
     const id = crypto.randomUUID();
+    const position = reactionPicker;
+
+    // Local display
     setFloatingReactions((prev) => [
       ...prev,
-      { id, emoji, position: reactionPicker },
+      { id, emoji, position },
     ]);
-    setReactionPicker(null);
 
-    // Clear selection
+    // Broadcast to others via awareness
+    updateAwarenessState({
+      reaction: {
+        emoji,
+        position,
+        timestamp: Date.now(),
+      },
+    });
+
+    // Clear reaction state after animation completes
+    setTimeout(() => {
+      updateAwarenessState({ reaction: undefined });
+    }, 2000);
+
+    setReactionPicker(null);
     window.getSelection()?.removeAllRanges();
-  }, [reactionPicker]);
+  }, [reactionPicker, updateAwarenessState]);
 
   // Remove floating reaction when animation completes
   const handleReactionComplete = useCallback((id: string) => {
@@ -413,9 +472,9 @@ export function Editor({ pageId }: EditorProps) {
     };
   }, [pageId, synckit]);
 
-  // Initialize awareness for typing indicators
+  // Initialize awareness for presence (typing, cursors, contributions, reactions)
   useEffect(() => {
-    if (!pageId || !synckit) return;
+    if (!pageId || !synckit || !userIdentity) return;
 
     const docId = pageId; // Capture for closure
     let mounted = true;
@@ -429,8 +488,23 @@ export function Editor({ pageId }: EditorProps) {
         if (!mounted) return;
 
         awarenessRef.current = awareness;
+
+        // Set initial state with user identity
+        const initialState = {
+          user: {
+            name: userIdentity.name,
+            color: userIdentity.color,
+          },
+          cursor: null,
+          typing: { isTyping: false, lastTypedAt: 0 },
+          contributions: { wordsAdded: 0, editsCount: 0 },
+        };
+        localAwarenessStateRef.current = initialState;
+        await awareness.setLocalState(initialState);
+
+        setAwarenessReady(true);
       } catch (error) {
-        console.error('Failed to setup awareness for typing:', error);
+        console.error('Failed to setup awareness:', error);
       }
     }
 
@@ -438,32 +512,27 @@ export function Editor({ pageId }: EditorProps) {
 
     return () => {
       mounted = false;
+      setAwarenessReady(false);
       awarenessRef.current = null;
+      localAwarenessStateRef.current = {};
       if (typingTimeoutRef.current) {
         clearTimeout(typingTimeoutRef.current);
       }
     };
-  }, [pageId, synckit]);
+  }, [pageId, synckit, userIdentity]);
+
+  // Update cursor position (called from Cursors component)
+  const updateCursorPosition = useCallback((cursor: { x: number; y: number } | null) => {
+    updateAwarenessState({ cursor });
+  }, [updateAwarenessState]);
 
   // Notify typing via awareness (debounced)
   const notifyTyping = useCallback(() => {
-    const awareness = awarenessRef.current;
-    if (!awareness) return;
-
-    const userIdentity = getUserIdentity(clientIdRef.current);
-
-    // Update typing state
-    awareness.setLocalState({
-      user: {
-        name: userIdentity.name,
-        color: userIdentity.color,
-      },
+    updateAwarenessState({
       typing: {
         isTyping: true,
         lastTypedAt: Date.now(),
       },
-    }).catch((err: Error) => {
-      console.error('Failed to update typing state:', err);
     });
 
     // Clear typing state after 2.5s of inactivity
@@ -471,20 +540,14 @@ export function Editor({ pageId }: EditorProps) {
       clearTimeout(typingTimeoutRef.current);
     }
     typingTimeoutRef.current = setTimeout(() => {
-      if (awarenessRef.current) {
-        awarenessRef.current.setLocalState({
-          user: {
-            name: userIdentity.name,
-            color: userIdentity.color,
-          },
-          typing: {
-            isTyping: false,
-            lastTypedAt: Date.now(),
-          },
-        }).catch(() => {});
-      }
+      updateAwarenessState({
+        typing: {
+          isTyping: false,
+          lastTypedAt: Date.now(),
+        },
+      });
     }, 2500);
-  }, []);
+  }, [updateAwarenessState]);
 
   // Track which block is currently focused
   useEffect(() => {
@@ -520,6 +583,20 @@ export function Editor({ pageId }: EditorProps) {
       document.removeEventListener('focusout', handleFocusOut);
     };
   }, []);
+
+  // Track mouse position for cursor sharing (centralized)
+  useEffect(() => {
+    if (!awarenessReady) return;
+
+    const handleMouseMove = (e: MouseEvent) => {
+      updateCursorPosition({ x: e.clientX, y: e.clientY });
+    };
+
+    window.addEventListener('mousemove', handleMouseMove);
+    return () => {
+      window.removeEventListener('mousemove', handleMouseMove);
+    };
+  }, [awarenessReady, updateCursorPosition]);
 
   // Clear pending focus after the block has been rendered and focused
   useEffect(() => {
@@ -653,6 +730,9 @@ export function Editor({ pageId }: EditorProps) {
 
       // DEBUG: Log content changes
       console.log(`[CLIENT] Block ${blockId} content changed:`, content.substring(0, 50));
+
+      // Update live content map for milestone tracking
+      setLiveContent(prev => new Map(prev).set(blockId, content));
 
       // Notify typing for live indicators
       notifyTyping();
