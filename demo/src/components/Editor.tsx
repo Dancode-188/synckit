@@ -209,7 +209,8 @@ export function Editor({ pageId }: EditorProps) {
         }
 
         // Handle remote reactions (Fix 6)
-        if (presence.reaction && Date.now() - presence.reaction.timestamp < 2000) {
+        // Use 10s window to account for clock drift between machines
+        if (presence.reaction && Date.now() - presence.reaction.timestamp < 10000) {
           const reactionId = `${state.client_id}-${presence.reaction.timestamp}`;
           if (!seenReactionsRef.current.has(reactionId)) {
             seenReactionsRef.current.add(reactionId);
