@@ -23,6 +23,11 @@ interface TypingState {
   lastTypedAt: number;
 }
 
+interface ContributionState {
+  wordsAdded: number;
+  editsCount: number;
+}
+
 interface UserPresence {
   user?: {
     name: string;
@@ -30,6 +35,7 @@ interface UserPresence {
   };
   cursor?: CursorPosition | null;
   typing?: TypingState;
+  contributions?: ContributionState;
 }
 
 export function Cursors({ synckit, pageId }: CursorProps) {

@@ -25,8 +25,10 @@ import { getImageFromClipboard, compressImage } from '../lib/images';
 import { needsArchiving, archiveOldBlocks } from '../lib/playground';
 import { getUserIdentity } from '../lib/user';
 import { useMilestoneTracker } from '../hooks/useMilestoneTracker';
+import { useContributionTracker } from '../hooks/useContributionTracker';
 import { useToast } from '../contexts/ToastContext';
 import { Confetti } from './Confetti';
+import { ContributionStats, ContributorData } from './ContributionStats';
 
 interface EditorProps {
   pageId?: string;
@@ -58,6 +60,7 @@ export function Editor({ pageId }: EditorProps) {
   const [focusedBlockId, setFocusedBlockId] = useState<string | null>(null);
   const [pendingFocusBlockId, setPendingFocusBlockId] = useState<string | null>(null);
   const [showConfetti, setShowConfetti] = useState(false);
+  const [contributors, setContributors] = useState<ContributorData[]>([]);
   const editorRef = useRef<HTMLDivElement>(null);
   const { addToast } = useToast();
   const pageDataRef = useRef<PageDocument | null>(null);
@@ -113,6 +116,78 @@ export function Editor({ pageId }: EditorProps) {
     blocks,
     onMilestone: handleMilestone,
   });
+
+  // Contribution tracking
+  const userIdentity = getUserIdentity(clientIdRef.current);
+  const contributionUpdateTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const handleContributionChange = useCallback((stats: { wordsAdded: number; editsCount: number }) => {
+    // Debounce awareness updates to every 2 seconds
+    if (contributionUpdateTimeoutRef.current) {
+      clearTimeout(contributionUpdateTimeoutRef.current);
+    }
+    contributionUpdateTimeoutRef.current = setTimeout(() => {
+      const awareness = awarenessRef.current;
+      if (awareness && userIdentity) {
+        awareness.setLocalState({
+          user: {
+            name: userIdentity.name,
+            color: userIdentity.color,
+          },
+          contributions: stats,
+        }).catch(() => {});
+      }
+    }, 2000);
+  }, [userIdentity]);
+
+  const { stats: localContributionStats, trackContentChange } = useContributionTracker({
+    pageId,
+    onContributionChange: handleContributionChange,
+  });
+
+  // Collect contributions from other users via awareness
+  useEffect(() => {
+    const awareness = awarenessRef.current;
+    if (!awareness) return;
+
+    const updateContributors = () => {
+      const allStates = awareness.getStates();
+      const localClientId = awareness.getClientId();
+      const otherContributors: ContributorData[] = [];
+
+      allStates.forEach((state: any) => {
+        if (state.client_id !== localClientId && state.state?.contributions) {
+          const presence = state.state;
+          if (presence.user && presence.contributions) {
+            otherContributors.push({
+              clientId: state.client_id,
+              userName: presence.user.name,
+              userColor: presence.user.color,
+              wordsAdded: presence.contributions.wordsAdded || 0,
+              editsCount: presence.contributions.editsCount || 0,
+            });
+          }
+        }
+      });
+
+      setContributors(otherContributors);
+    };
+
+    // Subscribe to awareness changes
+    const unsubscribe = awareness.subscribe(() => {
+      updateContributors();
+    });
+
+    // Initial update
+    updateContributors();
+
+    return () => {
+      unsubscribe();
+      if (contributionUpdateTimeoutRef.current) {
+        clearTimeout(contributionUpdateTimeoutRef.current);
+      }
+    };
+  }, [pageId]);
 
   // Load page document when pageId changes
   useEffect(() => {
@@ -518,6 +593,9 @@ export function Editor({ pageId }: EditorProps) {
       // Notify typing for live indicators
       notifyTyping();
 
+      // Track contributions
+      trackContentChange(blockId, content);
+
       // Check for slash command
       if (content.startsWith('/')) {
         const query = content.slice(1); // Remove the '/'
@@ -553,7 +631,7 @@ export function Editor({ pageId }: EditorProps) {
         snapshotScheduler.recordOperation();
       }
     },
-    [pageDoc, snapshotScheduler, notifyTyping]
+    [pageDoc, snapshotScheduler, notifyTyping, trackContentChange]
   );
 
   // Delete a block
@@ -1284,6 +1362,14 @@ export function Editor({ pageId }: EditorProps) {
           onClose={() => setShowSnapshotDialog(false)}
         />
       )}
+
+      {/* Contribution Stats */}
+      <ContributionStats
+        contributors={contributors}
+        localStats={localContributionStats}
+        localUserName={userIdentity?.name || 'Anonymous'}
+        localUserColor={userIdentity?.color || '#888888'}
+      />
 
       {/* Milestone Celebration Confetti */}
       {showConfetti && (
