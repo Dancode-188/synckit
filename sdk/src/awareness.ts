@@ -84,6 +84,8 @@ export class Awareness {
   private cachedStates = new Map<string, AwarenessState>()
   private onChangeCallback?: (update: AwarenessUpdate) => void
   private crossTabSync?: any
+  // Buffer for updates that arrive before WASM is initialized
+  private pendingUpdates: AwarenessUpdate[] = []
 
   constructor(
     private readonly clientId: string,
@@ -119,6 +121,17 @@ export class Awareness {
     }
 
     this.wasmAwareness = new (wasm as any).WasmAwareness(this.clientId)
+
+    // Apply any updates that arrived before WASM was initialized
+    if (this.pendingUpdates.length > 0) {
+      const previousStates = new Map(this.cachedStates)
+      for (const update of this.pendingUpdates) {
+        this.wasmAwareness!.applyUpdate(JSON.stringify(update))
+        this.updateCache(update)
+      }
+      this.pendingUpdates = []
+      this.notifySubscribers(previousStates)
+    }
 
     // Register CrossTabSync handler for awareness updates from other tabs
     if (this.crossTabSync && this.documentId) {
@@ -201,8 +214,10 @@ export class Awareness {
    * @param update - Update received from server
    */
   applyUpdate(update: AwarenessUpdate): void {
+    // Buffer updates if WASM not ready yet (they'll be applied in init())
     if (!this.wasmAwareness) {
-      throw new Error('Awareness not initialized. Call init() first.')
+      this.pendingUpdates.push(update)
+      return
     }
 
     const previousStates = new Map(this.cachedStates)
