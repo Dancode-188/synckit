@@ -17,6 +17,8 @@ import {
   type AppRoute,
 } from './lib/rooms';
 import { ThemeProvider } from './contexts/ThemeContext';
+import { ToastProvider } from './contexts/ToastContext';
+import { ToastContainer } from './components/Toast';
 import { initializeSyncKit } from './lib/synckit';
 import { StorageType } from './lib/storage';
 import { createPage, PageDocument, createBlock, BLOCK_TYPES } from './lib/blocks';
@@ -427,9 +429,12 @@ function App() {
 
   return (
     <ThemeProvider>
-      <SyncKitProvider synckit={synckit} storageType={storageType}>
-        <AppContent />
-      </SyncKitProvider>
+      <ToastProvider>
+        <SyncKitProvider synckit={synckit} storageType={storageType}>
+          <AppContent />
+          <ToastContainer />
+        </SyncKitProvider>
+      </ToastProvider>
     </ThemeProvider>
   );
 }
