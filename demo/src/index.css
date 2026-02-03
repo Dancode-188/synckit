@@ -171,4 +171,19 @@
       opacity: 0;
     }
   }
+
+  /* Crown bounce animation */
+  .animate-crown-bounce {
+    display: inline-block;
+    animation: crownBounce 1s ease-in-out infinite;
+  }
+
+  @keyframes crownBounce {
+    0%, 100% {
+      transform: translateY(0);
+    }
+    50% {
+      transform: translateY(-3px);
+    }
+  }
 }
