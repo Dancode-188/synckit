@@ -8,7 +8,7 @@
 
 import { useState, useEffect, useRef } from 'react';
 import { useSyncKit } from '../contexts/SyncKitContext';
-import { WordCloud } from './WordCloud';
+import { WordCosmos } from './WordCosmos';
 import {
   parseWordsFromDocument,
   textToSlug,
@@ -225,22 +225,22 @@ export function WordWall({ isConnected }: WordWallProps) {
           {/* Title */}
           <div className="text-center mb-6">
             <h2 className="text-3xl font-bold text-gray-900 dark:text-gray-100 mb-2">
-              Word Wall
+              Word Cosmos
             </h2>
             <p className="text-gray-500 dark:text-gray-400">
-              Add a word, vote for your favorites — synced live across everyone
+              Add a word, vote for your favorites — watch them glow in the cosmos
             </p>
             {words.length > 0 && (
               <p className="text-xs text-gray-400 dark:text-gray-500 mt-1">
-                {words.length} word{words.length !== 1 ? 's' : ''} on the wall
+                {words.length} word{words.length !== 1 ? 's' : ''} floating in space
               </p>
             )}
           </div>
 
-          {/* Word Cloud */}
+          {/* Word Cosmos */}
           {initialized ? (
-            <div className="bg-white dark:bg-gray-800 rounded-2xl border border-gray-100 dark:border-gray-700 shadow-sm min-h-[300px] flex items-center justify-center">
-              <WordCloud
+            <div className="rounded-2xl overflow-hidden shadow-lg min-h-[350px]">
+              <WordCosmos
                 words={words}
                 votedWords={votedWords}
                 onVote={handleVote}

@@ -11,7 +11,10 @@ import {
   generateRoomId,
   navigateToRoom,
   navigateToWordWall,
-  navigateToPlayground,
+  getRecentRooms,
+  addRecentRoom,
+  removeRecentRoom,
+  type RecentRoom,
 } from '../lib/rooms';
 import { FEATURES } from '../lib/features';
 
@@ -34,6 +37,12 @@ export function Stage({ isConnected }: StageProps) {
   const [stats, setStats] = useState<RoomStats | null>(null);
   const [fetchError, setFetchError] = useState(false);
   const prevStatsRef = useRef<RoomStats | null>(null);
+  const [recentRooms, setRecentRooms] = useState<RecentRoom[]>([]);
+
+  // Load recent rooms on mount
+  useEffect(() => {
+    setRecentRooms(getRecentRooms());
+  }, []);
 
   // Poll /rooms endpoint
   useEffect(() => {
@@ -62,20 +71,39 @@ export function Stage({ isConnected }: StageProps) {
     };
   }, []);
 
+  // Join a Room - matchmaking for public rooms
   const handleAutoJoin = () => {
     if (stats) {
       const bestRoom = pickBestRoom(stats.rooms);
       if (bestRoom) {
+        addRecentRoom({ id: bestRoom, isPrivate: false });
         navigateToRoom(bestRoom);
         return;
       }
     }
-    // No rooms or all full — create a new one
-    navigateToRoom(generateRoomId());
+    // No rooms or all full — create a new public one
+    const roomId = generateRoomId();
+    addRecentRoom({ id: roomId, isPrivate: false });
+    navigateToRoom(roomId);
   };
 
+  // Create Private Room - not listed in Active Rooms
   const handleCreateRoom = () => {
-    navigateToRoom(generateRoomId());
+    const roomId = generateRoomId();
+    addRecentRoom({ id: roomId, isPrivate: true });
+    navigateToRoom(roomId);
+  };
+
+  // Remove a room from recent history
+  const handleRemoveRecentRoom = (roomId: string) => {
+    removeRecentRoom(roomId);
+    setRecentRooms(getRecentRooms());
+  };
+
+  // Join a recent room
+  const handleJoinRecentRoom = (room: RecentRoom) => {
+    addRecentRoom({ id: room.id, isPrivate: room.isPrivate }); // Updates visitedAt
+    navigateToRoom(room.id);
   };
 
   return (
@@ -167,15 +195,54 @@ export function Stage({ isConnected }: StageProps) {
               Word Wall
             </button>
           )}
-          <button
-            onClick={navigateToPlayground}
-            disabled={!isConnected}
-            className="w-full sm:w-auto px-5 py-3 text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200 transition-colors text-sm font-medium"
-          >
-            Open Playground
-          </button>
         </div>
       </div>
+
+      {/* Your Recent Rooms */}
+      {recentRooms.length > 0 && (
+        <div className="max-w-4xl mx-auto px-4 pb-8">
+          <h2 className="text-sm font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-4 text-center">
+            Your Recent Rooms
+          </h2>
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+            {recentRooms.slice(0, 6).map((room) => (
+              <div
+                key={room.id}
+                className="bg-white dark:bg-gray-800 rounded-xl p-3 shadow-sm border border-gray-100 dark:border-gray-700 flex items-center justify-between"
+              >
+                <div className="flex items-center gap-2 min-w-0">
+                  <span className="font-mono text-sm font-medium text-gray-700 dark:text-gray-300 bg-gray-100 dark:bg-gray-700 px-2 py-0.5 rounded truncate">
+                    {room.id}
+                  </span>
+                  {room.isPrivate && (
+                    <span className="text-xs font-medium text-purple-600 dark:text-purple-400 bg-purple-50 dark:bg-purple-900/30 px-2 py-0.5 rounded-full whitespace-nowrap">
+                      Private
+                    </span>
+                  )}
+                </div>
+                <div className="flex items-center gap-1 ml-2">
+                  <button
+                    onClick={() => handleJoinRecentRoom(room)}
+                    disabled={!isConnected}
+                    className="px-3 py-1 bg-primary-500 hover:bg-primary-600 disabled:bg-gray-400 text-white text-sm font-medium rounded-lg transition-colors"
+                  >
+                    Open
+                  </button>
+                  <button
+                    onClick={() => handleRemoveRecentRoom(room.id)}
+                    className="p-1 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 transition-colors"
+                    title="Remove from history"
+                  >
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                    </svg>
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* Room Cards */}
       {stats && stats.rooms.length > 0 && (
@@ -188,7 +255,10 @@ export function Stage({ isConnected }: StageProps) {
               <RoomCard
                 key={room.id}
                 room={room}
-                onJoin={() => navigateToRoom(room.id)}
+                onJoin={() => {
+                  addRecentRoom({ id: room.id, isPrivate: false });
+                  navigateToRoom(room.id);
+                }}
               />
             ))}
           </div>

@@ -95,3 +95,50 @@ export function roomToDocumentId(roomId: string): string {
 export function isInRoom(): boolean {
   return getRoomIdFromUrl() !== null;
 }
+
+// ============================================================================
+// Recent Rooms (localStorage)
+// ============================================================================
+
+const RECENT_ROOMS_KEY = 'localwrite-recent-rooms';
+const MAX_RECENT_ROOMS = 10;
+
+export interface RecentRoom {
+  id: string;
+  isPrivate: boolean;
+  visitedAt: number;
+}
+
+/**
+ * Get list of recently visited rooms from localStorage
+ */
+export function getRecentRooms(): RecentRoom[] {
+  if (typeof localStorage === 'undefined') return [];
+  const stored = localStorage.getItem(RECENT_ROOMS_KEY);
+  if (!stored) return [];
+  try {
+    return JSON.parse(stored);
+  } catch {
+    return [];
+  }
+}
+
+/**
+ * Add or update a room in the recent rooms list
+ */
+export function addRecentRoom(room: Omit<RecentRoom, 'visitedAt'>): void {
+  if (typeof localStorage === 'undefined') return;
+  const rooms = getRecentRooms().filter(r => r.id !== room.id);
+  rooms.unshift({ ...room, visitedAt: Date.now() });
+  if (rooms.length > MAX_RECENT_ROOMS) rooms.pop();
+  localStorage.setItem(RECENT_ROOMS_KEY, JSON.stringify(rooms));
+}
+
+/**
+ * Remove a room from the recent rooms list
+ */
+export function removeRecentRoom(roomId: string): void {
+  if (typeof localStorage === 'undefined') return;
+  const rooms = getRecentRooms().filter(r => r.id !== roomId);
+  localStorage.setItem(RECENT_ROOMS_KEY, JSON.stringify(rooms));
+}

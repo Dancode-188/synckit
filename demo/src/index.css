@@ -206,4 +206,168 @@
       opacity: 0;
     }
   }
+
+  /* ========================================================================
+   * Word Cosmos Styles
+   * ======================================================================== */
+
+  .cosmos-container {
+    position: relative;
+    width: 100%;
+    min-height: 350px;
+    height: 100%;
+    overflow: hidden;
+    background: radial-gradient(ellipse at center, #1e1b4b 0%, #0f0a1f 100%);
+    border-radius: 1rem;
+  }
+
+  .cosmos-nebula {
+    position: absolute;
+    inset: 0;
+    background:
+      radial-gradient(ellipse at 25% 35%, rgba(139, 92, 246, 0.2) 0%, transparent 50%),
+      radial-gradient(ellipse at 75% 65%, rgba(59, 130, 246, 0.15) 0%, transparent 50%),
+      radial-gradient(ellipse at 50% 80%, rgba(236, 72, 153, 0.1) 0%, transparent 40%);
+    animation: nebulaDrift 40s ease-in-out infinite;
+    pointer-events: none;
+  }
+
+  @keyframes nebulaDrift {
+    0%, 100% {
+      transform: translate(0, 0) scale(1);
+    }
+    25% {
+      transform: translate(15px, -10px) scale(1.02);
+    }
+    50% {
+      transform: translate(-10px, 5px) scale(1);
+    }
+    75% {
+      transform: translate(5px, 10px) scale(1.01);
+    }
+  }
+
+  .cosmos-stars-layer {
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+  }
+
+  .cosmos-star {
+    position: absolute;
+    background: white;
+    border-radius: 50%;
+    animation: starTwinkle 3s ease-in-out infinite;
+  }
+
+  .cosmos-star:nth-child(3n) {
+    animation-delay: -1s;
+  }
+
+  .cosmos-star:nth-child(5n) {
+    animation-delay: -2s;
+  }
+
+  @keyframes starTwinkle {
+    0%, 100% {
+      opacity: 0.3;
+    }
+    50% {
+      opacity: 0.8;
+    }
+  }
+
+  .cosmos-word {
+    position: absolute;
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    font-weight: 600;
+    cursor: pointer;
+    transition:
+      transform 0.15s ease-out,
+      text-shadow 0.3s ease,
+      filter 0.3s ease;
+    background: transparent;
+    border: none;
+    padding: 4px 8px;
+    border-radius: 4px;
+  }
+
+  .cosmos-word:hover {
+    transform: translate(-50%, -50%) scale(1.15) !important;
+    filter: brightness(1.3);
+  }
+
+  .cosmos-word:active {
+    transform: translate(-50%, -50%) scale(1.05) !important;
+  }
+
+  .cosmos-word-voted {
+    cursor: default;
+    opacity: 0.7 !important;
+  }
+
+  .cosmos-word-voted:hover {
+    transform: translate(-50%, -50%) scale(1.02) !important;
+    filter: none;
+  }
+
+  .cosmos-word-text {
+    white-space: nowrap;
+  }
+
+  .cosmos-word-check {
+    width: 0.7em;
+    height: 0.7em;
+    flex-shrink: 0;
+  }
+
+  /* Shooting star animation for new words */
+  .cosmos-word-new {
+    animation: cosmosShootingStar 1.5s ease-out;
+  }
+
+  @keyframes cosmosShootingStar {
+    0% {
+      opacity: 0;
+      transform: translate(calc(-50% - 200px), calc(-50% - 200px)) scale(0.3);
+      filter: blur(4px);
+    }
+    10% {
+      opacity: 1;
+      filter: blur(2px);
+    }
+    30% {
+      filter: blur(0);
+    }
+    100% {
+      opacity: 1;
+      transform: translate(-50%, -50%) scale(1);
+      filter: blur(0);
+    }
+  }
+
+  /* High-vote words get a subtle pulse */
+  .cosmos-word[style*="z-index: 30"]::before {
+    content: '';
+    position: absolute;
+    inset: -4px;
+    border-radius: 8px;
+    background: currentColor;
+    opacity: 0.1;
+    animation: cosmosWordPulse 2.5s ease-in-out infinite;
+    z-index: -1;
+  }
+
+  @keyframes cosmosWordPulse {
+    0%, 100% {
+      opacity: 0.05;
+      transform: scale(1);
+    }
+    50% {
+      opacity: 0.15;
+      transform: scale(1.1);
+    }
+  }
 }
