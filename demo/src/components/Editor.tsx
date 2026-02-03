@@ -29,6 +29,8 @@ import { useContributionTracker } from '../hooks/useContributionTracker';
 import { useToast } from '../contexts/ToastContext';
 import { Confetti } from './Confetti';
 import { ContributionStats, ContributorData } from './ContributionStats';
+import { ReactionPicker } from './ReactionPicker';
+import { FloatingReaction } from './FloatingReaction';
 
 interface EditorProps {
   pageId?: string;
@@ -61,6 +63,8 @@ export function Editor({ pageId }: EditorProps) {
   const [pendingFocusBlockId, setPendingFocusBlockId] = useState<string | null>(null);
   const [showConfetti, setShowConfetti] = useState(false);
   const [contributors, setContributors] = useState<ContributorData[]>([]);
+  const [reactionPicker, setReactionPicker] = useState<{ x: number; y: number } | null>(null);
+  const [floatingReactions, setFloatingReactions] = useState<Array<{ id: string; emoji: string; position: { x: number; y: number } }>>([]);
   const editorRef = useRef<HTMLDivElement>(null);
   const { addToast } = useToast();
   const pageDataRef = useRef<PageDocument | null>(null);
@@ -188,6 +192,55 @@ export function Editor({ pageId }: EditorProps) {
       }
     };
   }, [pageId]);
+
+  // Selection change detection for reactions
+  useEffect(() => {
+    const handleSelectionChange = () => {
+      const selection = window.getSelection();
+      if (!selection || selection.isCollapsed || !selection.toString().trim()) {
+        setReactionPicker(null);
+        return;
+      }
+
+      // Check if selection is within the editor
+      const range = selection.getRangeAt(0);
+      const editorElement = editorRef.current;
+      if (!editorElement || !editorElement.contains(range.commonAncestorContainer)) {
+        setReactionPicker(null);
+        return;
+      }
+
+      // Get selection position
+      const rect = range.getBoundingClientRect();
+      setReactionPicker({
+        x: rect.left + rect.width / 2,
+        y: rect.top,
+      });
+    };
+
+    document.addEventListener('selectionchange', handleSelectionChange);
+    return () => document.removeEventListener('selectionchange', handleSelectionChange);
+  }, []);
+
+  // Handle reaction selection
+  const handleReaction = useCallback((emoji: string) => {
+    if (!reactionPicker) return;
+
+    const id = crypto.randomUUID();
+    setFloatingReactions((prev) => [
+      ...prev,
+      { id, emoji, position: reactionPicker },
+    ]);
+    setReactionPicker(null);
+
+    // Clear selection
+    window.getSelection()?.removeAllRanges();
+  }, [reactionPicker]);
+
+  // Remove floating reaction when animation completes
+  const handleReactionComplete = useCallback((id: string) => {
+    setFloatingReactions((prev) => prev.filter((r) => r.id !== id));
+  }, []);
 
   // Load page document when pageId changes
   useEffect(() => {
@@ -1375,6 +1428,25 @@ export function Editor({ pageId }: EditorProps) {
       {showConfetti && (
         <Confetti onComplete={() => setShowConfetti(false)} />
       )}
+
+      {/* Reaction Picker */}
+      {reactionPicker && (
+        <ReactionPicker
+          position={reactionPicker}
+          onReact={handleReaction}
+          onClose={() => setReactionPicker(null)}
+        />
+      )}
+
+      {/* Floating Reactions */}
+      {floatingReactions.map((reaction) => (
+        <FloatingReaction
+          key={reaction.id}
+          emoji={reaction.emoji}
+          position={reaction.position}
+          onComplete={() => handleReactionComplete(reaction.id)}
+        />
+      ))}
     </div>
   );
 }
