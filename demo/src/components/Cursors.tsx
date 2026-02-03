@@ -18,12 +18,18 @@ interface CursorPosition {
   y: number;
 }
 
+interface TypingState {
+  isTyping: boolean;
+  lastTypedAt: number;
+}
+
 interface UserPresence {
   user?: {
     name: string;
     color: string;
   };
   cursor?: CursorPosition | null;
+  typing?: TypingState;
 }
 
 export function Cursors({ synckit, pageId }: CursorProps) {
@@ -31,6 +37,8 @@ export function Cursors({ synckit, pageId }: CursorProps) {
   const [others, setOthers] = useState<AwarenessState[]>([]);
   const awarenessRef = useRef<any>(null);
   const mouseListenerRef = useRef<((e: MouseEvent) => void) | null>(null);
+  // Tick state to force re-renders for stale typing indicator cleanup
+  const [, setTick] = useState(0);
 
   // Get client ID on mount
   useEffect(() => {
@@ -38,6 +46,21 @@ export function Cursors({ synckit, pageId }: CursorProps) {
     localStorage.setItem('localwrite:client-id', id);
     setClientId(id);
   }, []);
+
+  // Periodically re-render to clear stale typing indicators
+  useEffect(() => {
+    const interval = setInterval(() => {
+      // Only tick if there are others with typing state
+      const hasTyping = others.some((other) => {
+        const presence = other.state as UserPresence;
+        return presence?.typing?.isTyping;
+      });
+      if (hasTyping) {
+        setTick((t) => t + 1);
+      }
+    }, 500);
+    return () => clearInterval(interval);
+  }, [others]);
 
   // Use playground document if no page selected
   const documentId = pageId || 'playground';
@@ -193,6 +216,22 @@ export function Cursors({ synckit, pageId }: CursorProps) {
             >
               {user.name}
             </div>
+
+            {/* Typing indicator - show if typing within last 2.5s */}
+            {presence?.typing?.isTyping &&
+             Date.now() - presence.typing.lastTypedAt < 2500 && (
+              <div
+                className="absolute top-10 left-5 flex items-center gap-0.5 px-2 py-1 rounded-full"
+                style={{
+                  backgroundColor: user.color,
+                  boxShadow: '0 2px 4px rgba(0, 0, 0, 0.2)',
+                }}
+              >
+                <span className="typing-dot" style={{ animationDelay: '0ms' }}>.</span>
+                <span className="typing-dot" style={{ animationDelay: '150ms' }}>.</span>
+                <span className="typing-dot" style={{ animationDelay: '300ms' }}>.</span>
+              </div>
+            )}
           </div>
         );
       })}
