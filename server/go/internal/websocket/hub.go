@@ -204,6 +204,39 @@ func (h *Hub) handleMessage(conn *Connection, msg *protocol.Message) {
 			"state":     doc,
 		})
 
+	case protocol.TypeUnsubscribe:
+		docID, ok := msg.Payload["docId"].(string)
+		if !ok {
+			conn.SendError("Missing docId", "INVALID_REQUEST")
+			return
+		}
+
+		// Remove subscription from connection
+		delete(conn.Subscriptions, docID)
+
+		// Remove from document subscribers
+		h.mu.Lock()
+		if subs, exists := h.subscribers[docID]; exists {
+			delete(subs, conn.ID)
+			if len(subs) == 0 {
+				delete(h.subscribers, docID)
+			}
+		}
+		h.mu.Unlock()
+
+		// Clean up awareness for this connection on this document
+		h.awareMu.Lock()
+		if states, exists := h.awareness[docID]; exists {
+			delete(states, conn.ClientID)
+			if len(states) == 0 {
+				delete(h.awareness, docID)
+			}
+		}
+		h.awareMu.Unlock()
+
+		// Remove from awareness subscriptions
+		delete(conn.AwarenessSubscriptions, docID)
+
 	case protocol.TypeDelta:
 		docID, ok := msg.Payload["docId"].(string)
 		if !ok {
