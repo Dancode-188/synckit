@@ -9,6 +9,7 @@ from typing import Any
 from fastapi import WebSocket, WebSocketDisconnect
 
 from .protocol import decode_message, encode_message, MessageType
+from .auth import TokenPayload, DocumentPermissions, verify_token
 
 
 class Connection:
@@ -20,6 +21,7 @@ class Connection:
         self.user_id: str | None = None
         self.client_id: str | None = None
         self.authenticated = False
+        self.token_payload: TokenPayload | None = None  # Verified token payload for RBAC
         self.subscriptions: set[str] = set()  # Document IDs
         self.awareness_subscriptions: set[str] = set()  # Document IDs for awareness
         self.connected_at = time.time()
@@ -159,12 +161,46 @@ async def handle_message(connection: Connection, message: dict[str, Any]):
         )
 
     elif message_type == MessageType.AUTH:
-        # Simple auth - just mark as authenticated
-        # TODO: Implement proper JWT validation
-        connection.authenticated = True
-        connection.user_id = message.get("userId", "anonymous")
-        connection.client_id = message.get("clientId", str(uuid.uuid4()))
+        # JWT token validation
+        token = message.get("token")
 
+        if token:
+            # Validate JWT token
+            decoded = verify_token(token)
+            if not decoded:
+                # Invalid or expired token
+                await connection.send(
+                    MessageType.AUTH_ERROR,
+                    {
+                        "type": MessageType.AUTH_ERROR,
+                        "id": message_id,
+                        "timestamp": timestamp,
+                        "error": "Invalid or expired token",
+                        "code": "INVALID_TOKEN",
+                    },
+                )
+                return
+
+            # Token valid - set connection state
+            connection.authenticated = True
+            connection.user_id = decoded.user_id
+            connection.client_id = message.get("clientId", str(uuid.uuid4()))
+            connection.token_payload = decoded
+        else:
+            # Anonymous connection (no admin privileges)
+            connection.authenticated = True
+            connection.user_id = message.get("userId", "anonymous")
+            connection.client_id = message.get("clientId", str(uuid.uuid4()))
+            connection.token_payload = TokenPayload(
+                user_id=connection.user_id,
+                permissions=DocumentPermissions(
+                    can_read=["*"],
+                    can_write=["*"],
+                    is_admin=False,
+                ),
+            )
+
+        # Send success response with permissions
         await connection.send(
             MessageType.AUTH_SUCCESS,
             {
@@ -172,6 +208,11 @@ async def handle_message(connection: Connection, message: dict[str, Any]):
                 "id": message_id,
                 "timestamp": timestamp,
                 "userId": connection.user_id,
+                "permissions": {
+                    "canRead": connection.token_payload.permissions.can_read,
+                    "canWrite": connection.token_payload.permissions.can_write,
+                    "isAdmin": connection.token_payload.permissions.is_admin,
+                },
             },
         )
 

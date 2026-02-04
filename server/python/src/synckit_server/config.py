@@ -2,6 +2,8 @@
 Server configuration
 """
 
+import warnings
+from pydantic import field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -19,6 +21,19 @@ class Settings(BaseSettings):
     jwt_secret: str = "your-secret-key-change-in-production"
     jwt_algorithm: str = "HS256"
     jwt_expiration_hours: int = 24
+
+    @field_validator("jwt_secret")
+    @classmethod
+    def validate_jwt_secret(cls, v: str, info) -> str:
+        """Validate JWT secret meets security requirements"""
+        if len(v) < 32:
+            # Warn in development, but don't fail
+            warnings.warn(
+                "JWT secret should be at least 32 characters for security. "
+                "This is required in production.",
+                UserWarning,
+            )
+        return v
 
     # Database (optional)
     database_url: str | None = None
