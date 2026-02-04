@@ -11,9 +11,13 @@ import {
   generateRoomId,
   navigateToRoom,
   navigateToWordWall,
-  navigateToPlayground,
+  getRecentRooms,
+  addRecentRoom,
+  removeRecentRoom,
+  type RecentRoom,
 } from '../lib/rooms';
 import { FEATURES } from '../lib/features';
+import { useTheme } from '../contexts/ThemeContext';
 
 // Derive the HTTP base URL from the WebSocket server URL
 const SERVER_URL = 'https://synckit-localwrite.fly.dev';
@@ -31,9 +35,16 @@ interface StageProps {
 }
 
 export function Stage({ isConnected }: StageProps) {
+  const { theme, toggleTheme } = useTheme();
   const [stats, setStats] = useState<RoomStats | null>(null);
   const [fetchError, setFetchError] = useState(false);
   const prevStatsRef = useRef<RoomStats | null>(null);
+  const [recentRooms, setRecentRooms] = useState<RecentRoom[]>([]);
+
+  // Load recent rooms on mount
+  useEffect(() => {
+    setRecentRooms(getRecentRooms());
+  }, []);
 
   // Poll /rooms endpoint
   useEffect(() => {
@@ -62,24 +73,67 @@ export function Stage({ isConnected }: StageProps) {
     };
   }, []);
 
+  // Join a Room - matchmaking for public rooms
   const handleAutoJoin = () => {
     if (stats) {
       const bestRoom = pickBestRoom(stats.rooms);
       if (bestRoom) {
+        addRecentRoom({ id: bestRoom, isPrivate: false });
         navigateToRoom(bestRoom);
         return;
       }
     }
-    // No rooms or all full — create a new one
-    navigateToRoom(generateRoomId());
+    // No rooms or all full — create a new public one
+    const roomId = generateRoomId();
+    addRecentRoom({ id: roomId, isPrivate: false });
+    navigateToRoom(roomId);
   };
 
+  // Create Private Room - not listed in Active Rooms
   const handleCreateRoom = () => {
-    navigateToRoom(generateRoomId());
+    const roomId = generateRoomId();
+    addRecentRoom({ id: roomId, isPrivate: true });
+    navigateToRoom(roomId, true); // Pass isPrivate=true for URL prefix
+  };
+
+  // Remove a room from recent history
+  const handleRemoveRecentRoom = (roomId: string) => {
+    removeRecentRoom(roomId);
+    setRecentRooms(getRecentRooms());
+  };
+
+  // Join a recent room
+  const handleJoinRecentRoom = (room: RecentRoom) => {
+    addRecentRoom({ id: room.id, isPrivate: room.isPrivate }); // Updates visitedAt
+    navigateToRoom(room.id, room.isPrivate);
   };
 
   return (
     <div className="min-h-screen bg-gradient-to-b from-stone-50 to-stone-100 dark:from-gray-900 dark:to-gray-950">
+      {/* Mobile notice - hidden on sm screens and up */}
+      <div className="sm:hidden bg-amber-50 dark:bg-amber-900/30 text-amber-800 dark:text-amber-200 text-xs text-center py-2 px-4">
+        Best experienced on desktop
+      </div>
+
+      {/* Theme toggle */}
+      <div className="absolute top-4 right-4">
+        <button
+          onClick={toggleTheme}
+          className="p-2 rounded-lg bg-white/80 dark:bg-gray-800/80 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors shadow-sm"
+          aria-label="Toggle theme"
+        >
+          {theme === 'light' ? (
+            <svg className="w-5 h-5 text-gray-600 dark:text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z" />
+            </svg>
+          ) : (
+            <svg className="w-5 h-5 text-gray-600 dark:text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z" />
+            </svg>
+          )}
+        </button>
+      </div>
+
       {/* Hero */}
       <div className="max-w-4xl mx-auto px-4 pt-16 pb-8 text-center">
         <div className="flex items-center justify-center gap-3 mb-4">
@@ -94,7 +148,7 @@ export function Stage({ isConnected }: StageProps) {
           Real-time collaborative editing powered by CRDTs
         </p>
         <p className="text-sm text-gray-500 dark:text-gray-500">
-          Built with <span className="font-medium text-primary-600 dark:text-primary-400">SyncKit</span> — local-first sync that just works
+          Built with <a href="https://github.com/Dancode-188/synckit" target="_blank" rel="noopener noreferrer" className="font-medium text-primary-600 dark:text-primary-400 hover:underline">SyncKit</a> — local-first sync that just works
         </p>
 
         {/* Connection indicator */}
@@ -167,15 +221,54 @@ export function Stage({ isConnected }: StageProps) {
               Word Wall
             </button>
           )}
-          <button
-            onClick={navigateToPlayground}
-            disabled={!isConnected}
-            className="w-full sm:w-auto px-5 py-3 text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200 transition-colors text-sm font-medium"
-          >
-            Open Playground
-          </button>
         </div>
       </div>
+
+      {/* Your Recent Rooms */}
+      {recentRooms.length > 0 && (
+        <div className="max-w-4xl mx-auto px-4 pb-8">
+          <h2 className="text-sm font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-4 text-center">
+            Your Recent Rooms
+          </h2>
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+            {recentRooms.slice(0, 6).map((room) => (
+              <div
+                key={room.id}
+                className="bg-white dark:bg-gray-800 rounded-xl p-3 shadow-sm border border-gray-100 dark:border-gray-700 flex items-center justify-between"
+              >
+                <div className="flex items-center gap-2 min-w-0">
+                  <span className="font-mono text-sm font-medium text-gray-700 dark:text-gray-300 bg-gray-100 dark:bg-gray-700 px-2 py-0.5 rounded truncate">
+                    {room.id}
+                  </span>
+                  {room.isPrivate && (
+                    <span className="text-xs font-medium text-purple-600 dark:text-purple-400 bg-purple-50 dark:bg-purple-900/30 px-2 py-0.5 rounded-full whitespace-nowrap">
+                      Private
+                    </span>
+                  )}
+                </div>
+                <div className="flex items-center gap-1 ml-2">
+                  <button
+                    onClick={() => handleJoinRecentRoom(room)}
+                    disabled={!isConnected}
+                    className="px-3 py-1 bg-primary-500 hover:bg-primary-600 disabled:bg-gray-400 text-white text-sm font-medium rounded-lg transition-colors"
+                  >
+                    Open
+                  </button>
+                  <button
+                    onClick={() => handleRemoveRecentRoom(room.id)}
+                    className="p-1 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 transition-colors"
+                    title="Remove from history"
+                  >
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                    </svg>
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* Room Cards */}
       {stats && stats.rooms.length > 0 && (
@@ -188,7 +281,10 @@ export function Stage({ isConnected }: StageProps) {
               <RoomCard
                 key={room.id}
                 room={room}
-                onJoin={() => navigateToRoom(room.id)}
+                onJoin={() => {
+                  addRecentRoom({ id: room.id, isPrivate: false });
+                  navigateToRoom(room.id);
+                }}
               />
             ))}
           </div>
@@ -214,9 +310,12 @@ export function Stage({ isConnected }: StageProps) {
       )}
 
       {/* Footer */}
-      <div className="max-w-4xl mx-auto px-4 pb-8 text-center">
+      <div className="max-w-4xl mx-auto px-4 pb-8 text-center space-y-1">
         <p className="text-xs text-gray-400 dark:text-gray-600">
-          Powered by SyncKit &mdash; Fugue CRDT + WASM + WebSocket
+          Powered by <a href="https://github.com/Dancode-188/synckit" target="_blank" rel="noopener noreferrer" className="hover:underline">SyncKit</a> &mdash; Fugue CRDT + WASM + WebSocket
+        </p>
+        <p className="text-xs text-gray-400 dark:text-gray-600">
+          Demo application &mdash; not for sensitive data
         </p>
       </div>
     </div>

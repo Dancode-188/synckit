@@ -8,7 +8,7 @@
 
 import { useState, useEffect, useRef } from 'react';
 import { useSyncKit } from '../contexts/SyncKitContext';
-import { WordCloud } from './WordCloud';
+import { WordPulse } from './WordPulse';
 import {
   parseWordsFromDocument,
   textToSlug,
@@ -228,19 +228,19 @@ export function WordWall({ isConnected }: WordWallProps) {
               Word Wall
             </h2>
             <p className="text-gray-500 dark:text-gray-400">
-              Add a word, vote for your favorites — synced live across everyone
+              Add words, vote together — watch real-time sync in action
             </p>
             {words.length > 0 && (
               <p className="text-xs text-gray-400 dark:text-gray-500 mt-1">
-                {words.length} word{words.length !== 1 ? 's' : ''} on the wall
+                {words.length} word{words.length !== 1 ? 's' : ''}
               </p>
             )}
           </div>
 
-          {/* Word Cloud */}
+          {/* Word Wall */}
           {initialized ? (
-            <div className="bg-white dark:bg-gray-800 rounded-2xl border border-gray-100 dark:border-gray-700 shadow-sm min-h-[300px] flex items-center justify-center">
-              <WordCloud
+            <div className="rounded-2xl overflow-hidden shadow-lg min-h-[350px]">
+              <WordPulse
                 words={words}
                 votedWords={votedWords}
                 onVote={handleVote}

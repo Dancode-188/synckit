@@ -8,11 +8,12 @@ import { navigateToStage, type AppRoute } from '../lib/rooms';
 
 interface HeaderProps {
   isConnected?: boolean;
+  pendingOps?: number;
   route: AppRoute;
   roomId?: string | null;
 }
 
-export function Header({ isConnected = false, route, roomId }: HeaderProps) {
+export function Header({ isConnected = false, pendingOps = 0, route, roomId }: HeaderProps) {
   const { theme, toggleTheme } = useTheme();
 
   return (
@@ -69,11 +70,21 @@ export function Header({ isConnected = false, route, roomId }: HeaderProps) {
 
         {/* Right: Status + Theme */}
         <div className="flex items-center gap-3">
-          {/* Connection indicator */}
+          {/* Sync status indicator */}
           <div className="flex items-center gap-1.5 px-2.5 py-1 bg-gray-100 dark:bg-gray-700 rounded-full">
-            <div className={`w-2 h-2 rounded-full ${isConnected ? 'bg-green-500' : 'bg-gray-400'}`} />
+            <div className={`w-2 h-2 rounded-full ${
+              !isConnected
+                ? 'bg-gray-400'
+                : pendingOps > 0
+                  ? 'bg-amber-500 animate-pulse'
+                  : 'bg-green-500'
+            }`} />
             <span className="text-xs font-medium text-gray-700 dark:text-gray-300 hidden sm:inline">
-              {isConnected ? 'Connected' : 'Offline'}
+              {!isConnected
+                ? 'Offline'
+                : pendingOps > 0
+                  ? `Syncing (${pendingOps})`
+                  : 'Synced'}
             </span>
           </div>
 

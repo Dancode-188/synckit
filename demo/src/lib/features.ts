@@ -21,8 +21,9 @@ export const FEATURES = {
   /**
    * V1: Public playground mode
    * Single shared document where strangers collaborate
+   * DISABLED: Redundant with room system, poses scalability risk
    */
-  PUBLIC_PLAYGROUND: true,
+  PUBLIC_PLAYGROUND: false,
 
   /**
    * V1: Private rooms

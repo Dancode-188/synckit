@@ -14,6 +14,7 @@ import {
   getRouteFromUrl,
   getRoomIdFromUrl,
   roomToDocumentId,
+  isPrivateRoomUrl,
   type AppRoute,
 } from './lib/rooms';
 import { ThemeProvider } from './contexts/ThemeContext';
@@ -35,6 +36,7 @@ interface Page {
 function AppContent() {
   const { synckit } = useSyncKit();
   const [isConnected, setIsConnected] = useState(false);
+  const [pendingOps, setPendingOps] = useState(0);
   const [route, setRoute] = useState<AppRoute>(getRouteFromUrl());
   const [pages, setPages] = useState<Page[]>([]);
   const [currentPageId, setCurrentPageId] = useState<string>('playground');
@@ -43,15 +45,16 @@ function AppContent() {
   const [showExportDialog, setShowExportDialog] = useState(false);
   const [roomId, setRoomId] = useState<string | null>(null);
 
-  // Track connection status
+  // Track connection and sync status
   useEffect(() => {
-    const checkConnection = () => {
+    const checkStatus = () => {
       const status = synckit.getNetworkStatus();
       setIsConnected(status?.connectionState === 'connected');
+      setPendingOps(status?.queueSize ?? 0);
     };
 
-    checkConnection();
-    const interval = setInterval(checkConnection, 1000);
+    checkStatus();
+    const interval = setInterval(checkStatus, 500);
     return () => clearInterval(interval);
   }, [synckit]);
 
@@ -71,7 +74,8 @@ function AppContent() {
       setRoomId(id);
 
       if (route === 'room' && id) {
-        const roomDocId = roomToDocumentId(id);
+        const isPrivate = isPrivateRoomUrl();
+        const roomDocId = roomToDocumentId(id, isPrivate);
         setCurrentPageId(roomDocId);
 
         try {
@@ -295,7 +299,7 @@ function AppContent() {
   // Word Wall
   if (route === 'wordwall') {
     return (
-      <Layout isConnected={isConnected} route={route} roomId={null} sidebar={null}>
+      <Layout isConnected={isConnected} pendingOps={pendingOps} route={route} roomId={null} sidebar={null}>
         <WordWall isConnected={isConnected} />
       </Layout>
     );
@@ -310,6 +314,7 @@ function AppContent() {
 
       <Layout
         isConnected={isConnected}
+        pendingOps={pendingOps}
         route={route}
         roomId={roomId}
         sidebar={
