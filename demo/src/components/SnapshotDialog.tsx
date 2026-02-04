@@ -58,8 +58,9 @@ export function SnapshotDialog({ scheduler, document, onClose }: SnapshotDialogP
 
   const formatTimestamp = (key: string): string => {
     // Extract timestamp from key: "snapshot:docId:timestamp"
+    // Note: docId may contain colons (e.g., "room:abc123"), so use last segment
     const parts = key.split(':');
-    const timestamp = parseInt(parts[2] || '0', 10);
+    const timestamp = parseInt(parts[parts.length - 1] || '0', 10);
 
     if (!timestamp) return 'Unknown time';
 
