@@ -29,7 +29,7 @@ type Server struct {
 
 // New creates a new server
 func New(cfg *config.Config) *Server {
-	hub := websocket.NewHub()
+	hub := websocket.NewHub(cfg.JWTSecret)
 	go hub.Run()
 
 	return &Server{

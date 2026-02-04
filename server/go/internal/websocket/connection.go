@@ -4,6 +4,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/Dancode-188/synckit/server/go/internal/auth"
 	"github.com/Dancode-188/synckit/server/go/internal/protocol"
 	"github.com/gorilla/websocket"
 )
@@ -14,7 +15,8 @@ type Connection struct {
 	UserID        string
 	ClientID      string
 	Authenticated bool
-	Subscriptions map[string]bool // docId -> subscribed
+	TokenPayload  *auth.TokenPayload // Verified token payload for RBAC
+	Subscriptions map[string]bool    // docId -> subscribed
 	AwarenessSubscriptions map[string]bool
 	ConnectedAt   time.Time
 

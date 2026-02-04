@@ -6,11 +6,15 @@ import (
 	"sync"
 	"time"
 
+	"github.com/Dancode-188/synckit/server/go/internal/auth"
 	"github.com/Dancode-188/synckit/server/go/internal/protocol"
 )
 
 // Hub maintains active connections and broadcasts messages
 type Hub struct {
+	// Configuration
+	jwtSecret string
+
 	// Registered connections
 	connections map[string]*Connection
 	mu          sync.RWMutex
@@ -39,8 +43,9 @@ type MessageEvent struct {
 }
 
 // NewHub creates a new Hub
-func NewHub() *Hub {
+func NewHub(jwtSecret string) *Hub {
 	return &Hub{
+		jwtSecret:     jwtSecret,
 		connections:   make(map[string]*Connection),
 		subscribers:   make(map[string]map[string]bool),
 		documents:     make(map[string]map[string]interface{}),
@@ -106,24 +111,64 @@ func (h *Hub) handleMessage(conn *Connection, msg *protocol.Message) {
 		})
 
 	case protocol.TypeAuth:
-		// Simple auth - just mark as authenticated
-		conn.Authenticated = true
-		if userID, ok := msg.Payload["userId"].(string); ok {
-			conn.UserID = userID
+		// JWT token validation
+		token, _ := msg.Payload["token"].(string)
+
+		if token != "" {
+			// Validate JWT token
+			decoded, err := auth.VerifyToken(token, h.jwtSecret)
+			if err != nil {
+				// Invalid or expired token
+				conn.SendMessage(protocol.TypeAuthError, map[string]interface{}{
+					"type":      protocol.TypeAuthError,
+					"id":        msg.ID,
+					"timestamp": time.Now().UnixMilli(),
+					"error":     "Invalid or expired token",
+					"code":      "INVALID_TOKEN",
+				})
+				return
+			}
+
+			// Token valid - set connection state
+			conn.Authenticated = true
+			conn.UserID = decoded.UserID
+			conn.TokenPayload = decoded
 		} else {
-			conn.UserID = "anonymous"
+			// Anonymous connection (no admin privileges)
+			conn.Authenticated = true
+			if userID, ok := msg.Payload["userId"].(string); ok {
+				conn.UserID = userID
+			} else {
+				conn.UserID = "anonymous"
+			}
+			conn.TokenPayload = &auth.TokenPayload{
+				UserID: conn.UserID,
+				Permissions: auth.DocumentPermissions{
+					CanRead:  []string{"*"},
+					CanWrite: []string{"*"},
+					IsAdmin:  false,
+				},
+			}
 		}
+
+		// Set client ID
 		if clientID, ok := msg.Payload["clientId"].(string); ok {
 			conn.ClientID = clientID
 		} else {
 			conn.ClientID = generateID()
 		}
 
+		// Send success response with permissions
 		conn.SendMessage(protocol.TypeAuthSuccess, map[string]interface{}{
 			"type":      protocol.TypeAuthSuccess,
 			"id":        msg.ID,
 			"timestamp": time.Now().UnixMilli(),
 			"userId":    conn.UserID,
+			"permissions": map[string]interface{}{
+				"canRead":  conn.TokenPayload.Permissions.CanRead,
+				"canWrite": conn.TokenPayload.Permissions.CanWrite,
+				"isAdmin":  conn.TokenPayload.Permissions.IsAdmin,
+			},
 		})
 
 	case protocol.TypeSubscribe:
