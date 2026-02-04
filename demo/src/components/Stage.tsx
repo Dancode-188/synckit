@@ -122,7 +122,7 @@ export function Stage({ isConnected }: StageProps) {
           Real-time collaborative editing powered by CRDTs
         </p>
         <p className="text-sm text-gray-500 dark:text-gray-500">
-          Built with <span className="font-medium text-primary-600 dark:text-primary-400">SyncKit</span> — local-first sync that just works
+          Built with <a href="https://github.com/Dancode-188/synckit" target="_blank" rel="noopener noreferrer" className="font-medium text-primary-600 dark:text-primary-400 hover:underline">SyncKit</a> — local-first sync that just works
         </p>
 
         {/* Connection indicator */}
@@ -286,7 +286,7 @@ export function Stage({ isConnected }: StageProps) {
       {/* Footer */}
       <div className="max-w-4xl mx-auto px-4 pb-8 text-center">
         <p className="text-xs text-gray-400 dark:text-gray-600">
-          Powered by SyncKit &mdash; Fugue CRDT + WASM + WebSocket
+          Powered by <a href="https://github.com/Dancode-188/synckit" target="_blank" rel="noopener noreferrer" className="hover:underline">SyncKit</a> &mdash; Fugue CRDT + WASM + WebSocket
         </p>
       </div>
     </div>
