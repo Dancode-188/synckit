@@ -110,6 +110,11 @@ export function Stage({ isConnected }: StageProps) {
 
   return (
     <div className="min-h-screen bg-gradient-to-b from-stone-50 to-stone-100 dark:from-gray-900 dark:to-gray-950">
+      {/* Mobile notice - hidden on sm screens and up */}
+      <div className="sm:hidden bg-amber-50 dark:bg-amber-900/30 text-amber-800 dark:text-amber-200 text-xs text-center py-2 px-4">
+        Best experienced on desktop
+      </div>
+
       {/* Theme toggle */}
       <div className="absolute top-4 right-4">
         <button
