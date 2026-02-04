@@ -49,11 +49,78 @@ class Connection:
 class ConnectionManager:
     """Manages all active WebSocket connections"""
 
+    # Cleanup constants matching TypeScript
+    AWARENESS_TIMEOUT = 30.0  # 30 seconds
+    AWARENESS_CLEANUP_INTERVAL = 30.0  # 30 seconds
+
     def __init__(self):
         self.connections: dict[str, Connection] = {}
         self.document_subscribers: dict[str, set[str]] = {}  # docId -> set of connection_ids
         self.documents: dict[str, dict[str, Any]] = {}  # In-memory document storage
         self.awareness_states: dict[str, dict[str, Any]] = {}  # docId -> {clientId -> state}
+        self._cleanup_task: asyncio.Task | None = None
+
+    def start_cleanup_tasks(self):
+        """Start periodic cleanup tasks"""
+        if self._cleanup_task is None:
+            self._cleanup_task = asyncio.create_task(self._awareness_cleanup_loop())
+
+    async def _awareness_cleanup_loop(self):
+        """Clean up stale awareness clients every 30 seconds"""
+        while True:
+            await asyncio.sleep(self.AWARENESS_CLEANUP_INTERVAL)
+            await self._cleanup_stale_awareness()
+
+    async def _cleanup_stale_awareness(self):
+        """Remove awareness states older than AWARENESS_TIMEOUT"""
+        now = time.time()
+        removed_clients: list[tuple[str, str]] = []  # (doc_id, client_id)
+
+        for doc_id, states in list(self.awareness_states.items()):
+            for client_id, state in list(states.items()):
+                # Check _lastSeen timestamp if present
+                last_seen = state.get("_lastSeen", 0) if isinstance(state, dict) else 0
+                if now - last_seen > self.AWARENESS_TIMEOUT:
+                    del self.awareness_states[doc_id][client_id]
+                    removed_clients.append((doc_id, client_id))
+
+            # Clean up empty document entries
+            if not self.awareness_states[doc_id]:
+                del self.awareness_states[doc_id]
+
+        # Broadcast removal notifications
+        for doc_id, client_id in removed_clients:
+            await self._broadcast_awareness_removal(doc_id, client_id)
+
+    async def _broadcast_awareness_removal(self, doc_id: str, client_id: str):
+        """Broadcast client removal to awareness subscribers"""
+        if doc_id not in self.document_subscribers:
+            return
+
+        timestamp = int(time.time() * 1000)
+        for conn_id in self.document_subscribers[doc_id]:
+            conn = self.connections.get(conn_id)
+            if conn:
+                try:
+                    await conn.send(
+                        MessageType.AWARENESS_UPDATE,
+                        {
+                            "type": MessageType.AWARENESS_UPDATE,
+                            "id": str(uuid.uuid4()),
+                            "timestamp": timestamp,
+                            "docId": doc_id,
+                            "clientId": client_id,
+                            "state": None,  # null indicates removal
+                        },
+                    )
+                except Exception:
+                    pass
+
+    def dispose(self):
+        """Cleanup all resources"""
+        if self._cleanup_task:
+            self._cleanup_task.cancel()
+            self._cleanup_task = None
 
     async def connect(self, websocket: WebSocket) -> Connection:
         """Register a new connection"""
@@ -307,10 +374,17 @@ async def handle_message(connection: Connection, message: dict[str, Any]):
         if not doc_id or not connection.client_id:
             return
 
+        # Add timestamp for cleanup tracking
+        if isinstance(state, dict):
+            state["_lastSeen"] = time.time()
+
         # Store awareness state
         if doc_id not in manager.awareness_states:
             manager.awareness_states[doc_id] = {}
         manager.awareness_states[doc_id][connection.client_id] = state
+
+        # Track awareness subscription
+        connection.awareness_subscriptions.add(doc_id)
 
         # Broadcast to other subscribers
         if doc_id in manager.document_subscribers:
