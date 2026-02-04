@@ -284,9 +284,12 @@ export function Stage({ isConnected }: StageProps) {
       )}
 
       {/* Footer */}
-      <div className="max-w-4xl mx-auto px-4 pb-8 text-center">
+      <div className="max-w-4xl mx-auto px-4 pb-8 text-center space-y-1">
         <p className="text-xs text-gray-400 dark:text-gray-600">
           Powered by <a href="https://github.com/Dancode-188/synckit" target="_blank" rel="noopener noreferrer" className="hover:underline">SyncKit</a> &mdash; Fugue CRDT + WASM + WebSocket
+        </p>
+        <p className="text-xs text-gray-400 dark:text-gray-600">
+          Demo application &mdash; not for sensitive data
         </p>
       </div>
     </div>
