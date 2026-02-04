@@ -10,6 +10,12 @@ import (
 	"github.com/Dancode-188/synckit/server/go/internal/protocol"
 )
 
+// AwarenessTimeout is the time after which stale awareness entries are cleaned up
+const AwarenessTimeout = 30 * time.Second
+
+// AwarenessCleanupInterval is how often the cleanup runs
+const AwarenessCleanupInterval = 30 * time.Second
+
 // Hub maintains active connections and broadcasts messages
 type Hub struct {
 	// Configuration
@@ -26,9 +32,13 @@ type Hub struct {
 	documents map[string]map[string]interface{}
 	docsMu    sync.RWMutex
 
-	// Awareness states
+	// Awareness states with timestamps
 	awareness map[string]map[string]interface{} // docId -> clientId -> state
 	awareMu   sync.RWMutex
+
+	// Cleanup ticker for stale awareness
+	cleanupTicker *time.Ticker
+	stopChan      chan struct{}
 
 	// Channels
 	Register      chan *Connection
@@ -50,6 +60,7 @@ func NewHub(jwtSecret string) *Hub {
 		subscribers:   make(map[string]map[string]bool),
 		documents:     make(map[string]map[string]interface{}),
 		awareness:     make(map[string]map[string]interface{}),
+		stopChan:      make(chan struct{}),
 		Register:      make(chan *Connection),
 		Unregister:    make(chan *Connection),
 		HandleMessage: make(chan *MessageEvent, 256),
@@ -58,8 +69,18 @@ func NewHub(jwtSecret string) *Hub {
 
 // Run starts the hub
 func (h *Hub) Run() {
+	// Start periodic awareness cleanup
+	h.cleanupTicker = time.NewTicker(AwarenessCleanupInterval)
+	go h.runAwarenessCleanup()
+
 	for {
 		select {
+		case <-h.stopChan:
+			if h.cleanupTicker != nil {
+				h.cleanupTicker.Stop()
+			}
+			return
+
 		case conn := <-h.Register:
 			h.mu.Lock()
 			h.connections[conn.ID] = conn
@@ -97,6 +118,53 @@ func (h *Hub) Run() {
 
 		case event := <-h.HandleMessage:
 			h.handleMessage(event.Connection, event.Message)
+		}
+	}
+}
+
+// Stop gracefully stops the hub
+func (h *Hub) Stop() {
+	close(h.stopChan)
+}
+
+// runAwarenessCleanup periodically removes stale awareness entries
+func (h *Hub) runAwarenessCleanup() {
+	for {
+		select {
+		case <-h.stopChan:
+			return
+		case <-h.cleanupTicker.C:
+			h.cleanupStaleAwareness()
+		}
+	}
+}
+
+// cleanupStaleAwareness removes awareness entries older than AwarenessTimeout
+func (h *Hub) cleanupStaleAwareness() {
+	now := time.Now().UnixMilli()
+	timeoutMs := AwarenessTimeout.Milliseconds()
+
+	h.awareMu.Lock()
+	defer h.awareMu.Unlock()
+
+	for docID, clients := range h.awareness {
+		for clientID, stateRaw := range clients {
+			state, ok := stateRaw.(map[string]interface{})
+			if !ok {
+				continue
+			}
+
+			// Check lastUpdate timestamp
+			if lastUpdate, ok := state["lastUpdate"].(float64); ok {
+				if now-int64(lastUpdate) > timeoutMs {
+					delete(clients, clientID)
+				}
+			}
+		}
+
+		// Remove empty document entries
+		if len(clients) == 0 {
+			delete(h.awareness, docID)
 		}
 	}
 }
@@ -316,6 +384,9 @@ func (h *Hub) handleMessage(conn *Connection, msg *protocol.Message) {
 		if !ok {
 			return
 		}
+
+		// Add lastUpdate timestamp for cleanup tracking
+		state["lastUpdate"] = float64(time.Now().UnixMilli())
 
 		// Store awareness state
 		h.awareMu.Lock()
