@@ -8,7 +8,7 @@
 
 import { useState, useEffect, useRef } from 'react';
 import { useSyncKit } from '../contexts/SyncKitContext';
-import { WordCosmos } from './WordCosmos';
+import { WordPulse } from './WordPulse';
 import {
   parseWordsFromDocument,
   textToSlug,
@@ -240,7 +240,7 @@ export function WordWall({ isConnected }: WordWallProps) {
           {/* Word Cosmos */}
           {initialized ? (
             <div className="rounded-2xl overflow-hidden shadow-lg min-h-[350px]">
-              <WordCosmos
+              <WordPulse
                 words={words}
                 votedWords={votedWords}
                 onVote={handleVote}
