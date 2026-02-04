@@ -195,6 +195,18 @@ export function Stage({ isConnected }: StageProps) {
         </div>
       </div>
 
+      {/* Hint for new visitors */}
+      <div className="max-w-4xl mx-auto px-4 pb-4">
+        <p className="text-center text-sm text-gray-500 dark:text-gray-400">
+          <span className="inline-flex items-center gap-1.5">
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+            </svg>
+            Open a room in two browser windows to see real-time sync
+          </span>
+        </p>
+      </div>
+
       {/* Action Buttons */}
       <div className="max-w-4xl mx-auto px-4 pb-10">
         <div className="flex flex-col sm:flex-row items-center justify-center gap-3">
