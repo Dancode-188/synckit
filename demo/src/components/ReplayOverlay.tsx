@@ -67,8 +67,8 @@ export function ReplayOverlay({ session, blocks, onClose }: ReplayOverlayProps) 
         )}
       </div>
 
-      {/* Document view */}
-      <div className="flex-1 overflow-y-auto bg-white dark:bg-gray-900 p-8">
+      {/* Document view - pb-36 accounts for fixed controls height */}
+      <div className="flex-1 overflow-y-auto bg-white dark:bg-gray-900 p-8 pb-36">
         <div className="max-w-3xl mx-auto">
           {blockOrder.map((blockId) => {
             const content = currentState[blockId] || '';
