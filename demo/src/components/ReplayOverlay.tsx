@@ -71,9 +71,11 @@ export function ReplayOverlay({ session, blocks, onClose }: ReplayOverlayProps) 
       <div className="flex-1 overflow-y-auto bg-white dark:bg-gray-900 p-8 pb-36">
         <div className="max-w-3xl mx-auto">
           {blockOrder.map((blockId) => {
-            const content = currentState[blockId] || '';
-            const isActive = activeUser?.blockId === blockId;
             const block = blocks.find((b) => b.id === blockId);
+            // Use replay state if available, otherwise fall back to current block content
+            // This ensures remote users' edits are visible even if not animated
+            const content = currentState[blockId] ?? block?.content ?? '';
+            const isActive = activeUser?.blockId === blockId;
 
             if (!block) return null;
 
