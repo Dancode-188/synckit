@@ -164,20 +164,6 @@ try
     // Map health check endpoints (matches TypeScript server + Kubernetes probes)
     app.MapSyncKitHealthEndpoints();
 
-    // Test cleanup endpoint (development mode only)
-    // Used by integration tests for test isolation between test runs
-    if (app.Environment.IsDevelopment())
-    {
-        app.MapPost("/_test/clear", async (IStorageAdapter storage) =>
-        {
-            await storage.ClearAllAsync();
-            return Results.Ok(new { cleared = true, timestamp = DateTime.UtcNow });
-        })
-        .WithName("TestClear")
-        .WithDescription("Clear all storage (test mode only)")
-        .WithTags("Test");
-    }
-
     // Enable WebSocket support with SyncKit middleware
     app.UseSyncKitWebSockets();
 
