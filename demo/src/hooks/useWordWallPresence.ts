@@ -148,20 +148,23 @@ export function useWordWallPresence({
           // Convert to RemoteUser array (excluding self)
           const users: RemoteUser[] = [];
 
-          states.forEach((state: any, clientId: string) => {
+          states.forEach((awarenessState: any, clientId: string) => {
             if (clientId === localClientId) return;
-            if (!state || !state.user) return;
+
+            // User data is nested inside awarenessState.state
+            const userState = awarenessState?.state as WordWallPresenceState | undefined;
+            if (!userState || !userState.user) return;
 
             // Filter out stale users (no activity in 30 seconds)
-            const lastActivity = state.lastActivity || 0;
+            const lastActivity = userState.lastActivity || 0;
             if (Date.now() - lastActivity > 30000) return;
 
             users.push({
               clientId,
-              name: state.user.name || 'Anonymous',
-              color: state.user.color || '#888888',
-              cursor: state.cursor || null,
-              hoveredWord: state.hoveredWord || null,
+              name: userState.user.name || 'Anonymous',
+              color: userState.user.color || '#888888',
+              cursor: userState.cursor || null,
+              hoveredWord: userState.hoveredWord || null,
               lastActivity,
             });
           });

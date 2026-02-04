@@ -225,19 +225,19 @@ export function WordWall({ isConnected }: WordWallProps) {
           {/* Title */}
           <div className="text-center mb-6">
             <h2 className="text-3xl font-bold text-gray-900 dark:text-gray-100 mb-2">
-              Word Cosmos
+              Word Wall
             </h2>
             <p className="text-gray-500 dark:text-gray-400">
-              Add a word, vote for your favorites — watch them glow in the cosmos
+              Add words, vote together — watch real-time sync in action
             </p>
             {words.length > 0 && (
               <p className="text-xs text-gray-400 dark:text-gray-500 mt-1">
-                {words.length} word{words.length !== 1 ? 's' : ''} floating in space
+                {words.length} word{words.length !== 1 ? 's' : ''}
               </p>
             )}
           </div>
 
-          {/* Word Cosmos */}
+          {/* Word Wall */}
           {initialized ? (
             <div className="rounded-2xl overflow-hidden shadow-lg min-h-[350px]">
               <WordPulse

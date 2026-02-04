@@ -154,10 +154,10 @@ export function WordPulse({ words, votedWords, onVote }: WordPulseProps) {
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
 
-      // Glow for high votes
-      if (node.votes > 3) {
-        ctx.shadowColor = 'rgba(99, 102, 241, 0.4)';
-        ctx.shadowBlur = Math.min(node.votes * 1.5, 20);
+      // Glow for high votes (visible at 3+ votes)
+      if (node.votes >= 3) {
+        ctx.shadowColor = 'rgba(99, 102, 241, 0.8)';
+        ctx.shadowBlur = Math.min(node.votes * 3, 30);
       }
 
       // Color based on state
