@@ -3,11 +3,13 @@ package websocket
 import (
 	"crypto/rand"
 	"encoding/hex"
+	"os"
 	"sync"
 	"time"
 
 	"github.com/Dancode-188/synckit/server/go/internal/auth"
 	"github.com/Dancode-188/synckit/server/go/internal/protocol"
+	"github.com/Dancode-188/synckit/server/go/internal/security"
 )
 
 // AwarenessTimeout is the time after which stale awareness entries are cleaned up
@@ -202,7 +204,18 @@ func (h *Hub) handleMessage(conn *Connection, msg *protocol.Message) {
 			conn.UserID = decoded.UserID
 			conn.TokenPayload = decoded
 		} else {
-			// Anonymous connection (no admin privileges)
+			// Anonymous connection - only allowed when auth is disabled
+			authRequired := os.Getenv("SYNCKIT_AUTH_REQUIRED") != "false"
+			if authRequired {
+				conn.SendMessage(protocol.TypeAuthError, map[string]interface{}{
+					"type":      protocol.TypeAuthError,
+					"id":        msg.ID,
+					"timestamp": time.Now().UnixMilli(),
+					"error":     "Authentication required",
+					"code":      "AUTH_REQUIRED",
+				})
+				return
+			}
 			conn.Authenticated = true
 			if userID, ok := msg.Payload["userId"].(string); ok {
 				conn.UserID = userID
@@ -243,6 +256,30 @@ func (h *Hub) handleMessage(conn *Connection, msg *protocol.Message) {
 		docID, ok := msg.Payload["docId"].(string)
 		if !ok {
 			conn.SendError("Missing docId", "INVALID_REQUEST")
+			return
+		}
+
+		// Check authentication
+		if !conn.Authenticated || conn.TokenPayload == nil {
+			conn.SendError("Not authenticated", "NOT_AUTHENTICATED")
+			return
+		}
+
+		// Validate document ID
+		if valid, errMsg := security.ValidateDocumentID(docID); !valid {
+			conn.SendError(errMsg, "INVALID_DOCUMENT_ID")
+			return
+		}
+
+		// Check document access
+		if !security.CanAccessDocument(docID) {
+			conn.SendError("Access denied to this document", "ACCESS_DENIED")
+			return
+		}
+
+		// Check read permission
+		if !auth.CanReadDocument(conn.TokenPayload, docID) {
+			conn.SendError("Permission denied", "PERMISSION_DENIED")
 			return
 		}
 
@@ -312,6 +349,18 @@ func (h *Hub) handleMessage(conn *Connection, msg *protocol.Message) {
 			return
 		}
 
+		// Check authentication
+		if !conn.Authenticated || conn.TokenPayload == nil {
+			conn.SendError("Not authenticated", "NOT_AUTHENTICATED")
+			return
+		}
+
+		// Check write permission
+		if !auth.CanWriteDocument(conn.TokenPayload, docID) {
+			conn.SendError("Permission denied", "PERMISSION_DENIED")
+			return
+		}
+
 		// Apply delta
 		h.docsMu.Lock()
 		if h.documents[docID] == nil {
@@ -339,6 +388,18 @@ func (h *Hub) handleMessage(conn *Connection, msg *protocol.Message) {
 		docID, ok := msg.Payload["docId"].(string)
 		if !ok {
 			conn.SendError("Missing docId", "INVALID_REQUEST")
+			return
+		}
+
+		// Check authentication
+		if !conn.Authenticated || conn.TokenPayload == nil {
+			conn.SendError("Not authenticated", "NOT_AUTHENTICATED")
+			return
+		}
+
+		// Check write permission
+		if !auth.CanWriteDocument(conn.TokenPayload, docID) {
+			conn.SendError("Permission denied", "PERMISSION_DENIED")
 			return
 		}
 

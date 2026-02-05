@@ -24,29 +24,23 @@ SECURITY_LIMITS = {
     "PLAYGROUND_DOC_ID": "playground",
 }
 
-# Valid message types
+# Valid client-sendable message types (server-only types excluded for security)
 VALID_MESSAGE_TYPES = {
     "connect",
     "auth",
-    "auth_success",
-    "auth_error",
     "subscribe",
     "unsubscribe",
     "sync_request",
-    "sync_response",
     "sync_step1",
-    "sync_step2",
     "delta",
     "delta_batch",
     "ack",
     "awareness_update",
     "awareness_subscribe",
-    "awareness_state",
     "snapshot_request",
     "snapshot_upload",
     "ping",
     "pong",
-    "error",
 }
 
 # Document ID validation pattern

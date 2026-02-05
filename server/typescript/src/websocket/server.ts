@@ -316,14 +316,20 @@ export class SyncWebSocketServer {
         connection.sendError('API key authentication not yet implemented');
         return;
       } else {
-        // Anonymous connection (SECURITY: No admin privileges!)
+        // Anonymous connection - only allowed when auth is disabled
+        const authRequired = process.env.SYNCKIT_AUTH_REQUIRED !== 'false';
+        if (authRequired) {
+          connection.sendError('Authentication required', { code: 'AUTH_REQUIRED' });
+          connection.close(1008, 'Authentication required');
+          return;
+        }
         userId = 'anonymous';
         tokenPayload = {
           userId: 'anonymous',
           permissions: {
             canRead: ['*'],
             canWrite: ['*'],
-            isAdmin: false, // NO ADMIN (SECURITY FIX)
+            isAdmin: false,
           },
         };
       }

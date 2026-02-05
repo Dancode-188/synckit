@@ -31,29 +31,23 @@ var SecurityLimits = struct {
 	PlaygroundDocID:      "playground",
 }
 
-// ValidMessageTypes lists all valid WebSocket message types
+// ValidMessageTypes lists valid client-sendable message types (server-only types excluded)
 var ValidMessageTypes = map[string]bool{
-	"connect":            true,
-	"auth":               true,
-	"auth_success":       true,
-	"auth_error":         true,
-	"subscribe":          true,
-	"unsubscribe":        true,
-	"sync_request":       true,
-	"sync_response":      true,
-	"sync_step1":         true,
-	"sync_step2":         true,
-	"delta":              true,
-	"delta_batch":        true,
-	"ack":                true,
-	"awareness_update":   true,
+	"connect":             true,
+	"auth":                true,
+	"subscribe":           true,
+	"unsubscribe":         true,
+	"sync_request":        true,
+	"sync_step1":          true,
+	"delta":               true,
+	"delta_batch":         true,
+	"ack":                 true,
+	"awareness_update":    true,
 	"awareness_subscribe": true,
-	"awareness_state":    true,
-	"snapshot_request":   true,
-	"snapshot_upload":    true,
-	"ping":               true,
-	"pong":               true,
-	"error":              true,
+	"snapshot_request":    true,
+	"snapshot_upload":     true,
+	"ping":                true,
+	"pong":                true,
 }
 
 // DocumentIDPattern validates document IDs

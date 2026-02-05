@@ -9,7 +9,8 @@ from typing import Any
 from fastapi import WebSocket, WebSocketDisconnect
 
 from .protocol import decode_message, encode_message, MessageType
-from .auth import TokenPayload, DocumentPermissions, verify_token
+from .auth import TokenPayload, DocumentPermissions, verify_token, can_read_document, can_write_document
+from .security.middleware import validate_document_id, validate_message, can_access_document, security_manager
 
 
 class Connection:
@@ -204,9 +205,11 @@ async def websocket_endpoint(websocket: WebSocket):
                 await connection.send_error(f"Invalid message: {e}")
 
     except WebSocketDisconnect:
+        security_manager.connection_rate_limiter.remove_connection(connection.connection_id)
         manager.disconnect(connection.connection_id)
     except Exception as e:
         print(f"WebSocket error: {e}")
+        security_manager.connection_rate_limiter.remove_connection(connection.connection_id)
         manager.disconnect(connection.connection_id)
 
 
@@ -215,6 +218,18 @@ async def handle_message(connection: Connection, message: dict[str, Any]):
     message_type = message.get("type")
     message_id = message.get("id", str(uuid.uuid4()))
     timestamp = int(time.time() * 1000)
+
+    # Per-connection rate limiting
+    if not security_manager.connection_rate_limiter.can_send_message(connection.connection_id):
+        await connection.send_error("Too many messages. Please slow down.", "RATE_LIMIT_EXCEEDED")
+        return
+    security_manager.connection_rate_limiter.record_message(connection.connection_id)
+
+    # Validate message format
+    valid, error = validate_message(message)
+    if not valid:
+        await connection.send_error(error or "Invalid message format", "INVALID_MESSAGE")
+        return
 
     if message_type == MessageType.PING:
         # Respond with pong
@@ -254,7 +269,21 @@ async def handle_message(connection: Connection, message: dict[str, Any]):
             connection.client_id = message.get("clientId", str(uuid.uuid4()))
             connection.token_payload = decoded
         else:
-            # Anonymous connection (no admin privileges)
+            # Anonymous connection - only allowed when auth is disabled
+            import os
+            auth_required = os.environ.get("SYNCKIT_AUTH_REQUIRED", "true") != "false"
+            if auth_required:
+                await connection.send(
+                    MessageType.AUTH_ERROR,
+                    {
+                        "type": MessageType.AUTH_ERROR,
+                        "id": message_id,
+                        "timestamp": timestamp,
+                        "error": "Authentication required",
+                        "code": "AUTH_REQUIRED",
+                    },
+                )
+                return
             connection.authenticated = True
             connection.user_id = message.get("userId", "anonymous")
             connection.client_id = message.get("clientId", str(uuid.uuid4()))
@@ -290,6 +319,27 @@ async def handle_message(connection: Connection, message: dict[str, Any]):
             await connection.send_error("Missing docId", "INVALID_REQUEST")
             return
 
+        # Check authentication
+        if not connection.authenticated or not connection.token_payload:
+            await connection.send_error("Not authenticated", "NOT_AUTHENTICATED")
+            return
+
+        # Validate document ID
+        valid, error = validate_document_id(doc_id)
+        if not valid:
+            await connection.send_error(error or "Invalid document ID", "INVALID_DOCUMENT_ID")
+            return
+
+        # Check document access
+        if not can_access_document(doc_id):
+            await connection.send_error("Access denied to this document", "ACCESS_DENIED")
+            return
+
+        # Check read permission
+        if not can_read_document(connection.token_payload, doc_id):
+            await connection.send_error("Permission denied", "PERMISSION_DENIED")
+            return
+
         await manager.subscribe(connection, doc_id)
 
         # Send current document state if it exists
@@ -310,6 +360,16 @@ async def handle_message(connection: Connection, message: dict[str, Any]):
         doc_id = message.get("docId")
         if not doc_id:
             await connection.send_error("Missing docId", "INVALID_REQUEST")
+            return
+
+        # Check authentication
+        if not connection.authenticated or not connection.token_payload:
+            await connection.send_error("Not authenticated", "NOT_AUTHENTICATED")
+            return
+
+        # Check write permission
+        if not can_write_document(connection.token_payload, doc_id):
+            await connection.send_error("Permission denied", "PERMISSION_DENIED")
             return
 
         # Apply delta to document
@@ -341,6 +401,16 @@ async def handle_message(connection: Connection, message: dict[str, Any]):
 
         if not doc_id:
             await connection.send_error("Missing docId", "INVALID_REQUEST")
+            return
+
+        # Check authentication
+        if not connection.authenticated or not connection.token_payload:
+            await connection.send_error("Not authenticated", "NOT_AUTHENTICATED")
+            return
+
+        # Check write permission
+        if not can_write_document(connection.token_payload, doc_id):
+            await connection.send_error("Permission denied", "PERMISSION_DENIED")
             return
 
         # Apply each delta

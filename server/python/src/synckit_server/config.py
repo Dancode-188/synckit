@@ -2,6 +2,7 @@
 Server configuration
 """
 
+import os
 import warnings
 from pydantic import field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -26,11 +27,19 @@ class Settings(BaseSettings):
     @classmethod
     def validate_jwt_secret(cls, v: str, info) -> str:
         """Validate JWT secret meets security requirements"""
+        env = (info.data or {}).get("environment", os.environ.get("ENVIRONMENT", "development"))
+        if v == "your-secret-key-change-in-production" and env == "production":
+            raise ValueError(
+                "JWT_SECRET environment variable must be set in production. "
+                "Do not use the default development secret."
+            )
         if len(v) < 32:
-            # Warn in development, but don't fail
+            if env == "production":
+                raise ValueError(
+                    "JWT secret must be at least 32 characters in production."
+                )
             warnings.warn(
-                "JWT secret should be at least 32 characters for security. "
-                "This is required in production.",
+                "JWT secret should be at least 32 characters for security.",
                 UserWarning,
             )
         return v

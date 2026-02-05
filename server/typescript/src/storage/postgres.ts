@@ -630,14 +630,16 @@ export class PostgresAdapter implements StorageAdapter {
     const maxSnapshotsPerDoc = options?.maxSnapshotsPerDocument || 10;
 
     try {
-      // Clean sessions
+      // Clean sessions (parameterized to prevent SQL injection)
       const sessionsResult = await this.pool.query(
-        `DELETE FROM sessions WHERE last_seen < NOW() - INTERVAL '${sessionsHours} hours'`
+        `DELETE FROM sessions WHERE last_seen < NOW() - make_interval(hours => $1)`,
+        [sessionsHours]
       );
 
-      // Clean deltas
+      // Clean deltas (parameterized to prevent SQL injection)
       const deltasResult = await this.pool.query(
-        `DELETE FROM deltas WHERE timestamp < NOW() - INTERVAL '${deltasDays} days'`
+        `DELETE FROM deltas WHERE timestamp < NOW() - make_interval(days => $1)`,
+        [deltasDays]
       );
 
       // Clean old snapshots (keep only maxSnapshotsPerDocument recent snapshots per document)
@@ -648,9 +650,9 @@ export class PostgresAdapter implements StorageAdapter {
             SELECT id, ROW_NUMBER() OVER (PARTITION BY document_id ORDER BY created_at DESC) as rn
             FROM snapshots
           ) ranked
-          WHERE rn > $1 OR created_at < NOW() - INTERVAL '${snapshotsDays} days'
+          WHERE rn > $1 OR created_at < NOW() - make_interval(days => $2)
         )
-      `, [maxSnapshotsPerDoc]);
+      `, [maxSnapshotsPerDoc, snapshotsDays]);
 
       return {
         sessionsDeleted: sessionsResult.rowCount || 0,

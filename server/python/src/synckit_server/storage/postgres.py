@@ -691,29 +691,32 @@ class PostgresAdapter(StorageAdapter):
 
         try:
             async with self.pool.acquire() as conn:
-                # Clean sessions
+                # Clean sessions (parameterized to prevent SQL injection)
                 sessions_result = await conn.execute(
-                    f"DELETE FROM sessions WHERE last_seen < NOW() - INTERVAL '{sessions_hours} hours'"
+                    "DELETE FROM sessions WHERE last_seen < NOW() - make_interval(hours => $1)",
+                    sessions_hours,
                 )
                 sessions_deleted = int(sessions_result.split()[-1]) if sessions_result else 0
 
-                # Clean deltas
+                # Clean deltas (parameterized to prevent SQL injection)
                 deltas_result = await conn.execute(
-                    f"DELETE FROM deltas WHERE timestamp < NOW() - INTERVAL '{deltas_days} days'"
+                    "DELETE FROM deltas WHERE timestamp < NOW() - make_interval(days => $1)",
+                    deltas_days,
                 )
                 deltas_deleted = int(deltas_result.split()[-1]) if deltas_result else 0
 
                 # Clean old snapshots (keep only max_snapshots recent snapshots per document)
                 snapshots_result = await conn.execute(
-                    f"""DELETE FROM snapshots
+                    """DELETE FROM snapshots
                         WHERE id IN (
                           SELECT id FROM (
                             SELECT id, ROW_NUMBER() OVER (PARTITION BY document_id ORDER BY created_at DESC) as rn
                             FROM snapshots
                           ) ranked
-                          WHERE rn > $1 OR created_at < NOW() - INTERVAL '{snapshots_days} days'
+                          WHERE rn > $1 OR created_at < NOW() - make_interval(days => $2)
                         )""",
                     max_snapshots,
+                    snapshots_days,
                 )
                 snapshots_deleted = int(snapshots_result.split()[-1]) if snapshots_result else 0
 

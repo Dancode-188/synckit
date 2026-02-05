@@ -353,13 +353,14 @@ export function validateMessage(message: any): { valid: boolean; error?: string 
     };
   }
 
-  // Validate message type
+  // Validate message type (client-sendable types only; server-only types excluded)
   const validTypes = [
-    'connect', // Initial connection message
+    'connect',
     'auth',
     'subscribe',
     'unsubscribe',
     'sync_request',
+    'sync_step1',
     'delta',
     'delta_batch',
     'ack',
@@ -367,8 +368,8 @@ export function validateMessage(message: any): { valid: boolean; error?: string 
     'awareness_update',
     'snapshot_request',
     'snapshot_upload',
-    'ping', // WebSocket keep-alive
-    'pong', // WebSocket keep-alive response
+    'ping',
+    'pong',
   ];
 
   if (!validTypes.includes(message.type)) {
