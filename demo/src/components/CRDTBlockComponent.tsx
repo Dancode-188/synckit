@@ -58,23 +58,11 @@ export function CRDTBlockComponent({
   onToggleStateChange,
   onDelete,
 }: CRDTBlockComponentProps) {
-  // DIAGNOSTIC: Log what block.content we're passing to useBlockText
-  const isPlayground = pageId === 'playground';
-  if (isPlayground) {
-    console.log(`📦 [CRDTBlock] Rendering block ${block.id.substring(0, 20)}...`, {
-      type: block.type,
-      blockContent: block.content ? `"${block.content.substring(0, 40)}..."` : '(empty)',
-      blockContentLength: block.content?.length || 0,
-    });
-  }
-
   // Use CRDT-backed text content
   const {
     content,
     updateContent,
     loading,
-    initialized,
-    error,
   } = useBlockText(pageId, block.id, block.content);
 
   // NOTE: We intentionally DO NOT call onContentChange in a useEffect that watches `content`
@@ -103,7 +91,6 @@ export function CRDTBlockComponent({
         // Silently handle "not initialized" errors - these happen during race conditions
         const errorMessage = error instanceof Error ? error.message : String(error);
         if (errorMessage.includes('not initialized')) {
-          console.log('[CRDTBlockComponent] SyncText not ready yet, skipping update');
           return;
         }
         console.error('[CRDTBlockComponent] Failed to update content:', error);
@@ -119,17 +106,6 @@ export function CRDTBlockComponent({
         <div className="h-6 bg-gray-200 dark:bg-gray-700 rounded" />
       </div>
     );
-  }
-
-  // DIAGNOSTIC: Log what content value useBlockText actually returned
-  if (isPlayground) {
-    console.log(`🎯 [CRDTBlock] AFTER useBlockText ${block.id.substring(0, 20)}...`, {
-      loading,
-      initialized,
-      crdtContent: content ? `"${content.substring(0, 40)}..."` : '(empty)',
-      crdtContentLength: content?.length || 0,
-      error: error?.message || null,
-    });
   }
 
   // Create a block with CRDT-backed content

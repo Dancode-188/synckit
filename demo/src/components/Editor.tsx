@@ -347,16 +347,7 @@ export function Editor({ pageId }: EditorProps) {
       // For playground, just init and load from server - no client-side seeding
       // The seed-playground.ts script handles seeding the server
       // Client-side seeding was removed to prevent duplication when multiple tabs connect
-      if (pageId === 'playground') {
-        console.log('🌍 Initializing playground document (server-seeded)');
-        await doc.init();
-      } else {
-        // For non-playground documents (rooms, personal pages), just init normally
-        console.log('🚪 Initializing room/page document:', pageId);
-        await doc.init();
-      }
-
-      console.log('[CLIENT] Document initialized successfully for:', pageId);
+      await doc.init();
 
       if (!mounted) return;
 
@@ -370,18 +361,10 @@ export function Editor({ pageId }: EditorProps) {
         unsubscribe = doc.subscribe((updatedData) => {
         if (!mounted) return;
 
-        console.log(`📥 Document ${pageId} updated:`, {
-          title: updatedData.title,
-          icon: updatedData.icon,
-          blockCount: parseBlockOrder(updatedData.blockOrder || '[]').length,
-          keys: Object.keys(updatedData).slice(0, 10) // First 10 keys
-        });
-
         setPageData(updatedData);
 
         // Extract blocks in order
         const blockIds = parseBlockOrder(updatedData.blockOrder || '[]');
-        console.log('📊 Block IDs from subscription:', blockIds);
         const loadedBlocks: Block[] = [];
 
         for (const blockId of blockIds) {
@@ -391,24 +374,11 @@ export function Editor({ pageId }: EditorProps) {
           }
         }
 
-        // DIAGNOSTIC: Log block content for playground
-        if (pageId === 'playground') {
-          console.log('📋 [Editor] Blocks extracted from subscription:');
-          loadedBlocks.forEach((b, i) => {
-            console.log(`  Block ${i}: type=${b.type}, content="${(b.content || '').substring(0, 40)}..." (${(b.content || '').length} chars)`);
-          });
-        }
-
         setBlocks(loadedBlocks);
 
         // Check if playground needs archiving
         if (pageId === 'playground' && needsArchiving(loadedBlocks.length)) {
-          console.log('⚠️ Playground approaching block limit, archiving old blocks...');
-          archiveOldBlocks(doc, synckit).then((archivedCount) => {
-            if (archivedCount > 0) {
-              console.log(`✅ Archived ${archivedCount} blocks`);
-            }
-          }).catch((error) => {
+          archiveOldBlocks(doc, synckit).catch((error) => {
             console.error('Failed to archive blocks:', error);
           });
         }
@@ -463,7 +433,6 @@ export function Editor({ pageId }: EditorProps) {
       // CRITICAL: Dispose document to unsubscribe and free memory
       // Uses ref instead of state to avoid stale closure bug
       if (pageDocRef.current) {
-        console.log(`🧹 Disposing page document: ${pageId}`);
         (pageDocRef.current as any).dispose?.();
         pageDocRef.current = null;
       }
@@ -666,7 +635,6 @@ export function Editor({ pageId }: EditorProps) {
           };
 
           await pageDoc.set(getBlockKey(targetBlockId) as any, updatedBlock);
-          console.log('📷 Image pasted into existing block');
         } else {
           // Create new image block
           const newBlock = createBlock(BLOCK_TYPES.IMAGE);
@@ -703,8 +671,6 @@ export function Editor({ pageId }: EditorProps) {
 
           // Focus the following paragraph block so user can continue typing
           setPendingFocusBlockId(followingBlock.id);
-
-          console.log('📷 Image pasted as new block with following paragraph');
         }
 
         // Record operation for snapshots
@@ -792,7 +758,6 @@ export function Editor({ pageId }: EditorProps) {
 
         // Don't allow deleting the last block - always keep at least one
         if (currentOrder.length <= 1) {
-          console.log('⚠️ Cannot delete last block - page must have at least one block');
           return;
         }
 
@@ -808,7 +773,6 @@ export function Editor({ pageId }: EditorProps) {
 
         // Don't allow deleting the last editable block - page must have at least one text block
         if (isDeletingEditableBlock && editableBlocks.length <= 1) {
-          console.log('⚠️ Cannot delete last text block - page must have at least one editable block');
           return;
         }
 
@@ -822,8 +786,6 @@ export function Editor({ pageId }: EditorProps) {
         if (snapshotScheduler) {
           snapshotScheduler.recordOperation();
         }
-
-        console.log(`🗑️ Deleted block: ${blockId}`);
       } catch (error) {
         console.error('Failed to delete block:', error);
       }
@@ -1237,8 +1199,6 @@ export function Editor({ pageId }: EditorProps) {
 
         // Focus the new block after render
         setPendingFocusBlockId(newBlock.id);
-
-        console.log('📝 Created block above image');
         return;
       }
 
@@ -1320,7 +1280,6 @@ export function Editor({ pageId }: EditorProps) {
           // Don't allow deleting the last editable block via backspace
           const isDeletingEditableBlock = currentBlock.type !== BLOCK_TYPES.IMAGE;
           if (isDeletingEditableBlock && editableBlocks.length <= 1) {
-            console.log('⚠️ Cannot delete last text block - page must have at least one editable block');
             return;
           }
 

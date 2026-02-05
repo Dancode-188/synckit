@@ -143,7 +143,6 @@ export class AwarenessManager {
 
     const awareness = this.awarenessInstances.get(documentId)
     if (!awareness) {
-      console.debug(`Received awareness state for unregistered document: ${documentId}`)
       return
     }
 
@@ -167,7 +166,6 @@ export class AwarenessManager {
 
     const awareness = this.awarenessInstances.get(documentId)
     if (!awareness) {
-      console.debug(`Received awareness update for unregistered document: ${documentId}`)
       return
     }
 

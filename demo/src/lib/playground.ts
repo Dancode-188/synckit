@@ -38,12 +38,10 @@ export async function initializePlayground(
     const existingBlockOrder = data?.blockOrder ? JSON.parse(data.blockOrder as string) : [];
 
     if (existingBlockOrder.length > 0) {
-      console.log('🌍 Playground already has content');
       return false;
     }
 
     // Create blocks with seed content
-    console.log('🌍 Initializing playground with seed content');
 
     const blocks = PLAYGROUND_SEED_BLOCKS.map(({ type, content }) =>
       createBlock(type, content)
@@ -61,7 +59,6 @@ export async function initializePlayground(
       await doc.set(`block:${block.id}` as any, block);
     }
 
-    console.log('✅ Playground initialized with seed content');
     return true;
   } catch (error) {
     console.error('Failed to initialize playground:', error);
@@ -102,8 +99,6 @@ export async function archiveOldBlocks(
     if (blockOrder.length < 900) {
       return 0; // No need to archive yet
     }
-
-    console.log('🗄️ Archiving old playground blocks...');
 
     // Take oldest 400 blocks
     const blocksToArchive = blockOrder.slice(0, 400);
@@ -151,7 +146,6 @@ export async function archiveOldBlocks(
     await playgroundDoc.set('blockOrder', JSON.stringify(remainingBlocks));
     await playgroundDoc.set('updatedAt', Date.now());
 
-    console.log(`✅ Archived ${blocksToArchive.length} blocks to ${archiveDocId}`);
     return blocksToArchive.length;
   } catch (error) {
     console.error('Failed to archive blocks:', error);
