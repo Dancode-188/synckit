@@ -36,15 +36,15 @@ export const TEST_CONFIG = {
   websocket: {
     heartbeatInterval: 5000, // 5s for faster tests
     heartbeatTimeout: 10000, // 10s timeout
-    maxConnections: 100, // Lower limit for tests
+    maxConnections: 2000, // High limit for load tests with 1000+ clients
   },
 
   // Test timeouts (increased for complex scenarios)
   timeouts: {
-    connection: 10000, // 10s to establish connection (was 5s)
-    sync: 6000, // 6s for sync operations (was 3s)
-    convergence: 20000, // 20s for convergence in chaos tests (was 10s)
-    cleanup: 5000, // 5s for cleanup (was 2s)
+    connection: 15000, // 15s to establish connection (increased for load tests)
+    sync: 10000, // 10s for sync operations (increased for chaos tests)
+    convergence: 40000, // 40s for convergence in chaos tests (increased)
+    cleanup: 10000, // 10s for cleanup (increased for large client counts)
   },
 
   // Test data

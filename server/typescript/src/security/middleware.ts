@@ -10,16 +10,15 @@
  */
 
 import DOMPurify from 'isomorphic-dompurify';
-import type { Context } from 'hono';
 
 // ============================================================================
 // Configuration
 // ============================================================================
 
 export const SECURITY_LIMITS = {
-  // Rate limiting
-  MAX_CONNECTIONS_PER_IP: 50, // Increased for development/testing
-  MAX_MESSAGES_PER_MINUTE: 500, // Increased for real-time collaborative editing
+  // Rate limiting (configurable via environment variables for testing)
+  MAX_CONNECTIONS_PER_IP: parseInt(process.env.SYNCKIT_MAX_CONNECTIONS_PER_IP || '50', 10),
+  MAX_MESSAGES_PER_MINUTE: parseInt(process.env.SYNCKIT_MAX_MESSAGES_PER_MINUTE || '500', 10),
 
   // Document limits
   MAX_BLOCKS_PER_DOC: 1000,
@@ -51,8 +50,12 @@ export const SECURITY_LIMITS = {
 export class ConnectionLimiter {
   private connections = new Map<string, number>();
   private cleanupInterval: NodeJS.Timeout;
+  private maxConnectionsPerIp: number;
 
-  constructor() {
+  constructor(maxConnectionsPerIp?: number) {
+    // Allow override for testing, check env var at runtime, fallback to default
+    this.maxConnectionsPerIp = maxConnectionsPerIp ??
+      parseInt(process.env.SYNCKIT_MAX_CONNECTIONS_PER_IP || '50', 10);
     // Cleanup stale entries every 5 minutes
     this.cleanupInterval = setInterval(() => {
       this.cleanup();
@@ -64,7 +67,7 @@ export class ConnectionLimiter {
    */
   canConnect(ip: string): boolean {
     const count = this.connections.get(ip) || 0;
-    return count < SECURITY_LIMITS.MAX_CONNECTIONS_PER_IP;
+    return count < this.maxConnectionsPerIp;
   }
 
   /**
