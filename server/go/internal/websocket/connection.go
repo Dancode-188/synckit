@@ -6,6 +6,7 @@ import (
 
 	"github.com/Dancode-188/synckit/server/go/internal/auth"
 	"github.com/Dancode-188/synckit/server/go/internal/protocol"
+	"github.com/Dancode-188/synckit/server/go/internal/security"
 	"github.com/gorilla/websocket"
 )
 
@@ -14,11 +15,13 @@ type Connection struct {
 	ID            string
 	UserID        string
 	ClientID      string
+	ClientIP      string
 	Authenticated bool
 	TokenPayload  *auth.TokenPayload // Verified token payload for RBAC
 	Subscriptions map[string]bool    // docId -> subscribed
 	AwarenessSubscriptions map[string]bool
 	ConnectedAt   time.Time
+	SecurityManager *security.SecurityManager
 
 	ws   *websocket.Conn
 	send chan []byte
@@ -72,6 +75,11 @@ func (c *Connection) SendError(errorMsg, errorCode string) error {
 // ReadPump pumps messages from the WebSocket connection to the hub
 func (c *Connection) ReadPump() {
 	defer func() {
+		// Clean up rate limiter on disconnect
+		if c.SecurityManager != nil {
+			c.SecurityManager.ConnectionRateLimiter.RemoveConnection(c.ID)
+			c.SecurityManager.ConnectionLimiter.RemoveConnection(c.ClientIP)
+		}
 		c.hub.Unregister <- c
 		c.ws.Close()
 	}()
@@ -89,6 +97,15 @@ func (c *Connection) ReadPump() {
 				// Log error
 			}
 			break
+		}
+
+		// Per-connection rate limiting
+		if c.SecurityManager != nil {
+			if !c.SecurityManager.ConnectionRateLimiter.CanSendMessage(c.ID) {
+				c.SendError("Too many messages. Please slow down.", "RATE_LIMIT_EXCEEDED")
+				continue
+			}
+			c.SecurityManager.ConnectionRateLimiter.RecordMessage(c.ID)
 		}
 
 		// Decode message
