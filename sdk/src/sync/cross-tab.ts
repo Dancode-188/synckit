@@ -723,8 +723,6 @@ export class CrossTabSync {
     try {
       const state = this.stateProvider();
 
-      console.info('[CrossTab] Sending full state to:', requesterId);
-
       this.broadcast({
         type: 'full-sync-response',
         requesterId,
@@ -744,7 +742,6 @@ export class CrossTabSync {
     }
 
     try {
-      console.info('[CrossTab] Applying full state from leader');
       this.stateRestorer(state);
     } catch (error) {
       console.error('Failed to apply full state:', error);

@@ -67,21 +67,13 @@ export class Connection extends EventEmitter {
    * Setup WebSocket event handlers
    */
   private setupHandlers() {
-    console.log(`[Connection ${this.id}] Setting up WebSocket event handlers...`);
-
     this.ws.on('message', (data: Buffer | string) => {
-      console.log(`[Connection ${this.id}] 🔴 WS 'message' EVENT FIRED! Size: ${data.length}, Type: ${typeof data}`);
       this.handleMessage(data);
     });
 
     this.ws.on('close', this.handleClose.bind(this));
     this.ws.on('error', this.handleError.bind(this));
     this.ws.on('pong', this.handlePong.bind(this));
-
-    this.ws.on('ping', () => console.log(`[Connection ${this.id}] 🔵 WS 'ping' event`));
-    this.ws.on('unexpected-response', () => console.log(`[Connection ${this.id}] ⚠️  WS 'unexpected-response' event`));
-
-    console.log(`[Connection ${this.id}] ✅ WebSocket event handlers registered`);
   }
 
   /**
@@ -89,14 +81,6 @@ export class Connection extends EventEmitter {
    */
   private handleMessage(data: Buffer | string) {
     try {
-      // CRITICAL DEBUG: Log ALL incoming messages
-      console.log(`[Connection ${this.id}] RAW MESSAGE RECEIVED:`, {
-        type: typeof data,
-        size: data.length,
-        preview: typeof data === 'string' ? data.substring(0, 150) : `Buffer[${data.length}]`,
-        firstChar: typeof data === 'string' ? data[0] : data[0]
-      });
-
       // Detect protocol type from first message
       if (typeof data === 'string' && this.protocolType === 'binary') {
         this.protocolType = 'json';
@@ -106,22 +90,9 @@ export class Connection extends EventEmitter {
       const message = parseMessage(data);
 
       if (!message) {
-        console.error(`[Connection ${this.id}] parseMessage returned null. Data type: ${typeof data}, size: ${data.length}`);
-        if (typeof data === 'string') {
-          console.error(`[Connection ${this.id}] Raw JSON data:`, data.substring(0, 200));
-        } else {
-          console.error(`[Connection ${this.id}] Buffer first bytes:`, data.subarray(0, Math.min(50, data.length)));
-        }
         this.sendError('Invalid message format');
         return;
       }
-
-      // CRITICAL DEBUG: Log message before emitting
-      console.log(`[Connection ${this.id}] About to emit message event:`, {
-        type: message.type,
-        hasDocumentId: !!(message as any).documentId,
-        keys: Object.keys(message).slice(0, 10)
-      });
 
       // Handle chunk messages specially
       if (message.type === MessageType.DELTA_BATCH_CHUNK) {
@@ -131,8 +102,6 @@ export class Connection extends EventEmitter {
 
       // Emit event for message handlers
       this.emit('message', message);
-
-      console.log(`[Connection ${this.id}] ✅ Message event emitted successfully for type: ${message.type}`);
 
       // Handle ping internally
       if (message.type === MessageType.PING) {
@@ -274,8 +243,6 @@ export class Connection extends EventEmitter {
   private handleChunk(chunkMessage: any): void {
     const { chunkId, totalChunks, chunkIndex, data } = chunkMessage;
 
-    console.log(`[Connection ${this.id}] Received chunk ${chunkIndex + 1}/${totalChunks} for ${chunkId}`);
-
     // Initialize chunk buffer if first chunk
     if (!this.chunkBuffers.has(chunkId)) {
       this.chunkBuffers.set(chunkId, {
@@ -291,8 +258,6 @@ export class Connection extends EventEmitter {
 
     // Check if all chunks received
     if (buffer.chunks.every(chunk => chunk !== null)) {
-      console.log(`[Connection ${this.id}] All chunks received for ${chunkId}, reassembling...`);
-
       // Reassemble message
       const completeMessage = Buffer.concat(buffer.chunks as Buffer[]);
       this.chunkBuffers.delete(chunkId);
@@ -301,7 +266,6 @@ export class Connection extends EventEmitter {
       try {
         const message = parseMessage(completeMessage);
         if (message) {
-          console.log(`[Connection ${this.id}] ✅ Reassembled ${completeMessage.length} bytes into ${message.type}`);
           this.emit('message', message);
         }
       } catch (error) {
@@ -321,7 +285,6 @@ export class Connection extends EventEmitter {
 
       for (const [chunkId, buffer] of this.chunkBuffers.entries()) {
         if (now - buffer.receivedAt > timeout) {
-          console.log(`[Connection ${this.id}] Cleaning up abandoned chunks for ${chunkId}`);
           this.chunkBuffers.delete(chunkId);
         }
       }

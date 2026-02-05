@@ -25,11 +25,8 @@ export interface SyncKitInfo {
  * @returns SyncKit instance and storage info
  */
 export async function initializeSyncKit(): Promise<SyncKitInfo> {
-  console.log('🚀 Initializing SyncKit...');
-
   // Initialize storage (OPFS with IndexedDB fallback)
   const storageInfo = await initializeStorage();
-  console.log(`📦 Storage initialized: ${storageInfo.type.toUpperCase()}`);
 
   // Create SyncKit instance with server connection
   const synckit = new SyncKit({
@@ -40,8 +37,6 @@ export async function initializeSyncKit(): Promise<SyncKitInfo> {
   });
 
   await synckit.init();
-
-  console.log(`✅ SyncKit initialized`);
 
   return {
     synckit,
@@ -56,5 +51,4 @@ export async function initializeSyncKit(): Promise<SyncKitInfo> {
 export function enableAutoSnapshots(_doc: any) {
   // TODO: Implement when snapshot API is available in v0.3.0
   // _doc.enableAutoSnapshot(AUTO_SNAPSHOT_CONFIG);
-  console.log('📸 Auto-snapshots will be enabled in v0.3.0');
 }

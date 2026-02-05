@@ -81,7 +81,6 @@ export class IndexedDBStorage {
           // Strategy 2: Try with compression
           const compressed = this.compressState(state);
           await this.putState(compressed);
-          console.info('[IndexedDB] Successfully saved compressed data');
           return;
         } catch (compressionErr: any) {
           if (compressionErr.name === 'QuotaExceededError') {
@@ -102,7 +101,6 @@ export class IndexedDBStorage {
 
                 // Final retry
                 await this.putState(truncated);
-                console.info('[IndexedDB] Saved after clearing old data');
                 return;
               } else {
                 throw truncateErr;

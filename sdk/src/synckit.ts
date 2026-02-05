@@ -143,9 +143,7 @@ export class SyncKit {
 
     // Connect to server
     try {
-      console.log('[SyncKit] Connecting WebSocket...')
       await this.websocket.connect()
-      console.log('[SyncKit] WebSocket connected')
     } catch (error) {
       // Connection failure is non-fatal - will retry automatically
       console.warn('Initial connection failed, will retry:', error)

@@ -93,7 +93,6 @@ export class PostgresAdapter implements StorageAdapter {
       }
 
       await this.pool.query(schema);
-      console.log(`✅ Database schema verified (from ${usedPath})`);
     } catch (error) {
       console.warn('⚠️  Failed to ensure database schema:', error instanceof Error ? error.message : String(error));
       // Don't throw - server can still work with existing tables

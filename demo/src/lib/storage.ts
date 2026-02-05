@@ -32,22 +32,18 @@ export async function initializeStorage(): Promise<StorageInfo> {
     try {
       const storage = new OPFSStorage();
       await storage.init();
-      console.log('✅ Using OPFS storage (3.75x faster writes, 6x faster reads)');
       return {
         type: 'opfs',
         storage,
       };
-    } catch (error) {
-      console.warn('⚠️ OPFS init failed, falling back to IndexedDB:', error);
+    } catch {
+      // OPFS init failed, fall back to IndexedDB
     }
-  } else {
-    console.log('ℹ️ OPFS not supported in this browser, using IndexedDB');
   }
 
   // Fallback to IndexedDB
   const storage = new IndexedDBStorage();
   await storage.init();
-  console.log('✅ Using IndexedDB storage');
   return {
     type: 'indexeddb',
     storage,

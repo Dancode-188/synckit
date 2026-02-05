@@ -169,7 +169,6 @@ export class SyncWebSocketServer {
 
     // Add to registry
     this.registry.add(connection);
-    console.log(`[CONNECTION] New: ${connectionId} from ${clientIP} (total: ${this.registry.count()})`);
 
     // Start heartbeat
     connection.startHeartbeat(config.wsHeartbeatInterval);
@@ -181,7 +180,6 @@ export class SyncWebSocketServer {
       // Auto-authenticate for public playground (SECURITY: No admin privileges!)
       connection.state = ConnectionState.AUTHENTICATED;
       connection.userId = `anonymous-${clientIP}`;
-      console.log(`[AUTH] Auto-authenticated ${connection.id} as ${connection.userId}`);
       connection.tokenPayload = {
         userId: `anonymous-${clientIP}`,
         permissions: {
@@ -191,7 +189,6 @@ export class SyncWebSocketServer {
         },
       };
       this.registry.linkUser(connection.id, `anonymous-${clientIP}`);
-      console.log(`[AUTH] Auto-authenticated: ${connection.id} (auth disabled, no admin)`);
     }
 
     // Setup message handlers
@@ -375,7 +372,6 @@ export class SyncWebSocketServer {
   private async handleSubscribe(connection: Connection, message: SubscribeMessage) {
     const { documentId } = message;
 
-    console.log(`[SUBSCRIBE] ${connection.id} requesting subscription to ${documentId}`);
 
     // Check authentication
     if (connection.state !== ConnectionState.AUTHENTICATED || !connection.tokenPayload) {
@@ -441,7 +437,6 @@ export class SyncWebSocketServer {
 
       connection.send(response);
 
-      console.log(`[SUBSCRIBE] ✓ ${connection.id} subscribed to ${documentId}, total subscribers: ${this.coordinator.getSubscribers(documentId).length}${textState ? ' (with text state)' : ''}`);
     } catch (error) {
       console.error('[handleSubscribe] Error:', error);
       connection.sendError('Subscribe failed', { documentId });
@@ -541,9 +536,6 @@ export class SyncWebSocketServer {
     }
 
     try {
-      console.log(`[SYNC_STEP1] Client ${connection.id} requesting initial sync for ${documentId}`);
-      console.log(`[SYNC_STEP1] Client state vector:`, stateVector);
-
       // TODO: Compute missing operations based on state vector
       // For now, respond with empty array (client is up to date)
       // In future: compare stateVector with server's operation history
@@ -558,7 +550,6 @@ export class SyncWebSocketServer {
       };
 
       connection.send(response);
-      console.log(`[SYNC_STEP2] Sent response to ${connection.id} (0 operations)`);
     } catch (error) {
       console.error('Error handling SyncStep1:', error);
       connection.sendError('SyncStep1 failed', { documentId });
@@ -680,7 +671,6 @@ export class SyncWebSocketServer {
    */
   private async handleDeltaBatch(connection: Connection, message: any) {
     const { documentId, deltas } = message;
-    console.log(`[DELTA_BATCH] Received ${deltas?.length || 0} deltas from ${connection.id} for ${documentId}`);
 
     if (!deltas || !Array.isArray(deltas) || deltas.length === 0) {
       connection.sendError('Invalid delta batch: missing or empty deltas array');
@@ -784,7 +774,6 @@ export class SyncWebSocketServer {
       };
 
       connection.send(ack);
-      console.log(`[DELTA_BATCH] ✓ Processed ${deltas.length} deltas for ${documentId} (${textOperations.length} text ops)`);
     } catch (error) {
       console.error('Error handling delta batch:', error);
       connection.sendError('Delta batch application failed', { documentId });
@@ -797,7 +786,6 @@ export class SyncWebSocketServer {
    */
   private broadcastTextOperations(documentId: string, operations: any[], senderId: string) {
     const subscribers = this.coordinator.getSubscribers(documentId);
-    console.log(`[BROADCAST_TEXT] ${documentId} ${operations.length} ops to ${subscribers.length} subscribers (excluding ${senderId})`);
 
     for (const connectionId of subscribers) {
       // Don't send back to the sender
@@ -821,7 +809,6 @@ export class SyncWebSocketServer {
       };
 
       connection.send(textBatchMessage);
-      console.log(`[BROADCAST_TEXT] Sent ${operations.length} text ops to ${connectionId}`);
     }
   }
 
@@ -893,7 +880,6 @@ export class SyncWebSocketServer {
       // Send individual field updates (SDK format)
       for (const [field, value] of Object.entries(batch.delta)) {
         const subscribers = this.coordinator.getSubscribers(documentId);
-        console.log(`[BROADCAST] ${documentId} field=${field}, broadcasting to ${subscribers.length} subscribers:`, subscribers);
 
         for (const connectionId of subscribers) {
           const connection = this.registry.get(connectionId);
@@ -1138,8 +1124,6 @@ export class SyncWebSocketServer {
     deltas: Array<{ field: string; value: any; timestamp?: number; clock?: Record<string, number> }>,
     clientId: string
   ): Promise<{ success: boolean; processed: number; error?: string }> {
-    console.log(`[HTTP_DELTA] Processing ${deltas.length} deltas for ${documentId} from client ${clientId}`);
-
     if (!deltas || !Array.isArray(deltas) || deltas.length === 0) {
       return { success: false, processed: 0, error: 'Invalid delta batch: missing or empty deltas array' };
     }
@@ -1175,7 +1159,6 @@ export class SyncWebSocketServer {
       // Add to batch for broadcasting to WebSocket subscribers
       this.addToBatch(documentId, authoritativeDelta);
 
-      console.log(`[HTTP_DELTA] ✓ Processed ${deltas.length} deltas for ${documentId}`);
       return { success: true, processed: deltas.length };
     } catch (error) {
       console.error('[HTTP_DELTA] Error processing delta batch:', error);

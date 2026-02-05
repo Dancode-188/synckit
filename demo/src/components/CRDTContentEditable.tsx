@@ -423,8 +423,6 @@ export function CRDTContentEditable({
 
         default: {
           // For unknown operations, let them happen and sync afterward
-          // This is a fallback that may cause some cursor issues
-          console.log('[CRDTContentEditable] Unhandled inputType:', inputType);
           break;
         }
       }
