@@ -13,11 +13,11 @@ import { sleep } from '../integration/config';
 describe('Load - High-Frequency Updates', () => {
   beforeAll(async () => {
     await setupTestServer();
-  });
+  }, { timeout: 30000 });
 
   afterAll(async () => {
     await teardownTestServer();
-  });
+  }, { timeout: 30000 });
 
   // Helper to generate unique document ID per test
   const uniqueDocId = () => `highfreq-${Date.now()}-${Math.random().toString(36).slice(2)}`;
