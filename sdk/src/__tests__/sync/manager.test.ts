@@ -246,6 +246,8 @@ describe('SyncManager', () => {
 
   describe('Operation Push', () => {
     it('pushes operation when online', async () => {
+      vi.useFakeTimers()
+
       const operation: Operation = {
         type: 'set',
         documentId: 'doc-1',
@@ -258,44 +260,68 @@ describe('SyncManager', () => {
 
       const sendSpy = vi.spyOn(websocket, 'send')
 
-      // Push operation
-      const pushPromise = manager.pushOperation(operation)
+      // Push operation (batched with 50ms delay)
+      manager.pushOperation(operation)
 
-      // Simulate ACK
-      setTimeout(() => {
-        // Extract messageId from the send call
-        const sendCall = sendSpy.mock.calls[0]!
-        const messageId = sendCall[0].payload.messageId
-        websocket.trigger('ack', { messageId })
-      }, 10)
+      // Advance timers to trigger batch flush (50ms delay)
+      await vi.advanceTimersByTimeAsync(60)
 
-      await pushPromise
-
+      // Verify delta_batch was sent (batched operations use delta_batch type)
       expect(sendSpy).toHaveBeenCalledWith(
         expect.objectContaining({
-          type: 'delta',
+          type: 'delta_batch',
         })
       )
+
+      vi.useRealTimers()
     })
 
-    it('queues operation when offline', async () => {
-      websocket.setConnected(false)
+    it('batches multiple operations together', async () => {
+      vi.useFakeTimers()
 
-      const operation: Operation = {
+      const sendSpy = vi.spyOn(websocket, 'send')
+
+      // Push multiple operations for same document
+      manager.pushOperation({
         type: 'set',
         documentId: 'doc-1',
         field: 'title',
-        value: 'Test',
+        value: 'Test 1',
         clock: { 'test-client': 1 },
         clientId: 'test-client',
         timestamp: Date.now(),
-      }
+      })
 
-      const enqueueSpy = vi.spyOn(queue, 'enqueue')
+      manager.pushOperation({
+        type: 'set',
+        documentId: 'doc-1',
+        field: 'count',
+        value: 42,
+        clock: { 'test-client': 2 },
+        clientId: 'test-client',
+        timestamp: Date.now(),
+      })
 
-      await manager.pushOperation(operation)
+      // Advance timers to trigger batch flush
+      await vi.advanceTimersByTimeAsync(60)
 
-      expect(enqueueSpy).toHaveBeenCalledWith(operation)
+      // Should send single delta_batch with both operations
+      expect(sendSpy).toHaveBeenCalledTimes(1)
+      const call = sendSpy.mock.calls[0]![0]
+      expect(call.type).toBe('delta_batch')
+      expect(call.payload.deltas).toHaveLength(2)
+
+      vi.useRealTimers()
+    })
+
+    it('tracks sync state when offline', async () => {
+      websocket.setConnected(false)
+
+      const doc = new MockDocument('doc-1')
+      manager.registerDocument(doc)
+
+      // Try to subscribe while offline
+      await manager.subscribeDocument('doc-1')
 
       const state = manager.getSyncState('doc-1')
       expect(state.state).toBe('offline')
