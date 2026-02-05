@@ -1,3 +1,7 @@
 [test]
-# Global test timeout (120 seconds = 120000ms for chaos tests with extreme conditions)
-timeout = 120000
+# Global test timeout (12 minutes = 720000ms for sustained load tests)
+# Note: Individual tests can override with shorter timeouts where appropriate
+timeout = 720000
+
+# Preload test setup script to set environment variables before module loading
+preload = ["./test-setup.ts"]
