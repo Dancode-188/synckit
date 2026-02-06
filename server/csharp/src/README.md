@@ -164,13 +164,15 @@ Protocol and message shapes are documented in the repository protocol specs (`pr
 ## Contributing
 
 - Follow the repository `CONTRIBUTING.md` and commit conventions.
-- For protocol or behavioural changes, update the docs under `docs/.dotnet-feature/` and coordinate with the TypeScript reference implementers.
+- For protocol or behavioural changes, coordinate with the TypeScript reference implementers to maintain protocol compatibility.
 
 ## Troubleshooting
 
 - If the server fails to start due to missing `JWT_SECRET`, set `JWT_SECRET` to a secure value for development.
 - Check `ASPNETCORE_URLS` and firewall settings if the server isn't reachable.
 
-## Further reading
+## Further Reading
 
-- Refer to `docs/.dotnet-feature/IMPLEMENTATION_PLAN.md` for implementation details and phase work items.
+- [Protocol Specification](../../../protocol/specs/) - Wire protocol definitions
+- [Server Performance Comparison](../../../docs/architecture/SERVER_PERFORMANCE.md) - Benchmarks across server implementations
+- [TypeScript Reference Server](../../typescript/README.md) - The canonical reference implementation

@@ -17,11 +17,9 @@ Unit tests are the primary testing mechanism for the .NET server. They provide:
 
 **Example:** `ConnectionHeartbeatTests.cs` contains tests covering the heartbeat mechanism.
 
-### 2. Manual Verification Scripts
+### 2. Manual Verification
 
-**Location:** `test-heartbeat.js` (and similar)
-
-Simple Node.js scripts for quick end-to-end verification against a running server. Useful for:
+Simple scripts or cURL commands for quick end-to-end verification against a running server. Useful for:
 - Smoke testing after changes
 - Debugging protocol issues
 - Verifying behavior matches TypeScript reference
@@ -32,8 +30,8 @@ Simple Node.js scripts for quick end-to-end verification against a running serve
 cd src/SyncKit.Server
 JWT_SECRET="test-secret-key-for-development-32-chars" dotnet run
 
-# Terminal 2: Run test
-node test-heartbeat.js
+# Terminal 2: Health check
+curl -s http://localhost:8090/health
 ```
 
 ### 3. Separate Terminal Testing (Recommended for Development)
@@ -127,7 +125,7 @@ Each server type starts, then the same integration tests run against it.
 |------|---------|
 | `.vscode/tasks.json` | VS Code tasks for health checks (non-blocking) |
 | `src/SyncKit.Server.Tests/**/*.cs` | .NET unit tests |
-| `test-heartbeat.js` | Manual heartbeat verification |
+
 | `tests/integration/config.ts` | Test configuration (includes `useExternalServer` flag) |
 | `tests/integration/setup.ts` | Test lifecycle (supports external server mode) |
 
@@ -151,28 +149,7 @@ dotnet test --filter "FullyQualifiedName~AuthControllerTests"
 
 ### Manual Testing
 
-**Option 1: Using the integration test script**
-
-```bash
-# Terminal 1: Start .NET server
-cd src/SyncKit.Server
-JWT_SECRET="test-secret-key-for-development-32-chars" dotnet run
-
-# Terminal 2: Run automated tests
-cd ../../  # Back to server/csharp
-./test-auth-endpoints.sh
-```
-
-The script tests all 7 scenarios:
-- Login with permissions
-- Get user info (/auth/me)
-- Verify valid token
-- Verify invalid token
-- Refresh access token
-- Use refreshed token
-- Error handling
-
-**Option 2: Manual cURL commands**
+Use cURL commands for quick endpoint verification:
 
 ```bash
 # Login

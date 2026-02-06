@@ -208,6 +208,5 @@ cd examples/react-example && npm install
 ## Related Documentation
 
 - [.NET Aspire Documentation](https://learn.microsoft.com/en-us/dotnet/aspire/)
-- [SyncKit .NET Server Implementation Plan](../../docs/.dotnet-feature/IMPLEMENTATION_PLAN.md)
-- [Phase 6: Storage Layer](../../docs/.dotnet-feature/work-items/PHASE-6-STORAGE.md)
-- [T6-01: Storage Abstractions](../../docs/.dotnet-feature/work-items/phase-6/T6-01.md)
+- [SyncKit C# Server](../../server/csharp/README.md) - Server implementation details
+- [Server Performance Comparison](../../docs/architecture/SERVER_PERFORMANCE.md) - Benchmarks across implementations
