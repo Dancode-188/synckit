@@ -11,7 +11,7 @@ import { Stage } from './components/Stage';
 import { WordWall } from './components/WordWall';
 import { WelcomeModal, useShouldShowWelcome } from './components/WelcomeModal';
 import { HelpPanel } from './components/HelpPanel';
-import { QuickTour, useShouldShowTour, resetTour } from './components/QuickTour';
+import { QuickTour, resetTour } from './components/QuickTour';
 import { SyncKitProvider, useSyncKit } from './contexts/SyncKitContext';
 import {
   getRouteFromUrl,
@@ -50,7 +50,7 @@ function AppContent() {
 
   // UX improvements state
   const shouldShowWelcome = useShouldShowWelcome();
-  const shouldShowTour = useShouldShowTour();
+  // const shouldShowTour = useShouldShowTour(); // Disabled for now
   const [showWelcomeModal, setShowWelcomeModal] = useState(false);
   const [showHelpPanel, setShowHelpPanel] = useState(false);
   const [showQuickTour, setShowQuickTour] = useState(false);
@@ -62,14 +62,14 @@ function AppContent() {
     }
   }, [shouldShowWelcome, route]);
 
-  // Show tour on first room visit
-  useEffect(() => {
-    if (shouldShowTour && route === 'room' && roomId) {
-      // Delay tour slightly to let UI load
-      const timer = setTimeout(() => setShowQuickTour(true), 1000);
-      return () => clearTimeout(timer);
-    }
-  }, [shouldShowTour, route, roomId]);
+  // Tour disabled for now - needs proper element selectors
+  // Can be manually triggered via Help Panel
+  // useEffect(() => {
+  //   if (shouldShowTour && route === 'room' && roomId) {
+  //     const timer = setTimeout(() => setShowQuickTour(true), 1000);
+  //     return () => clearTimeout(timer);
+  //   }
+  // }, [shouldShowTour, route, roomId]);
 
   // Track connection and sync status
   useEffect(() => {

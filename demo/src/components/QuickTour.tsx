@@ -117,15 +117,15 @@ export function QuickTour({ isActive, onComplete, onSkip }: QuickTourProps) {
 
   return (
     <>
-      {/* Backdrop (subtle) */}
-      <div className="fixed inset-0 bg-black/10 z-40 animate-in fade-in duration-200" />
+      {/* Backdrop (subtle) - pointer-events-none so it doesn't block clicks */}
+      <div className="fixed inset-0 bg-black/10 z-40 animate-in fade-in duration-200 pointer-events-none" />
 
       {/* Tooltip */}
       <div
-        className="fixed z-50 bg-white dark:bg-gray-800 rounded-lg shadow-2xl border border-gray-200 dark:border-gray-700 p-4 max-w-xs animate-in fade-in zoom-in-95 duration-200"
+        className="fixed z-50 bg-white dark:bg-gray-800 rounded-lg shadow-2xl border border-gray-200 dark:border-gray-700 p-4 max-w-xs animate-in fade-in zoom-in-95 duration-200 pointer-events-auto"
         style={{
-          top: `${tooltipPosition.top}px`,
-          left: `${tooltipPosition.left}px`,
+          top: Math.min(Math.max(tooltipPosition.top, 20), window.innerHeight - 200) + 'px',
+          left: Math.min(Math.max(tooltipPosition.left, 20), window.innerWidth - 320) + 'px',
           transform: step.position === 'bottom' || step.position === 'top'
             ? 'translateX(-50%)'
             : step.position === 'left'
