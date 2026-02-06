@@ -672,15 +672,16 @@ console.log(state.pendingOps)    // Operations waiting to sync
 
 ## 🧪 Development Status
 
-### v0.2.3 - Current Release ✅
+### v0.3.0 - Current Release ✅
 
 **Core Infrastructure:**
 - ✅ Document API with TypeScript generics
-- ✅ Storage adapters (IndexedDB, Memory)
+- ✅ Storage adapters (IndexedDB, Memory, OPFS)
 - ✅ LWW conflict resolution with vector clocks
 - ✅ WebSocket client with auto-reconnection
 - ✅ Binary message protocol
 - ✅ Offline queue with persistent storage
+- ✅ Snapshot API for document state capture
 
 **Collaborative Text Editing (v0.2.0):**
 - ✅ Text CRDTs (Fugue) - Collaborative text editing
@@ -708,19 +709,15 @@ console.log(state.pendingOps)    // Operations waiting to sync
 - ✅ Vue 3 composables (Composition API)
 - ✅ Svelte 5 stores with runes support
 
+**Multi-Language Servers (v0.3.0):**
+- ✅ TypeScript reference server (Bun + Hono)
+- ✅ Python server (FastAPI + WebSockets)
+- ✅ Go server (Gorilla WebSocket)
+
 **Test Coverage:**
-- ✅ 1,081+ comprehensive tests
+- ✅ 1,415+ comprehensive tests across TypeScript, Rust, Python, and Go
 - ✅ 87% code coverage
 - ✅ Unit, integration, chaos, and load tests
-
-### v0.3.0 - Planned
-
-**Enhanced Features:**
-- 🚧 Multi-language server implementations (Python, Go, Rust)
-- 🚧 Advanced storage adapters (OPFS, SQLite)
-- 🚧 End-to-end encryption
-- 🚧 Compression for large payloads
-- 🚧 Conflict UI for visual conflict resolution
 
 ## 📝 Examples
 
@@ -732,7 +729,7 @@ Complete working examples available:
 
 ## 🚀 Performance
 
-### Benchmarks (v0.1.0)
+### Benchmarks (v0.3.0)
 
 | Operation | Performance | Notes |
 |-----------|-------------|-------|

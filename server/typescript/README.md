@@ -116,7 +116,7 @@ bun run test:bench         # Performance benchmarks
 bun run test:watch
 ```
 
-**Test Coverage:** 39/39 tests passing (100%)
+**Test Coverage:** 53/53 tests passing (100%)
 
 ---
 
@@ -455,5 +455,5 @@ MIT License - see **[LICENSE](../../LICENSE)** for details.
 ---
 
 **Server Status:** ✅ Production-Ready
-**Version:** 0.1.0
-**Last Updated:** November 25, 2025
+**Version:** 0.3.0
+**Last Updated:** February 6, 2026

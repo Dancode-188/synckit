@@ -54,7 +54,7 @@ curl http://localhost:8080/health
 {
   "status": "healthy",
   "timestamp": "2025-11-17T01:00:00.000Z",
-  "version": "0.1.0",
+  "version": "0.3.0",
   "uptime": 123.45
 }
 ```
@@ -528,4 +528,4 @@ Before going live:
 ---
 
 **Deployment Status**: ✅ Production-ready  
-**Last Updated**: November 17, 2025
+**Last Updated**: February 6, 2026

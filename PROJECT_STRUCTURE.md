@@ -105,37 +105,55 @@ sdk/
 - ✅ Simple, intuitive API (`sync.document()`)
 - ✅ React integration (hooks: `useDocument`)
 - ✅ Two optimized variants (default ~53KB, lite ~48KB gzipped)
-- ✅ Storage adapters (IndexedDB, Memory)
+- ✅ Storage adapters (IndexedDB, Memory, OPFS)
 - ✅ WASM module loading and management
-- 🚧 Vue/Svelte adapters (v0.3.0+)
-- 🚧 Text/Counter/Set CRDTs (future releases)
+- ✅ Vue 3 composables (v0.2.0+)
+- ✅ Svelte 5 stores (v0.2.0+)
+- ✅ Text, Counter, Set CRDTs (v0.2.0+)
 
 ---
 
 ## 🖥️ `server/` - Multi-Language Servers
 
-Reference server implementations in multiple languages. All implement the same Protobuf protocol.
+Production-ready server implementations in multiple languages. All implement the same binary WebSocket protocol.
 
 ```
 server/
-└── typescript/                 # TypeScript server (v0.1.0)
-    ├── src/
-    │   ├── index.ts            # Server entry point
-    │   ├── config.ts           # Configuration
-    │   ├── auth/               # Authentication
-    │   ├── middleware/         # Hono middleware
-    │   ├── routes/             # HTTP routes
-    │   ├── services/           # Business logic
-    │   ├── storage/            # Database layer (PostgreSQL)
-    │   ├── sync/               # Sync coordination
-    │   └── websocket/          # WebSocket handlers
-    ├── tests/                  # Server tests (Bun)
-    │   ├── unit/               # Unit tests
-    │   ├── integration/        # Integration tests
-    │   └── benchmarks/         # Performance benchmarks
-    └── package.json            # Bun package config
+├── typescript/                 # TypeScript server (v0.1.0+)
+│   ├── src/
+│   │   ├── index.ts            # Server entry point
+│   │   ├── config.ts           # Configuration
+│   │   ├── auth/               # Authentication
+│   │   ├── routes/             # HTTP routes
+│   │   ├── security/           # Rate limiting, middleware
+│   │   ├── storage/            # Database layer (PostgreSQL)
+│   │   ├── sync/               # Sync coordination
+│   │   └── websocket/          # WebSocket handlers
+│   ├── tests/                  # Server tests (Bun)
+│   └── package.json            # Bun package config
+│
+├── python/                     # Python server (v0.3.0+)
+│   ├── src/synckit_server/
+│   │   ├── main.py             # FastAPI entry point
+│   │   ├── config.py           # Configuration
+│   │   ├── security/           # JWT auth, rate limiting
+│   │   ├── storage/            # PostgreSQL adapter
+│   │   └── websocket.py        # WebSocket handlers
+│   ├── tests/                  # Server tests (pytest)
+│   └── pyproject.toml          # Python project config
+│
+└── go/                         # Go server (v0.3.0+)
+    ├── cmd/server/main.go      # Entry point
+    ├── internal/
+    │   ├── config/             # Configuration
+    │   ├── auth/               # JWT validation
+    │   ├── security/           # Rate limiting, middleware
+    │   ├── storage/            # PostgreSQL adapter
+    │   ├── server/             # HTTP/WebSocket server
+    │   └── websocket/          # Connection management
+    └── go.mod                  # Go module file
 
-Note: Python, Go, and Rust server implementations planned for future releases.
+Note: Rust server implementation planned for a future release.
 ```
 
 **Key Responsibilities:**
