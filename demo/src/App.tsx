@@ -54,13 +54,15 @@ function AppContent() {
   const [showWelcomeModal, setShowWelcomeModal] = useState(false);
   const [showHelpPanel, setShowHelpPanel] = useState(false);
   const [showQuickTour, setShowQuickTour] = useState(false);
+  const [hasShownWelcomeThisSession, setHasShownWelcomeThisSession] = useState(false);
 
-  // Show welcome modal on mount if first visit
+  // Show welcome modal on mount if first visit (only once per session)
   useEffect(() => {
-    if (shouldShowWelcome && route === 'stage') {
+    if (shouldShowWelcome && route === 'stage' && !hasShownWelcomeThisSession) {
       setShowWelcomeModal(true);
+      setHasShownWelcomeThisSession(true);
     }
-  }, [shouldShowWelcome, route]);
+  }, [shouldShowWelcome, route, hasShownWelcomeThisSession]);
 
   // Tour disabled for now - needs proper element selectors
   // Can be manually triggered via Help Panel

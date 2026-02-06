@@ -56,6 +56,13 @@ export function QuickTour({ isActive, onComplete, onSkip }: QuickTourProps) {
   const step = TOUR_STEPS[currentStep];
   const isLastStep = currentStep === TOUR_STEPS.length - 1;
 
+  // Reset to first step when tour becomes active
+  useEffect(() => {
+    if (isActive) {
+      setCurrentStep(0);
+    }
+  }, [isActive]);
+
   // Calculate tooltip position based on target element
   useEffect(() => {
     if (!isActive || !step) return;
@@ -120,17 +127,12 @@ export function QuickTour({ isActive, onComplete, onSkip }: QuickTourProps) {
       {/* Backdrop (subtle) - pointer-events-none so it doesn't block clicks */}
       <div className="fixed inset-0 bg-black/10 z-40 animate-in fade-in duration-200 pointer-events-none" />
 
-      {/* Tooltip */}
+      {/* Tooltip - Fixed positioning to stay in viewport */}
       <div
-        className="fixed z-50 bg-white dark:bg-gray-800 rounded-lg shadow-2xl border border-gray-200 dark:border-gray-700 p-4 max-w-xs animate-in fade-in zoom-in-95 duration-200 pointer-events-auto"
+        className="fixed z-50 bg-white dark:bg-gray-800 rounded-lg shadow-2xl border border-gray-200 dark:border-gray-700 p-4 w-80 max-w-[calc(100vw-40px)] animate-in fade-in zoom-in-95 duration-200 pointer-events-auto"
         style={{
-          top: Math.min(Math.max(tooltipPosition.top, 20), window.innerHeight - 200) + 'px',
-          left: Math.min(Math.max(tooltipPosition.left, 20), window.innerWidth - 320) + 'px',
-          transform: step.position === 'bottom' || step.position === 'top'
-            ? 'translateX(-50%)'
-            : step.position === 'left'
-              ? 'translate(-100%, -50%)'
-              : 'translateY(-50%)',
+          top: Math.min(Math.max(20, tooltipPosition.top), window.innerHeight - 250) + 'px',
+          left: Math.min(Math.max(20, tooltipPosition.left - 160), window.innerWidth - 340) + 'px',
         }}
       >
         {/* Progress indicator */}
@@ -177,19 +179,6 @@ export function QuickTour({ isActive, onComplete, onSkip }: QuickTourProps) {
             </button>
           </div>
         </div>
-
-        {/* Arrow pointer */}
-        <div
-          className={`absolute w-3 h-3 bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700 rotate-45 ${
-            step.position === 'bottom'
-              ? 'border-t border-l -top-1.5 left-1/2 -translate-x-1/2'
-              : step.position === 'top'
-                ? 'border-b border-r -bottom-1.5 left-1/2 -translate-x-1/2'
-                : step.position === 'left'
-                  ? 'border-r border-b -right-1.5 top-1/2 -translate-y-1/2'
-                  : 'border-l border-t -left-1.5 top-1/2 -translate-y-1/2'
-          }`}
-        />
       </div>
     </>
   );

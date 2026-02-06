@@ -96,9 +96,8 @@ export function HelpPanel({ isOpen, onClose, onReplayTour }: HelpPanelProps) {
               <ShortcutRow shortcut="Ctrl/Cmd + I" description="Italic text" />
               <ShortcutRow shortcut="Ctrl/Cmd + K" description="Insert link" />
               <ShortcutRow shortcut="Ctrl/Cmd + Z" description="Undo" />
-              <ShortcutRow shortcut="Ctrl/Cmd + Shift + Z" description="Redo" />
-              <ShortcutRow shortcut="Ctrl/Cmd + F" description="Search" />
-              <ShortcutRow shortcut="?" description="Open this help panel" />
+              <ShortcutRow shortcut="Ctrl/Cmd + Y" description="Redo" />
+              <ShortcutRow shortcut="Shift + ?" description="Open this help panel" />
             </div>
           </section>
 
@@ -127,7 +126,7 @@ export function HelpPanel({ isOpen, onClose, onReplayTour }: HelpPanelProps) {
             </h3>
             <div className="space-y-2">
               <ExternalLink
-                href="https://github.com/Dancode-188/synckit#readme"
+                href="https://github.com/Dancode-188/synckit/blob/main/docs/guides/getting-started.md"
                 icon={
                   <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253" />
@@ -137,7 +136,7 @@ export function HelpPanel({ isOpen, onClose, onReplayTour }: HelpPanelProps) {
                 Getting Started Guide
               </ExternalLink>
               <ExternalLink
-                href="https://github.com/Dancode-188/synckit#api-reference"
+                href="https://github.com/Dancode-188/synckit/blob/main/docs/api/SDK_API.md"
                 icon={
                   <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4" />
@@ -147,14 +146,14 @@ export function HelpPanel({ isOpen, onClose, onReplayTour }: HelpPanelProps) {
                 API Reference
               </ExternalLink>
               <ExternalLink
-                href="https://github.com/Dancode-188/synckit#features"
+                href="https://github.com/Dancode-188/synckit/blob/main/docs/architecture/ARCHITECTURE.md"
                 icon={
                   <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
                   </svg>
                 }
               >
-                Features & Architecture
+                Architecture Overview
               </ExternalLink>
             </div>
           </section>
