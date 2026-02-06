@@ -2,7 +2,7 @@
 name = "synckit-server"
 version = "0.3.0"
 description = "SyncKit Python WebSocket Server - Production-ready sync server"
-authors = [{ name = "SyncKit Contributors" }]
+authors = [{ name = "Daniel Bitengo" }]
 readme = "README.md"
 requires-python = ">=3.10"
 dependencies = [
