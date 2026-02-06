@@ -1,6 +1,6 @@
 {
   "name": "@synckit-js/server",
-  "version": "0.2.3",
+  "version": "0.3.0",
   "description": "SyncKit WebSocket Server - Deploy as standalone service for real-time sync (Bun + Hono)",
   "type": "module",
   "main": "dist/index.js",
