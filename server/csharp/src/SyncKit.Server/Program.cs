@@ -1,8 +1,11 @@
 using System.Net;
+using System.Threading.RateLimiting;
+using Microsoft.AspNetCore.RateLimiting;
 using Serilog;
 using SyncKit.Server.Auth;
 using SyncKit.Server.Configuration;
 using SyncKit.Server.Health;
+using SyncKit.Server.Security;
 using SyncKit.Server.WebSockets;
 using SyncKit.Server.Storage;
 
@@ -130,6 +133,62 @@ try
     // Add auth services
     builder.Services.AddSyncKitAuth();
 
+    // Add CORS policy
+    builder.Services.AddCors(options =>
+    {
+        options.AddPolicy("SyncKitCorsPolicy", policy =>
+        {
+            var syncKitConfig = builder.Configuration.GetSection(SyncKitConfig.SectionName).Get<SyncKitConfig>();
+            var origins = syncKitConfig?.CorsAllowedOrigins ?? ["*"];
+
+            if (origins.Length == 1 && origins[0] == "*")
+            {
+                policy.AllowAnyOrigin()
+                      .AllowAnyMethod()
+                      .AllowAnyHeader();
+            }
+            else
+            {
+                policy.WithOrigins(origins)
+                      .AllowAnyMethod()
+                      .AllowAnyHeader()
+                      .AllowCredentials();
+            }
+        });
+    });
+
+    // Add rate limiting
+    builder.Services.AddRateLimiter(options =>
+    {
+        var syncKitConfig = builder.Configuration.GetSection(SyncKitConfig.SectionName).Get<SyncKitConfig>();
+        var permitLimit = syncKitConfig?.RateLimitPerMinute ?? 100;
+
+        options.AddFixedWindowLimiter("fixed", limiterOptions =>
+        {
+            limiterOptions.PermitLimit = permitLimit;
+            limiterOptions.Window = TimeSpan.FromMinutes(1);
+            limiterOptions.QueueProcessingOrder = QueueProcessingOrder.OldestFirst;
+            limiterOptions.QueueLimit = 0;
+        });
+
+        options.OnRejected = async (context, cancellationToken) =>
+        {
+            context.HttpContext.Response.StatusCode = StatusCodes.Status429TooManyRequests;
+            await context.HttpContext.Response.WriteAsync("Rate limit exceeded. Try again later.", cancellationToken);
+        };
+
+        options.GlobalLimiter = PartitionedRateLimiter.Create<HttpContext, string>(context =>
+            RateLimitPartition.GetFixedWindowLimiter(
+                partitionKey: context.Connection.RemoteIpAddress?.ToString() ?? "unknown",
+                factory: _ => new FixedWindowRateLimiterOptions
+                {
+                    PermitLimit = permitLimit,
+                    Window = TimeSpan.FromMinutes(1),
+                    QueueProcessingOrder = QueueProcessingOrder.OldestFirst,
+                    QueueLimit = 0
+                }));
+    });
+
     // Add health check services
     builder.Services.AddSyncKitHealthChecks(builder.Configuration);
 
@@ -151,6 +210,15 @@ try
             diagnosticContext.Set("UserAgent", httpContext.Request.Headers.UserAgent.ToString());
         };
     });
+
+    // Security headers (CSP, X-Frame-Options, etc.)
+    app.UseMiddleware<SecurityHeaderMiddleware>();
+
+    // CORS
+    app.UseCors("SyncKitCorsPolicy");
+
+    // Rate limiting
+    app.UseRateLimiter();
 
     // Configure the HTTP request pipeline
     if (app.Environment.IsDevelopment())

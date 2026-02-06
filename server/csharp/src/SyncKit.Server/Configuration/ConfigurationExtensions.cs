@@ -114,6 +114,22 @@ public static class ConfigurationExtensions
                                             .ToArray();
                 }
 
+                // CORS origins (comma-separated)
+                var corsOrigins = Environment.GetEnvironmentVariable("SYNCKIT_CORS_ORIGINS");
+                if (!string.IsNullOrEmpty(corsOrigins))
+                {
+                    config.CorsAllowedOrigins = corsOrigins.Split(',', StringSplitOptions.RemoveEmptyEntries)
+                                                           .Select(o => o.Trim())
+                                                           .ToArray();
+                }
+
+                // Rate limiting
+                if (int.TryParse(Environment.GetEnvironmentVariable("RATE_LIMIT_PER_MINUTE"), out var rateLimit))
+                    config.RateLimitPerMinute = rateLimit;
+
+                if (int.TryParse(Environment.GetEnvironmentVariable("MAX_CONNECTIONS_PER_IP"), out var maxConnsPerIp))
+                    config.MaxConnectionsPerIp = maxConnsPerIp;
+
                 // Provide a safe default for JwtSecret when running in Development to avoid
                 // failing startup validation during unit tests or local development.
                 if (string.IsNullOrEmpty(config.JwtSecret) && string.Equals(config.Environment, "Development", StringComparison.OrdinalIgnoreCase))

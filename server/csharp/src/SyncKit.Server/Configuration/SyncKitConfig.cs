@@ -183,4 +183,26 @@ public class SyncKitConfig
     /// Environment variable: SYNCKIT_AUTH_APIKEYS (comma-separated)
     /// </summary>
     public string[] ApiKeys { get; set; } = Array.Empty<string>();
+
+    // CORS
+    /// <summary>
+    /// Allowed CORS origins. Use "*" to allow all origins.
+    /// Environment variable: SYNCKIT_CORS_ORIGINS (comma-separated)
+    /// </summary>
+    public string[] CorsAllowedOrigins { get; set; } = ["*"];
+
+    // Rate Limiting
+    /// <summary>
+    /// Maximum HTTP requests per IP per minute (fixed window).
+    /// Environment variable: RATE_LIMIT_PER_MINUTE
+    /// </summary>
+    [Range(1, int.MaxValue)]
+    public int RateLimitPerMinute { get; set; } = 100;
+
+    /// <summary>
+    /// Maximum concurrent WebSocket connections per IP address.
+    /// Environment variable: MAX_CONNECTIONS_PER_IP
+    /// </summary>
+    [Range(1, int.MaxValue)]
+    public int MaxConnectionsPerIp { get; set; } = 50;
 }
