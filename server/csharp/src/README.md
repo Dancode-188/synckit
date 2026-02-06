@@ -25,7 +25,9 @@ cd server/csharp/src/SyncKit.Server
 JWT_SECRET="test-secret-key-for-development-32-chars" dotnet run
 ```
 
-The server exposes a minimal health endpoint at `/health` by default and listens on the configured ASP.NET Core URL (see Configuration).
+The server exposes a root info endpoint at `GET /` and a health endpoint at `GET /health` by default, and listens on the configured ASP.NET Core URL (see Configuration).
+
+The server automatically falls back to in-memory storage if PostgreSQL or Redis is unavailable, allowing development without Docker dependencies.
 
 ## Configuration
 
@@ -38,6 +40,9 @@ Configuration is driven by environment variables and the standard ASP.NET Core c
 - `ConnectionStrings__synckit`: PostgreSQL connection string for persistent storage (alternatively use `DATABASE_URL`).
 - `REDIS_URL`: Redis connection string for pub/sub coordination (alternatively use `ConnectionStrings__redis`).
 - `PORT` or `ASPNETCORE_URLS`: Server listening port(s). Example: `http://localhost:5000`.
+- `RATE_LIMIT_PER_MINUTE`: Max requests per minute per client (default: `100`).
+- `MAX_CONNECTIONS_PER_IP`: Max concurrent WebSocket connections per IP (default: `50`).
+- `SYNCKIT_CORS_ORIGINS`: Comma-separated allowed CORS origins (default: `*`).
 
 Example `env` for development:
 
@@ -97,6 +102,24 @@ The server can be containerized; a sample Dockerfile and compose service can be 
 ## API Reference
 
 ### REST Endpoints
+
+#### Server Info
+
+**GET /** - Server info and capabilities
+```bash
+curl http://localhost:8080/
+```
+
+Returns:
+```json
+{
+  "name": "synckit-server",
+  "version": "0.3.0",
+  "description": "SyncKit Collaboration Server (C#)",
+  "endpoints": { "ws": "/ws", "health": "/health", "auth": "/auth/*" },
+  "features": ["binary-protocol", "json-protocol", "jwt-auth", "delta-sync", "awareness"]
+}
+```
 
 #### Authentication (Phase 3)
 

@@ -131,7 +131,8 @@ Each server type starts, then the same integration tests run against it.
 | File | Purpose |
 |------|---------|
 | `.vscode/tasks.json` | VS Code tasks for health checks (non-blocking) |
-| `src/SyncKit.Server.Tests/**/*.cs` | .NET unit tests |
+| `src/SyncKit.Server.Tests/**/*.cs` | .NET unit tests (866 tests) |
+| `src/SyncKit.Server.Benchmarks/**/*.cs` | BenchmarkDotNet performance micro-benchmarks |
 
 | `tests/integration/config.ts` | Test configuration (includes `TEST_SERVER_TYPE` flag: `'typescript'`, `'csharp'`, or `'external'`) |
 | `tests/integration/setup.ts` | Test lifecycle (supports external server mode) |
@@ -153,6 +154,33 @@ dotnet test --filter "FullyQualifiedName~AuthControllerTests"
 - User info retrieval (/auth/me)
 - Token verification
 - Complete authentication flow integration
+
+### Additional Test Categories
+
+Beyond auth, the test suite includes dedicated coverage for:
+
+- **Input Validation** (16 tests) — Document ID regex, field path traversal, null bytes, max length
+- **Security Headers** (7 tests) — CSP, X-Frame-Options, X-Content-Type-Options, X-XSS-Protection, Referrer-Policy
+- **Rate Limiting & CORS** (7 tests) — Config defaults, env var overrides, allowed origins
+- **Cross-Server JWT** (9 tests) — C#↔TypeScript token interop, claim extraction, wrong-secret rejection
+- **LWW Conflict Resolution** (11 tests) — 3-tier tiebreaker, tombstones, permutation determinism, multi-client
+- **Graceful Degradation** (6 tests) — FallbackStorageAdapter, PostgreSQL failure → in-memory fallback
+- **Root Endpoint** (4 tests) — `GET /` JSON shape, features, endpoints
+
+### Performance Benchmarks (BenchmarkDotNet)
+
+A separate project (`SyncKit.Server.Benchmarks`) provides micro-benchmarks:
+
+```bash
+cd src/SyncKit.Server.Benchmarks
+dotnet run -c Release
+```
+
+Benchmark classes:
+- `JwtBenchmarks` — Token generation and validation throughput
+- `ProtocolBenchmarks` — Binary/JSON serialization round-trips
+- `VectorClockBenchmarks` — Increment, merge, comparison at various sizes
+- `DocumentBenchmarks` — AddDelta, BuildState, LWW resolution at 1K/10K scale
 
 ### Manual Testing
 
@@ -215,7 +243,7 @@ curl -X POST http://localhost:8080/auth/refresh \
 
 ## Summary
 
-The .NET server uses unit tests as the primary quality gate because they:
+The .NET server uses unit tests as the primary quality gate (866 tests across 40+ test classes) because they:
 - Are fast and reliable
 - Don't require protocol negotiation complexity
 - Can be run independently of the TypeScript ecosystem

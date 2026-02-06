@@ -23,8 +23,14 @@ The TypeScript server works great, but not everyone wants to run Node.js or Bun 
 - **Vector Clocks** - Causality tracking and conflict resolution
 - **LWW Merge** - Last-Write-Wins conflict resolution
 - **Delta Sync** - Efficient incremental updates with ACK reliability
-- **Health Checks** - Built-in monitoring endpoints
+- **Input Validation** - Document ID and field path sanitization against injection/traversal
+- **Security Headers** - CSP, X-Frame-Options, X-Content-Type-Options, Referrer-Policy
+- **CORS Configuration** - Configurable allowed origins (default: `*`)
+- **Rate Limiting** - Configurable per-minute request limits
+- **Graceful Degradation** - Automatic fallback to in-memory storage when PostgreSQL/Redis unavailable
+- **Health Checks** - Built-in monitoring endpoints (`GET /health`, `GET /`)
 - **Graceful Shutdown** - Zero data loss on restart
+- **BenchmarkDotNet Suite** - Performance micro-benchmarks for JWT, protocol, vector clocks, documents
 
 ## Quick Start
 
@@ -54,12 +60,16 @@ JWT_SECRET="test-secret-key-for-development-32-chars" dotnet run
 ## Testing
 
 ```bash
-# Run unit tests (711 tests)
+# Run unit tests (866 tests)
 cd server/csharp/src
 dotnet test SyncKit.Server.Tests/SyncKit.Server.Tests.csproj
 
+# Run benchmarks
+cd SyncKit.Server.Benchmarks
+dotnet run -c Release
+
 # Run integration tests against this server
-cd ../../../tests
+cd ../../../../tests
 ./integration/run-against-csharp.sh
 ```
 
