@@ -172,7 +172,7 @@ Protocol uses semantic versioning:
 - **Minor version** (backward-compatible additions): New optional fields
 - **Patch version** (bug fixes): Documentation updates
 
-Current version: **v0.1.0** (Phase 1)
+Current version: **v0.3.0**
 
 ## Wire Format
 

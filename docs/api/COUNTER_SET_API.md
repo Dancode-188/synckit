@@ -2,7 +2,7 @@
 
 **Production-ready distributed data structures for collaborative applications**
 
-SyncKit v0.2.0 includes two additional CRDTs for common use cases: Counters for increment/decrement operations (likes, votes, inventory) and Sets for managing collections (tags, participants, selections).
+SyncKit includes two additional CRDTs for common use cases: Counters for increment/decrement operations (likes, votes, inventory) and Sets for managing collections (tags, participants, selections).
 
 ---
 

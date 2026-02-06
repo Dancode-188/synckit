@@ -1,6 +1,6 @@
 # Network Synchronization API
 
-Complete API reference for SyncKit's network synchronization features (v0.2.0).
+Complete API reference for SyncKit's network synchronization features (v0.3.0).
 
 ## Table of Contents
 

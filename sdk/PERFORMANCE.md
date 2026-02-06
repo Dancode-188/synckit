@@ -1,6 +1,6 @@
 # Performance Benchmarks
 
-Performance characteristics of SyncKit v0.1.0 network layer.
+Performance characteristics of SyncKit v0.3.0 network layer.
 
 ## Benchmark Results
 
@@ -95,12 +95,12 @@ All sizes are **gzipped** for fair comparison:
 
 ## Test Coverage
 
-- **Total tests**: 100 (100 passing, 100% pass rate)
+- **Total tests**: 1,415+ across TypeScript, Rust, Python, and Go
 - **Unit tests**: 100% passing ✅
 - **Integration tests**: 100% passing ✅
-- **Performance tests**: 11/11 passing ✅
+- **Performance tests**: All passing ✅
 
-All critical network paths tested and verified.
+All critical paths tested and verified across all server implementations.
 
 ## Performance Monitoring
 
@@ -112,7 +112,9 @@ npm test -- performance/benchmarks.test.ts --run
 
 ## Version History
 
-### v0.1.0 (Current)
-- Initial network layer implementation
+### v0.3.0 (Current)
+- Multi-language server implementations (TypeScript, Python, Go)
+- OPFS storage adapter (4-30x faster than IndexedDB)
+- Comprehensive benchmark suite
 - Performance benchmarks established
 - All critical paths optimized
