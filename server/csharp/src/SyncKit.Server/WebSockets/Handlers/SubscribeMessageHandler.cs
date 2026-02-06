@@ -1,4 +1,5 @@
 using System.Text.Json;
+using SyncKit.Server.Security;
 using SyncKit.Server.Sync;
 using SyncKit.Server.Storage;
 using SyncKit.Server.WebSockets.Protocol;
@@ -58,6 +59,14 @@ public class SubscribeMessageHandler : IMessageHandler
 
         _logger.LogDebug("Connection {ConnectionId} subscribing to document {DocumentId}",
             connection.Id, subscribe.DocumentId);
+
+        // Validate document ID
+        var validationError = InputValidator.GetValidationError(subscribe.DocumentId);
+        if (validationError != null)
+        {
+            connection.SendError(validationError);
+            return;
+        }
 
         // Enforce read permission
         if (!_authGuard.RequireRead(connection, subscribe.DocumentId))

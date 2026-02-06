@@ -1,3 +1,4 @@
+using SyncKit.Server.Security;
 using SyncKit.Server.Sync;
 using SyncKit.Server.Storage;
 using SyncKit.Server.WebSockets.Protocol;
@@ -53,6 +54,13 @@ public class UnsubscribeMessageHandler : IMessageHandler
         _logger.LogDebug("Connection {ConnectionId} unsubscribing from document {DocumentId}",
             connection.Id, unsubscribe.DocumentId);
 
+        // Validate document ID
+        var validationError = InputValidator.GetValidationError(unsubscribe.DocumentId);
+        if (validationError != null)
+        {
+            connection.SendError(validationError);
+            return;
+        }
 
         // Remove document from connection's subscriptions
         connection.RemoveSubscription(unsubscribe.DocumentId);

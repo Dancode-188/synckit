@@ -1,4 +1,5 @@
 using System.Text.Json;
+using SyncKit.Server.Security;
 using SyncKit.Server.Sync;
 using SyncKit.Server.Storage;
 using SyncKit.Server.WebSockets.Protocol;
@@ -42,6 +43,14 @@ public class SyncRequestMessageHandler : IMessageHandler
 
         _logger.LogDebug("Connection {ConnectionId} requesting sync for document {DocumentId}",
             connection.Id, request.DocumentId);
+
+        // Validate document ID
+        var validationError = InputValidator.GetValidationError(request.DocumentId);
+        if (validationError != null)
+        {
+            connection.SendError(validationError);
+            return;
+        }
 
         // Enforce authentication and read permission
         if (!_authGuard.RequireRead(connection, request.DocumentId))

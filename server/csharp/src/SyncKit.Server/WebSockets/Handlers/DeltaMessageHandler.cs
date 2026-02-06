@@ -1,5 +1,6 @@
 using System.Diagnostics;
 using System.Text.Json;
+using SyncKit.Server.Security;
 using SyncKit.Server.Sync;
 using SyncKit.Server.Storage;
 using SyncKit.Server.Services;
@@ -97,6 +98,14 @@ public class DeltaMessageHandler : IMessageHandler
 
         _logger.LogDebug("Connection {ConnectionId} sending delta for document {DocumentId}",
             connection.Id, delta.DocumentId);
+
+        // Validate document ID
+        var validationError = InputValidator.GetValidationError(delta.DocumentId);
+        if (validationError != null)
+        {
+            connection.SendError(validationError);
+            return;
+        }
 
         // Validate delta (check for undefined/null ValueKind since JsonElement is a struct)
         if (delta.Delta.ValueKind == JsonValueKind.Undefined)

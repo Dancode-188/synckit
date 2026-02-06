@@ -1,6 +1,7 @@
 using System.Linq;
 using System.Text.Json;
 using SyncKit.Server.Awareness;
+using SyncKit.Server.Security;
 using SyncKit.Server.WebSockets.Protocol;
 using SyncKit.Server.WebSockets.Protocol.Messages;
 
@@ -42,6 +43,14 @@ public class AwarenessSubscribeMessageHandler : IMessageHandler
 
         _logger.LogDebug("Connection {ConnectionId} subscribing to awareness for document {DocumentId}",
             connection.Id, subscribe.DocumentId);
+
+        // Validate document ID
+        var validationError = InputValidator.GetValidationError(subscribe.DocumentId);
+        if (validationError != null)
+        {
+            connection.SendError(validationError);
+            return;
+        }
 
         // Enforce awareness permission (authentication)
         if (!_authGuard.RequireAwareness(connection))
