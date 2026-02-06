@@ -114,7 +114,7 @@ public class SyncRequestMessageHandler : IMessageHandler
 
         // Get document state from storage (reconstructed from deltas)
         var documentState = await _storage.GetDocumentStateAsync(request.DocumentId);
-        _logger.LogInformation("DBG: Sync response for {DocumentId}: state has {FieldCount} fields",
+        _logger.LogDebug("Sync response for {DocumentId}: state has {FieldCount} fields",
             request.DocumentId, documentState.Count);
 
         // Convert state to JsonElement for source-generated serialization

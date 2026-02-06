@@ -15,6 +15,7 @@ namespace SyncKit.Server.WebSockets.Handlers;
 public class AwarenessSubscribeMessageHandler : IMessageHandler
 {
     private static readonly MessageType[] _handledTypes = [MessageType.AwarenessSubscribe];
+    private static readonly JsonElement NullJsonElement = CreateNullElement();
 
     private readonly AuthGuard _authGuard;
     private readonly IAwarenessStore _awarenessStore;
@@ -68,7 +69,7 @@ public class AwarenessSubscribeMessageHandler : IMessageHandler
 
         var states = entries.Select(e =>
         {
-            var stateElement = e.State.State ?? JsonDocument.Parse("null").RootElement;
+            var stateElement = e.State.State ?? NullJsonElement;
             return new AwarenessClientState
             {
                 ClientId = e.ClientId,
@@ -90,5 +91,11 @@ public class AwarenessSubscribeMessageHandler : IMessageHandler
         _logger.LogInformation(
             "Connection {ConnectionId} (user {UserId}) subscribed to awareness for document {DocumentId} and received {StateCount} states",
             connection.Id, connection.UserId, subscribe.DocumentId, states.Count);
+    }
+
+    private static JsonElement CreateNullElement()
+    {
+        using var doc = JsonDocument.Parse("null");
+        return doc.RootElement.Clone();
     }
 }

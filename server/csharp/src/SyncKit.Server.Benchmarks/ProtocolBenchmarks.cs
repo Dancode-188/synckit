@@ -1,4 +1,3 @@
-using System.Text;
 using System.Text.Json;
 using BenchmarkDotNet.Attributes;
 using Microsoft.Extensions.Logging.Abstractions;

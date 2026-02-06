@@ -9,10 +9,10 @@ namespace SyncKit.Server.Storage;
 /// </summary>
 public class FallbackStorageAdapter : IStorageAdapter
 {
-    private IStorageAdapter _inner;
+    private volatile IStorageAdapter _inner;
     private readonly ILogger<FallbackStorageAdapter> _logger;
     private readonly ILoggerFactory _loggerFactory;
-    private bool _usingFallback;
+    private volatile bool _usingFallback;
 
     public FallbackStorageAdapter(
         IStorageAdapter primary,
@@ -37,9 +37,10 @@ public class FallbackStorageAdapter : IStorageAdapter
         catch (Exception ex)
         {
             _logger.LogWarning(ex, "Primary storage provider failed to connect. Falling back to in-memory storage.");
-            _inner = new InMemoryStorageAdapter(_loggerFactory.CreateLogger<InMemoryStorageAdapter>());
+            var fallback = new InMemoryStorageAdapter(_loggerFactory.CreateLogger<InMemoryStorageAdapter>());
+            await fallback.ConnectAsync(ct);
+            _inner = fallback;
             _usingFallback = true;
-            await _inner.ConnectAsync(ct);
         }
     }
 
