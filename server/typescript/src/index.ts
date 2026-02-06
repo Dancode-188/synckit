@@ -25,7 +25,7 @@ const app = new Hono();
 // Middleware
 app.use('*', logger());
 app.use('*', cors({
-  origin: '*', // TODO: Configure in production
+  origin: process.env.CORS_ORIGIN || '*',
   credentials: true,
 }));
 
@@ -51,7 +51,7 @@ app.get('/health', (c) => {
   return c.json({
     status: 'healthy',
     timestamp: new Date().toISOString(),
-    version: '0.1.0',
+    version: '0.3.0',
     uptime: process.uptime(),
     connections: stats?.connections || { totalConnections: 0, totalUsers: 0, totalClients: 0 },
     documents: stats?.documents || { totalDocuments: 0, documents: [] },
@@ -62,7 +62,7 @@ app.get('/health', (c) => {
 app.get('/', (c) => {
   return c.json({
     name: 'SyncKit Server',
-    version: '0.1.0',
+    version: '0.3.0',
     description: 'Production-ready WebSocket sync server',
     endpoints: {
       health: '/health',

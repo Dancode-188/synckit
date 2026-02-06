@@ -230,7 +230,6 @@ const todo = sync.document<Todo>('todo-1')
 ### Get Help
 
 - **📖 [Documentation](README.md)** - You are here!
-- **💬 [Discord Community](#)** - Chat with the community *(coming soon)*
 - **🐛 [GitHub Issues](https://github.com/Dancode-188/synckit/issues)** - Report bugs, request features
 - **📧 [Email](mailto:danbitengo@gmail.com)** - Direct support for enterprise
 
@@ -239,7 +238,7 @@ const todo = sync.document<Todo>('todo-1')
 We welcome contributions!
 
 - **[Contributing Guide](../CONTRIBUTING.md)** - How to contribute
-- **[Code of Conduct](../CODE_OF_CONDUCT.md)** - Community guidelines *(coming soon)*
+- **[Code of Conduct](../CODE_OF_CONDUCT.md)** - Community guidelines
 - **[Roadmap](../ROADMAP.md)** - Development timeline
 - **[Architecture Docs](architecture/ARCHITECTURE.md)** - Technical deep-dive
 
