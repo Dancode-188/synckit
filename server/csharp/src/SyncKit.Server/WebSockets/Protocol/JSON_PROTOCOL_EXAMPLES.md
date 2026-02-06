@@ -96,7 +96,7 @@ var response = new AuthSuccessMessage
     Id = Guid.NewGuid().ToString(),
     Timestamp = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds(),
     UserId = "user-123",
-    Permissions = new Dictionary<string, object> { { "read", true } }
+    Permissions = JsonDocument.Parse("{\"read\":true}").RootElement
 };
 
 var serialized = handler.Serialize(response);
@@ -117,7 +117,7 @@ The handler is fully compatible with the TypeScript server implementation:
 
 ## Testing
 
-Comprehensive test suite with 46+ tests:
+Comprehensive test suite with 38 tests:
 - Unit tests for all message types
 - Integration tests for TypeScript compatibility
 - Round-trip serialization/deserialization tests

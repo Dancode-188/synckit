@@ -33,9 +33,9 @@ The TypeScript server works great, but not everyone wants to run Node.js or Bun 
 cd server/csharp/src/SyncKit.Server
 JWT_SECRET="test-secret-key-for-development-32-chars" dotnet run
 
-# Server starts on http://localhost:8090
-# WebSocket endpoint: ws://localhost:8090/ws
-# Health check: http://localhost:8090/health
+# Server starts on http://localhost:8080
+# WebSocket endpoint: ws://localhost:8080/ws
+# Health check: http://localhost:8080/health
 ```
 
 ## Documentation
@@ -54,15 +54,12 @@ JWT_SECRET="test-secret-key-for-development-32-chars" dotnet run
 ## Testing
 
 ```bash
-# Start test dependencies (PostgreSQL, Redis)
-cd server/csharp
-docker compose -f docker-compose.test.yml up -d
-
-# Run unit tests (772 tests)
-dotnet test src/SyncKit.Server.Tests/SyncKit.Server.Tests.csproj
+# Run unit tests (711 tests)
+cd server/csharp/src
+dotnet test SyncKit.Server.Tests/SyncKit.Server.Tests.csproj
 
 # Run integration tests against this server
-cd ../../tests
+cd ../../../tests
 ./integration/run-against-csharp.sh
 ```
 
@@ -82,12 +79,14 @@ The C# server implements the exact same binary WebSocket protocol as the TypeScr
 ```
 
 Supported message types:
+- CONNECT, DISCONNECT
 - AUTH, AUTH_SUCCESS, AUTH_ERROR
 - SUBSCRIBE, UNSUBSCRIBE
 - SYNC_REQUEST, SYNC_RESPONSE
-- DELTA, DELTA_BATCH, ACK
+- DELTA, ACK
 - PING, PONG
-- AWARENESS_UPDATE, AWARENESS_STATE
+- AWARENESS_UPDATE, AWARENESS_SUBSCRIBE, AWARENESS_STATE
+- ERROR
 
 ## Differences from TypeScript Server
 

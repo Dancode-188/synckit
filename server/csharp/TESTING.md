@@ -31,7 +31,7 @@ cd src/SyncKit.Server
 JWT_SECRET="test-secret-key-for-development-32-chars" dotnet run
 
 # Terminal 2: Health check
-curl -s http://localhost:8090/health
+curl -s http://localhost:8080/health
 ```
 
 ### 3. Separate Terminal Testing (Recommended for Development)
@@ -45,7 +45,7 @@ When developing and debugging the server, run test commands in a **separate term
 **Quick Health Check:**
 ```bash
 # In a separate terminal while server is running
-curl -s -w '\nHTTP Status: %{http_code}\n' http://localhost:8090/health
+curl -s -w '\nHTTP Status: %{http_code}\n' http://localhost:8080/health
 ```
 
 | Endpoint | Purpose |
@@ -79,15 +79,11 @@ this.wsServer = new SyncWebSocketServer(this.server, { ... });
 
 This tight coupling means tests manage the server lifecycle internally rather than connecting to an external server.
 
-### Future: External Server Mode
+### External Server Mode
 
-When the .NET server reaches feature parity, an external server mode could be added to the test framework. This would involve:
+The test framework supports running against an external server via the `TEST_SERVER_TYPE` environment variable in `tests/integration/config.ts`. Set it to `'csharp'` or `'external'` to connect to a pre-started server instead of spawning the TypeScript server internally.
 
-1. Adding a `USE_EXTERNAL_SERVER` flag to `tests/integration/config.ts`
-2. Skipping server lifecycle management in `setup.ts` when the flag is set
-3. Using the existing `TestClient` with proper protocol adapters (not raw WebSocket)
-
-This was intentionally deferred - no point testing against an incomplete server.
+The test config uses port 8090 by default (overridable via `TEST_SERVER_PORT`) to avoid conflicts with the server's default port of 8080.
 
 ## Recommended Approach
 
@@ -101,12 +97,23 @@ This was intentionally deferred - no point testing against an incomplete server.
 
 Once the .NET server implements all core features (auth, sync, awareness):
 
-1. Start the .NET server on the test port (8090)
-2. Run the full integration suite with external server mode:
+1. Start the .NET server on the test port (8090):
    ```bash
-   USE_EXTERNAL_SERVER=true bun test integration/
+   cd server/csharp/src/SyncKit.Server
+   SYNCKIT_SERVER_URL=http://localhost:8090 \
+   SYNCKIT_AUTH_REQUIRED=false \
+   JWT_SECRET='test-secret-key-for-integration-tests-only-32-chars' \
+   dotnet run
    ```
-3. The existing `TestClient` with proper protocol adapters should work
+2. Run the full integration suite with the C# server type:
+   ```bash
+   cd tests
+   TEST_SERVER_TYPE=csharp bun test integration/
+   ```
+3. Or use the convenience script:
+   ```bash
+   ./integration/run-against-csharp.sh
+   ```
 
 ### For CI/CD
 
@@ -126,7 +133,7 @@ Each server type starts, then the same integration tests run against it.
 | `.vscode/tasks.json` | VS Code tasks for health checks (non-blocking) |
 | `src/SyncKit.Server.Tests/**/*.cs` | .NET unit tests |
 
-| `tests/integration/config.ts` | Test configuration (includes `useExternalServer` flag) |
+| `tests/integration/config.ts` | Test configuration (includes `TEST_SERVER_TYPE` flag: `'typescript'`, `'csharp'`, or `'external'`) |
 | `tests/integration/setup.ts` | Test lifecycle (supports external server mode) |
 
 ## Testing REST Auth Endpoints (Phase 3)

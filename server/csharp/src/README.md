@@ -35,8 +35,8 @@ Configuration is driven by environment variables and the standard ASP.NET Core c
 - `JWT_ISSUER`: Optional issuer to enforce during JWT validation.
 - `JWT_AUDIENCE`: Optional audience to enforce during JWT validation.
 - `ASPNETCORE_ENVIRONMENT`: `Development` (default) or `Production`.
-- `ConnectionStrings__Postgres`: PostgreSQL connection string for persistent storage.
-- `REDIS__ENDPOINT` or `REDIS_URL`: Redis connection string for pub/sub coordination.
+- `ConnectionStrings__synckit`: PostgreSQL connection string for persistent storage (alternatively use `DATABASE_URL`).
+- `REDIS_URL`: Redis connection string for pub/sub coordination (alternatively use `ConnectionStrings__redis`).
 - `PORT` or `ASPNETCORE_URLS`: Server listening port(s). Example: `http://localhost:5000`.
 
 Example `env` for development:
@@ -46,7 +46,7 @@ export JWT_SECRET="test-secret-key-for-development-32-chars"
 export JWT_ISSUER="synckit-server"
 export JWT_AUDIENCE="synckit-api"
 export ASPNETCORE_ENVIRONMENT=Development
-export ConnectionStrings__Postgres="Host=localhost;Port=5432;Database=synckit;Username=postgres;Password=postgres"
+export DATABASE_URL="Host=localhost;Port=5432;Database=synckit;Username=postgres;Password=postgres"
 export REDIS_URL=redis://localhost:6379
 export ASPNETCORE_URLS="http://localhost:5000"
 ```
@@ -73,12 +73,7 @@ dotnet watch run
 
 ## Testing
 
-Integration tests require PostgreSQL and Redis. Start the test dependencies with Docker Compose in the `server/csharp` folder:
-
-```bash
-cd server/csharp
-docker compose -f docker-compose.test.yml up -d
-```
+Integration tests require PostgreSQL and Redis. If available, start them locally or via Docker.
 
 - Run the .NET test project:
 
@@ -97,7 +92,7 @@ bun test
 
 ## Docker
 
-There is a Docker Compose file for test dependencies at `server/csharp/docker-compose.test.yml` (Postgres + Redis). The server itself can be containerized; a sample Dockerfile and compose service can be added as needed.
+The server can be containerized; a sample Dockerfile and compose service can be added as needed. For local development with PostgreSQL and Redis dependencies, run them via Docker separately or use the .NET Aspire orchestration (see `orchestration/aspire/`).
 
 ## API Reference
 
