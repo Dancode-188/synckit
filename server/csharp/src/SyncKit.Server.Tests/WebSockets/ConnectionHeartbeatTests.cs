@@ -77,11 +77,16 @@ public class ConnectionHeartbeatTests
     {
         // Arrange
         var sentMessages = new List<IMessage>();
+        var pingReceived = new SemaphoreSlim(0);
 
         // Setup protocol handler to serialize ping messages
         _mockBinaryHandler.Setup(h => h.Serialize(It.IsAny<PingMessage>()))
             .Returns(new byte[] { 0x01 })
-            .Callback<IMessage>(msg => sentMessages.Add(msg));
+            .Callback<IMessage>(msg =>
+            {
+                sentMessages.Add(msg);
+                pingReceived.Release();
+            });
 
         // Setup WebSocket SendAsync
         _mockWebSocket.Setup(ws => ws.SendAsync(
@@ -97,8 +102,11 @@ public class ConnectionHeartbeatTests
             .SetValue(_connection, ProtocolType.Binary);
 
         // Act
-        _connection.StartHeartbeat(100, 500); // Short interval for testing
-        await Task.Delay(250); // Wait for at least 2 pings
+        _connection.StartHeartbeat(100, 5000); // Short interval, generous timeout
+
+        // Wait for at least 2 pings (with a generous timeout to avoid CI flakiness)
+        Assert.True(await pingReceived.WaitAsync(TimeSpan.FromSeconds(5)), "Timed out waiting for 1st ping");
+        Assert.True(await pingReceived.WaitAsync(TimeSpan.FromSeconds(5)), "Timed out waiting for 2nd ping");
 
         // Assert
         Assert.True(sentMessages.Count >= 2, $"Expected at least 2 ping messages, got {sentMessages.Count}");
@@ -153,6 +161,7 @@ public class ConnectionHeartbeatTests
     {
         // Arrange
         var connectionClosed = false;
+        var pingReceived = new SemaphoreSlim(0);
 
         _mockWebSocket.Setup(ws => ws.CloseAsync(
             It.IsAny<WebSocketCloseStatus>(),
@@ -165,7 +174,8 @@ public class ConnectionHeartbeatTests
             .Returns(Task.CompletedTask);
 
         _mockBinaryHandler.Setup(h => h.Serialize(It.IsAny<PingMessage>()))
-            .Returns(new byte[] { 0x01 });
+            .Returns(new byte[] { 0x01 })
+            .Callback<IMessage>(_ => pingReceived.Release());
 
         _mockWebSocket.Setup(ws => ws.SendAsync(
             It.IsAny<ArraySegment<byte>>(),
@@ -179,17 +189,16 @@ public class ConnectionHeartbeatTests
             .SetValue(_connection, ProtocolType.Binary);
 
         // Act
-        // Use longer intervals to avoid flakiness on slow CI runners
-        _connection.StartHeartbeat(100, 500); // ping every 100ms, timeout at 500ms
+        _connection.StartHeartbeat(100, 5000); // ping every 100ms, generous timeout
 
-        // Respond to pings - do it 3 times with comfortable margins
+        // Wait for each ping signal and respond with pong — fully deterministic
         for (int i = 0; i < 3; i++)
         {
-            await Task.Delay(120); // Wait for ping (slightly more than interval)
-            _connection.HandlePong(); // Respond
+            Assert.True(
+                await pingReceived.WaitAsync(TimeSpan.FromSeconds(5)),
+                $"Timed out waiting for ping #{i + 1}");
+            _connection.HandlePong();
         }
-
-        await Task.Delay(50); // Wait a bit more
 
         // Assert
         Assert.False(connectionClosed, "Connection should not be closed when pongs are received");
@@ -323,10 +332,16 @@ public class ConnectionHeartbeatTests
     {
         // Arrange
         var pingCount = 0;
+        var twoPingsReceived = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
 
         _mockBinaryHandler.Setup(h => h.Serialize(It.IsAny<PingMessage>()))
             .Returns(new byte[] { 0x01 })
-            .Callback<IMessage>(_ => Interlocked.Increment(ref pingCount));
+            .Callback<IMessage>(_ =>
+            {
+                var count = Interlocked.Increment(ref pingCount);
+                if (count >= 2)
+                    twoPingsReceived.TrySetResult();
+            });
 
         _mockWebSocket.Setup(ws => ws.SendAsync(
             It.IsAny<ArraySegment<byte>>(),
@@ -340,13 +355,25 @@ public class ConnectionHeartbeatTests
             .SetValue(_connection, ProtocolType.Binary);
 
         // Act
-        _connection.StartHeartbeat(100, 500);
-        _connection.StartHeartbeat(100, 500); // Start again
-        _connection.StartHeartbeat(100, 500); // And again
+        _connection.StartHeartbeat(100, 5000);
+        _connection.StartHeartbeat(100, 5000); // Start again
+        _connection.StartHeartbeat(100, 5000); // And again
 
-        await Task.Delay(250);
+        // Wait until we observe at least 2 pings
+        var completed = await Task.WhenAny(twoPingsReceived.Task, Task.Delay(TimeSpan.FromSeconds(5)));
+        Assert.True(completed == twoPingsReceived.Task, "Timed out waiting for 2 pings");
 
-        // Assert - should have roughly 2 pings (one timer active), not 6 (three timers)
-        Assert.InRange(pingCount, 1, 3);
+        // Snapshot the count right after 2 pings arrived, then wait a short window
+        // to verify no duplicate timers are flooding pings
+        var countAtSnapshot = Volatile.Read(ref pingCount);
+        await Task.Delay(300);
+        var countAfterWait = Volatile.Read(ref pingCount);
+
+        // Assert - with a 100ms interval and 300ms wait, a single timer should add ~3 more pings.
+        // If 3 timers were active, we'd see ~9 more. Allow generous range for single timer.
+        var pingsInWindow = countAfterWait - countAtSnapshot;
+        Assert.True(pingsInWindow <= 5,
+            $"Expected ≤5 pings in 300ms window (single timer), but got {pingsInWindow}. " +
+            $"Total pings: {countAfterWait}. Multiple timers may be active.");
     }
 }

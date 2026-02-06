@@ -80,7 +80,7 @@ if (backendMode is "typescript" or "both")
         .WithEnvironment("NODE_ENV", "development")
         .WithEnvironment("JWT_SECRET", jwtSecret);
 
-    if (storageMode == "postgres" && syncKitDb is not null && redis is not null)
+    if (storageMode == "postgres" && syncKitDb is not null && redis is not null && migrations is not null)
     {
         // TypeScript server expects DATABASE_URL and REDIS_URL environment variables
         // Format: postgresql://user:password@host:port/database
@@ -104,7 +104,7 @@ if (backendMode is "csharp" or "both")
         .WithEnvironment("STORAGE_MODE", storageMode)
         .WithEnvironment("JWT_SECRET", jwtSecret);
 
-    if (storageMode == "postgres" && syncKitDb is not null && redis is not null)
+    if (storageMode == "postgres" && syncKitDb is not null && redis is not null && migrations is not null)
     {
         // C# server uses Aspire's standard WithReference() which injects:
         //   ConnectionStrings__synckit = Host=...;Port=...;Database=...;Username=...;Password=...
