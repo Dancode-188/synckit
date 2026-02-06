@@ -60,6 +60,33 @@ public static class HealthExtensions
     /// </summary>
     public static WebApplication MapSyncKitHealthEndpoints(this WebApplication app)
     {
+        // Root endpoint — server info (matches TypeScript server format)
+        app.MapGet("/", () =>
+        {
+            return Results.Ok(new
+            {
+                name = "SyncKit Server",
+                version = "0.1.0",
+                description = "Production-ready WebSocket sync server",
+                endpoints = new
+                {
+                    health = "/health",
+                    ws = "/ws",
+                    auth = "/auth"
+                },
+                features = new
+                {
+                    websocket = "Real-time sync via WebSocket",
+                    auth = "JWT authentication",
+                    sync = "Delta-based document synchronization",
+                    crdt = "LWW conflict resolution"
+                }
+            });
+        })
+        .WithName("Root")
+        .WithDescription("Server information endpoint")
+        .WithTags("Info");
+
         // Main health endpoint with detailed stats (matches TypeScript server format)
         app.MapGet("/health", (IServerStatsService statsService) =>
         {
