@@ -41,25 +41,43 @@ await doc.update({ completed: true })
 
 ### 🎬 See It In Action
 
-**⚡ [Try Live Demo](https://synckit-demo.netlify.app)** - Open in two tabs to see real-time sync!
+**⚡ [Try Live Demo →](https://localwrite-demo.fly.dev)**
 
-**1. Complex State (Kanban)**
-SyncKit handles structural data like lists and nested objects with automatic conflict resolution.
+**LocalWrite** - Full-featured collaborative editor showcasing SyncKit's capabilities.
 
-![SyncKit Kanban Demo](demo.gif)
+**Quick test (30 seconds):**
+1. Open [localwrite-demo.fly.dev](https://localwrite-demo.fly.dev) in two browser tabs
+2. Click "Join a Room" in both tabs (auto-joins same room)
+3. Type in one tab → appears instantly in the other
+4. Watch live cursors showing each user's position
 
-**2. Collaborative Text (New in v0.2.0)**
-Add Google Docs-style collaboration to your app with a single hook.
+**What you'll see:**
+- **Character-level sync** - No debouncing, no lag
+- **Conflict-free merging** - Multiple users editing simultaneously
+- **Block-based editor** - Slash commands (`/h1`, `/list`) with real-time formatting
+- **Presence & cursors** - See who's online, where they're typing
+- **Offline-first** - Disconnect your network, keep editing, auto-sync on reconnect
+- **Word Wall** - Community voting feature (bonus: shows OR-Set CRDT in action)
 
+**Real-world example:**
 ```typescript
-// It's this simple:
-import { useSyncText } from '@synckit-js/sdk/react'
+import { SyncKit } from '@synckit-js/sdk'
+import { useSyncDocument } from '@synckit-js/sdk/react'
 
-function Editor() {
-  // ✨ Automatic conflict resolution & real-time sync
-  const [text, { insert, delete: del }] = useSyncText('doc-1')
+// Initialize once
+const sync = new SyncKit()
+await sync.init()
 
-  return <textarea value={text} onChange={e => insert(0, e.target.value)} />
+// Use in components
+function TaskList() {
+  const [tasks, { update }] = useSyncDocument<Task[]>('tasks')
+
+  const toggleTask = (id: string) => {
+    update(tasks.map(t =>
+      t.id === id ? { ...t, completed: !t.completed } : t
+    ))
+  }
+  // Syncs across all connected clients automatically
 }
 ```
 
@@ -246,6 +264,7 @@ graph TD
 - **[From Yjs/Automerge](docs/guides/migration-from-yjs.md)** - Simplify your stack
 
 ### Examples
+- **[LocalWrite Demo](https://localwrite-demo.fly.dev)** - Full-featured collaborative editor (live demo, see source in `demo/`)
 - **[Vanilla Counter](examples/vanilla-counter/)** - Minimal example with no build tools (just open in browser!)
 - **[Todo App](examples/todo-app/)** - Simple CRUD with filters
 - **[Collaborative Editor](examples/collaborative-editor/)** - Real-time text editing with CodeMirror 6
