@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
-  "description": "Real-time collaborative rich text editor built with SyncKit v0.2.0 and Quill",
+  "description": "Real-time collaborative rich text editor built with SyncKit and Quill",
   "scripts": {
     "dev": "vite",
     "build": "tsc && vite build",

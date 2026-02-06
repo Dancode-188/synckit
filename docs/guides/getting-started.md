@@ -443,7 +443,6 @@ const todo = sync.document<Todo>('todo-1')
 Need assistance?
 
 - 📖 **[Documentation](../README.md)** - Comprehensive guides and API reference
-- 💬 **[Discord Community](#)** - Get help from the community *(coming soon)*
 - 🐛 **[GitHub Issues](https://github.com/Dancode-188/synckit/issues)** - Report bugs or request features
 - 📧 **[Email Support](mailto:danbitengo@gmail.com)** - Direct support for enterprise users
 
