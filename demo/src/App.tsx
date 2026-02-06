@@ -9,6 +9,9 @@ import { Cursors } from './components/Cursors';
 import { RoomBanner } from './components/RoomBanner';
 import { Stage } from './components/Stage';
 import { WordWall } from './components/WordWall';
+import { WelcomeModal, useShouldShowWelcome } from './components/WelcomeModal';
+import { HelpPanel } from './components/HelpPanel';
+import { QuickTour, useShouldShowTour, resetTour } from './components/QuickTour';
 import { SyncKitProvider, useSyncKit } from './contexts/SyncKitContext';
 import {
   getRouteFromUrl,
@@ -44,6 +47,29 @@ function AppContent() {
   const [showSearchDialog, setShowSearchDialog] = useState(false);
   const [showExportDialog, setShowExportDialog] = useState(false);
   const [roomId, setRoomId] = useState<string | null>(null);
+
+  // UX improvements state
+  const shouldShowWelcome = useShouldShowWelcome();
+  const shouldShowTour = useShouldShowTour();
+  const [showWelcomeModal, setShowWelcomeModal] = useState(false);
+  const [showHelpPanel, setShowHelpPanel] = useState(false);
+  const [showQuickTour, setShowQuickTour] = useState(false);
+
+  // Show welcome modal on mount if first visit
+  useEffect(() => {
+    if (shouldShowWelcome && route === 'stage') {
+      setShowWelcomeModal(true);
+    }
+  }, [shouldShowWelcome, route]);
+
+  // Show tour on first room visit
+  useEffect(() => {
+    if (shouldShowTour && route === 'room' && roomId) {
+      // Delay tour slightly to let UI load
+      const timer = setTimeout(() => setShowQuickTour(true), 1000);
+      return () => clearTimeout(timer);
+    }
+  }, [shouldShowTour, route, roomId]);
 
   // Track connection and sync status
   useEffect(() => {
@@ -200,12 +226,18 @@ function AppContent() {
     };
   }, [synckit, roomId]);
 
-  // Keyboard shortcut for search (Cmd/Ctrl+P)
+  // Keyboard shortcuts
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
+      // Search (Cmd/Ctrl+P)
       if ((e.metaKey || e.ctrlKey) && e.key === 'p') {
         e.preventDefault();
         setShowSearchDialog(true);
+      }
+      // Help (Shift+?)
+      if (e.shiftKey && e.key === '?') {
+        e.preventDefault();
+        setShowHelpPanel(true);
       }
     };
 
@@ -293,15 +325,39 @@ function AppContent() {
 
   // Stage landing page
   if (route === 'stage') {
-    return <Stage isConnected={isConnected} />;
+    return (
+      <>
+        <Stage isConnected={isConnected} />
+        {showWelcomeModal && (
+          <WelcomeModal onClose={() => setShowWelcomeModal(false)} />
+        )}
+        <HelpPanel
+          isOpen={showHelpPanel}
+          onClose={() => setShowHelpPanel(false)}
+        />
+      </>
+    );
   }
 
   // Word Wall
   if (route === 'wordwall') {
     return (
-      <Layout isConnected={isConnected} pendingOps={pendingOps} route={route} roomId={null} sidebar={null}>
-        <WordWall isConnected={isConnected} />
-      </Layout>
+      <>
+        <Layout
+          isConnected={isConnected}
+          pendingOps={pendingOps}
+          route={route}
+          roomId={null}
+          sidebar={null}
+          onOpenHelp={() => setShowHelpPanel(true)}
+        >
+          <WordWall isConnected={isConnected} />
+        </Layout>
+        <HelpPanel
+          isOpen={showHelpPanel}
+          onClose={() => setShowHelpPanel(false)}
+        />
+      </>
     );
   }
 
@@ -317,6 +373,7 @@ function AppContent() {
         pendingOps={pendingOps}
         route={route}
         roomId={roomId}
+        onOpenHelp={() => setShowHelpPanel(true)}
         sidebar={
           !roomId && FEATURES.PERSONAL_PAGES ? (
             <Sidebar
@@ -357,6 +414,23 @@ function AppContent() {
 
         <Cursors synckit={synckit} pageId={currentPageId} />
       </Layout>
+
+      {/* Help Panel */}
+      <HelpPanel
+        isOpen={showHelpPanel}
+        onClose={() => setShowHelpPanel(false)}
+        onReplayTour={() => {
+          resetTour();
+          setShowQuickTour(true);
+        }}
+      />
+
+      {/* Quick Tour */}
+      <QuickTour
+        isActive={showQuickTour}
+        onComplete={() => setShowQuickTour(false)}
+        onSkip={() => setShowQuickTour(false)}
+      />
     </>
   );
 }

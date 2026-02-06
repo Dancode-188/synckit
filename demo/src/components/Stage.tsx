@@ -144,12 +144,38 @@ export function Stage({ isConnected }: StageProps) {
             LocalWrite
           </h1>
         </div>
-        <p className="text-lg text-gray-600 dark:text-gray-400 mb-2">
-          Real-time collaborative editing powered by CRDTs
+        <p className="text-lg text-gray-600 dark:text-gray-400 mb-3">
+          Collaborative text editor powered by real-time CRDTs
         </p>
-        <p className="text-sm text-gray-500 dark:text-gray-500">
-          Built with <a href="https://github.com/Dancode-188/synckit" target="_blank" rel="noopener noreferrer" className="font-medium text-primary-600 dark:text-primary-400 hover:underline">SyncKit</a> — local-first sync that just works
+        <p className="text-sm text-gray-600 dark:text-gray-400 mb-4">
+          Built with <a href="https://github.com/Dancode-188/synckit" target="_blank" rel="noopener noreferrer" className="font-semibold text-primary-600 dark:text-primary-400 hover:underline">SyncKit</a> — a local-first sync SDK for conflict-free collaboration
         </p>
+
+        {/* Documentation Button */}
+        <div className="flex items-center justify-center gap-2 mb-2">
+          <a
+            href="https://github.com/Dancode-188/synckit#readme"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-flex items-center gap-2 px-4 py-2 bg-white dark:bg-gray-800 border-2 border-primary-500 text-primary-600 dark:text-primary-400 font-semibold rounded-lg hover:bg-primary-50 dark:hover:bg-primary-900/20 transition-colors shadow-sm"
+          >
+            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253" />
+            </svg>
+            Documentation
+          </a>
+          <a
+            href="https://github.com/Dancode-188/synckit"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-flex items-center gap-2 px-4 py-2 bg-gray-900 dark:bg-gray-700 text-white font-semibold rounded-lg hover:bg-gray-800 dark:hover:bg-gray-600 transition-colors shadow-sm"
+          >
+            <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24">
+              <path fillRule="evenodd" d="M12 2C6.477 2 2 6.484 2 12.017c0 4.425 2.865 8.18 6.839 9.504.5.092.682-.217.682-.483 0-.237-.008-.868-.013-1.703-2.782.605-3.369-1.343-3.369-1.343-.454-1.158-1.11-1.466-1.11-1.466-.908-.62.069-.608.069-.608 1.003.07 1.531 1.032 1.531 1.032.892 1.53 2.341 1.088 2.91.832.092-.647.35-1.088.636-1.338-2.22-.253-4.555-1.113-4.555-4.951 0-1.093.39-1.988 1.029-2.688-.103-.253-.446-1.272.098-2.65 0 0 .84-.27 2.75 1.026A9.564 9.564 0 0112 6.844c.85.004 1.705.115 2.504.337 1.909-1.296 2.747-1.027 2.747-1.027.546 1.379.202 2.398.1 2.651.64.7 1.028 1.595 1.028 2.688 0 3.848-2.339 4.695-4.566 4.943.359.309.678.92.678 1.855 0 1.338-.012 2.419-.012 2.747 0 .268.18.58.688.482A10.019 10.019 0 0022 12.017C22 6.484 17.522 2 12 2z" clipRule="evenodd" />
+            </svg>
+            GitHub
+          </a>
+        </div>
 
         {/* Connection indicator */}
         <div className="flex items-center justify-center gap-2 mt-4">
@@ -197,41 +223,66 @@ export function Stage({ isConnected }: StageProps) {
 
       {/* Hint for new visitors */}
       <div className="max-w-4xl mx-auto px-4 pb-4">
-        <p className="text-center text-sm text-gray-500 dark:text-gray-400">
-          <span className="inline-flex items-center gap-1.5">
-            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-            </svg>
-            Open a room in two browser windows to see real-time sync
-          </span>
-        </p>
+        <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-4">
+          <p className="text-center text-sm text-blue-900 dark:text-blue-200 font-medium mb-1">
+            <span className="inline-flex items-center gap-1.5">
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
+              Try it: Join a room, then open the same room in another tab
+            </span>
+          </p>
+          <p className="text-center text-xs text-blue-700 dark:text-blue-300">
+            Start typing to see real-time collaborative editing in action
+          </p>
+        </div>
       </div>
 
       {/* Action Buttons */}
       <div className="max-w-4xl mx-auto px-4 pb-10">
-        <div className="flex flex-col sm:flex-row items-center justify-center gap-3">
-          <button
-            onClick={handleAutoJoin}
-            disabled={!isConnected}
-            className="w-full sm:w-auto px-6 py-3 bg-primary-500 hover:bg-primary-600 disabled:bg-gray-400 text-white rounded-xl font-semibold text-lg transition-colors shadow-lg shadow-primary-500/25"
-          >
-            Join a Room
-          </button>
-          <button
-            onClick={handleCreateRoom}
-            disabled={!isConnected}
-            className="w-full sm:w-auto px-6 py-3 bg-white dark:bg-gray-800 hover:bg-gray-50 dark:hover:bg-gray-700 text-gray-900 dark:text-gray-100 rounded-xl font-semibold transition-colors border border-gray-200 dark:border-gray-700"
-          >
-            Create Private Room
-          </button>
-          {FEATURES.WORD_WALL && (
+        <div className="flex flex-col sm:flex-row items-stretch sm:items-start justify-center gap-3">
+          {/* Join Room */}
+          <div className="flex-1 sm:flex-none">
             <button
-              onClick={navigateToWordWall}
+              onClick={handleAutoJoin}
               disabled={!isConnected}
-              className="w-full sm:w-auto px-6 py-3 bg-amber-500 hover:bg-amber-600 disabled:bg-gray-400 text-white rounded-xl font-semibold transition-colors shadow-lg shadow-amber-500/25"
+              className="w-full px-6 py-3 bg-primary-500 hover:bg-primary-600 disabled:bg-gray-400 text-white rounded-xl font-semibold text-lg transition-colors shadow-lg shadow-primary-500/25"
             >
-              Word Wall
+              Join a Room
             </button>
+            <p className="text-center text-xs text-gray-500 dark:text-gray-400 mt-1.5">
+              Collaborate with others
+            </p>
+          </div>
+
+          {/* Create Private Room */}
+          <div className="flex-1 sm:flex-none">
+            <button
+              onClick={handleCreateRoom}
+              disabled={!isConnected}
+              className="w-full px-6 py-3 bg-white dark:bg-gray-800 hover:bg-gray-50 dark:hover:bg-gray-700 text-gray-900 dark:text-gray-100 rounded-xl font-semibold transition-colors border border-gray-200 dark:border-gray-700"
+            >
+              Create Private Room
+            </button>
+            <p className="text-center text-xs text-gray-500 dark:text-gray-400 mt-1.5">
+              Unlisted, shareable link
+            </p>
+          </div>
+
+          {/* Word Wall */}
+          {FEATURES.WORD_WALL && (
+            <div className="flex-1 sm:flex-none">
+              <button
+                onClick={navigateToWordWall}
+                disabled={!isConnected}
+                className="w-full px-6 py-3 bg-amber-500 hover:bg-amber-600 disabled:bg-gray-400 text-white rounded-xl font-semibold transition-colors shadow-lg shadow-amber-500/25"
+              >
+                Word Wall
+              </button>
+              <p className="text-center text-xs text-gray-500 dark:text-gray-400 mt-1.5">
+                Vote on ideas together
+              </p>
+            </div>
           )}
         </div>
       </div>
@@ -322,11 +373,11 @@ export function Stage({ isConnected }: StageProps) {
       )}
 
       {/* Footer */}
-      <div className="max-w-4xl mx-auto px-4 pb-8 text-center space-y-1">
-        <p className="text-xs text-gray-400 dark:text-gray-600">
-          Powered by <a href="https://github.com/Dancode-188/synckit" target="_blank" rel="noopener noreferrer" className="hover:underline">SyncKit</a> &mdash; Fugue CRDT + WASM + WebSocket
+      <div className="max-w-4xl mx-auto px-4 pb-8 text-center space-y-2">
+        <p className="text-sm text-gray-500 dark:text-gray-400">
+          Powered by <a href="https://github.com/Dancode-188/synckit" target="_blank" rel="noopener noreferrer" className="font-medium text-primary-600 dark:text-primary-400 hover:underline">SyncKit</a> &mdash; Fugue CRDT + WebAssembly + WebSocket
         </p>
-        <p className="text-xs text-gray-400 dark:text-gray-600">
+        <p className="text-xs text-gray-400 dark:text-gray-500">
           Demo application &mdash; not for sensitive data
         </p>
       </div>
