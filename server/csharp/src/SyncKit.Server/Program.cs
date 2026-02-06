@@ -241,17 +241,16 @@ try
         app.MapDefaultEndpoints();
     }
 
-    // Attempt to connect storage provider and fail fast if necessary
-    try
+    // Attempt to connect storage provider; FallbackStorageAdapter handles degradation
+    var storage = app.Services.GetRequiredService<IStorageAdapter>();
+    await storage.ConnectAsync();
+    if (storage is FallbackStorageAdapter fallback && fallback.IsUsingFallback)
     {
-        var storage = app.Services.GetRequiredService<IStorageAdapter>();
-        await storage.ConnectAsync();
-        Log.Information("Storage provider connected and validated");
+        Log.Warning("Storage provider unavailable — running with in-memory storage (data will not persist across restarts)");
     }
-    catch (Exception ex)
+    else
     {
-        Log.Fatal(ex, "Storage provider failed to connect or validate. Exiting.");
-        return;
+        Log.Information("Storage provider connected and validated");
     }
 
     // Mark server as ready to accept traffic

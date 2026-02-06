@@ -19,7 +19,11 @@ public static class StorageRegistration
 
             var connectionString = config.DatabaseUrl;
 
-            services.AddSingleton<IStorageAdapter>(sp => new PostgresStorageAdapter(connectionString, sp.GetRequiredService<ILogger<PostgresStorageAdapter>>()));
+            services.AddSingleton<IStorageAdapter>(sp =>
+            {
+                var primary = new PostgresStorageAdapter(connectionString, sp.GetRequiredService<ILogger<PostgresStorageAdapter>>());
+                return new FallbackStorageAdapter(primary, sp.GetRequiredService<ILoggerFactory>());
+            });
             services.AddSingleton<SchemaValidator>(sp => new SchemaValidator(async ct =>
             {
                 var conn = new NpgsqlConnection(connectionString);
@@ -105,7 +109,12 @@ public static class StorageRegistration
         if (string.IsNullOrEmpty(connectionString))
             throw new InvalidOperationException("PostgreSQL connection string required for Storage:PostgreSql:ConnectionString");
 
-        services.AddSingleton<IStorageAdapter>(sp => new PostgresStorageAdapter(connectionString, sp.GetRequiredService<ILogger<PostgresStorageAdapter>>()));
+        // Wrap PostgresStorageAdapter with FallbackStorageAdapter for graceful degradation
+        services.AddSingleton<IStorageAdapter>(sp =>
+        {
+            var primary = new PostgresStorageAdapter(connectionString, sp.GetRequiredService<ILogger<PostgresStorageAdapter>>());
+            return new FallbackStorageAdapter(primary, sp.GetRequiredService<ILoggerFactory>());
+        });
         services.AddSingleton<SchemaValidator>(sp => new SchemaValidator(async ct =>
         {
             var conn = new NpgsqlConnection(connectionString);

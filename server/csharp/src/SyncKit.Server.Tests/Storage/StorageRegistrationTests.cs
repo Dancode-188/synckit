@@ -49,7 +49,7 @@ public class StorageRegistrationTests
 
         var sp = services.BuildServiceProvider();
         var storage = sp.GetRequiredService<IStorageAdapter>();
-        Assert.IsType<PostgresStorageAdapter>(storage);
+        Assert.IsType<FallbackStorageAdapter>(storage);
 
         // SchemaValidator should be registered
         var validator = sp.GetRequiredService<SchemaValidator>();
