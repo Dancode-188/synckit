@@ -11,6 +11,8 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "SyncKit.AppHost", "..\..\..
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "SyncKit.ServiceDefaults", "..\..\..\orchestration\aspire\SyncKit.ServiceDefaults\SyncKit.ServiceDefaults.csproj", "{07F04C0E-1E74-4469-BF28-157C474AC5DE}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "SyncKit.Server.Benchmarks", "SyncKit.Server.Benchmarks\SyncKit.Server.Benchmarks.csproj", "{DA15939F-CEDD-4F2C-AACF-C1E96049721E}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -69,6 +71,18 @@ Global
 		{07F04C0E-1E74-4469-BF28-157C474AC5DE}.Release|x64.Build.0 = Release|Any CPU
 		{07F04C0E-1E74-4469-BF28-157C474AC5DE}.Release|x86.ActiveCfg = Release|Any CPU
 		{07F04C0E-1E74-4469-BF28-157C474AC5DE}.Release|x86.Build.0 = Release|Any CPU
+		{DA15939F-CEDD-4F2C-AACF-C1E96049721E}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{DA15939F-CEDD-4F2C-AACF-C1E96049721E}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{DA15939F-CEDD-4F2C-AACF-C1E96049721E}.Debug|x64.ActiveCfg = Debug|Any CPU
+		{DA15939F-CEDD-4F2C-AACF-C1E96049721E}.Debug|x64.Build.0 = Debug|Any CPU
+		{DA15939F-CEDD-4F2C-AACF-C1E96049721E}.Debug|x86.ActiveCfg = Debug|Any CPU
+		{DA15939F-CEDD-4F2C-AACF-C1E96049721E}.Debug|x86.Build.0 = Debug|Any CPU
+		{DA15939F-CEDD-4F2C-AACF-C1E96049721E}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{DA15939F-CEDD-4F2C-AACF-C1E96049721E}.Release|Any CPU.Build.0 = Release|Any CPU
+		{DA15939F-CEDD-4F2C-AACF-C1E96049721E}.Release|x64.ActiveCfg = Release|Any CPU
+		{DA15939F-CEDD-4F2C-AACF-C1E96049721E}.Release|x64.Build.0 = Release|Any CPU
+		{DA15939F-CEDD-4F2C-AACF-C1E96049721E}.Release|x86.ActiveCfg = Release|Any CPU
+		{DA15939F-CEDD-4F2C-AACF-C1E96049721E}.Release|x86.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
