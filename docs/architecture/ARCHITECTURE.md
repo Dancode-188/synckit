@@ -1,8 +1,8 @@
 # SyncKit System Architecture
 
-**Version:** 0.2.0
-**Status:** v0.2.0 Released - Production Ready
-**Last Updated:** December 18, 2025
+**Version:** 0.3.0
+**Status:** v0.3.0 Released - Production Ready
+**Last Updated:** February 6, 2026
 
 ---
 
@@ -33,7 +33,7 @@ SyncKit is a **local-first sync engine** designed for modern web and mobile appl
 - 📦 **Production Bundle**: 154KB gzipped (46KB lite) - Complete solution with all collaboration features
 - 🌐 **Universal**: Works everywhere (browser, Node.js, mobile, desktop)
 - 🔒 **Data Integrity**: Formally verified with TLA+ (zero data loss guarantee)
-- 🧪 **Battle-Tested**: 1,081 passing tests, 87% coverage, 24-hour stress test
+- 🧪 **Battle-Tested**: 1,415+ passing tests across TypeScript, Rust, Python, and Go
 
 **Target Use Cases:**
 - Collaborative applications (Google Docs-style)
@@ -152,10 +152,10 @@ SyncKit is a **local-first sync engine** designed for modern web and mobile appl
 
 **Responsibilities:**
 - Simple, intuitive API wrapping Rust core
-- Storage adapters (IndexedDB, Memory - v0.1.0; OPFS, SQLite planned for v0.2+)
+- Storage adapters (IndexedDB, Memory, OPFS)
 - Offline operation queue with retry logic
 - WebSocket connection management
-- Framework integrations (React in v0.1.0; Vue, Svelte planned for v0.2+)
+- Framework integrations (React, Vue 3, Svelte 5)
 
 **Why TypeScript:**
 - Native to web development
@@ -794,4 +794,4 @@ SyncKit's architecture is designed for **performance**, **correctness**, and **s
 ✅ **Scalability:** Horizontal scaling + partial sync = millions of users
 ✅ **Security:** JWT + RBAC + TLS = production-ready security
 
-**Implementation Status:** All core architecture components implemented and verified in v0.1.0, including cross-tab synchronization via BroadcastChannel API. Future enhancements (Vue/Svelte adapters, Protobuf protocol, OPFS/SQLite storage, Text/Counter/Set CRDT APIs) planned for subsequent releases. Note: CRDT implementations exist in Rust core but are not yet exposed in SDK API.
+**Implementation Status:** All core architecture components implemented and production-verified. Includes cross-tab synchronization via BroadcastChannel API, Vue 3/Svelte 5 framework adapters, OPFS storage, Text/Counter/Set CRDT APIs exposed in SDK, and multi-language server implementations (TypeScript, Python, Go). Future enhancements: Protobuf protocol, SQLite storage, Rust server.

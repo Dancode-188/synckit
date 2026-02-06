@@ -101,7 +101,7 @@ Open source and self-hostable. No vendor lock-in, no surprise $2,000/month bills
 ### 🛡️ **Data Integrity Guaranteed**
 - Zero data loss with automatic conflict resolution (Last-Write-Wins)
 - Formal verification with TLA+ (3 bugs found and fixed)
-- 1,081+ comprehensive tests across TypeScript and Rust (unit, integration, chaos, load)
+- 1,415+ comprehensive tests across TypeScript, Rust, Python, and Go (unit, integration, chaos, load)
 
 ---
 
@@ -316,7 +316,7 @@ Different libraries make different trade-offs. Here's how SyncKit compares:
 | **Works Without Server** | ✅ Yes | ❌ No | ❌ No | ✅ Yes | ✅ Yes |
 | **Self-Hosted** | ✅ Yes | ❌ No | ✅ Yes | ✅ Yes | ✅ Yes |
 | **TypeScript Support** | ✅ Native | ✅ Good | ✅ Good | ⚠️ Issues | ✅ Good |
-| **Production Status** | ✅ v0.2.0 | ✅ Mature | ✅ Mature | ✅ Mature | ⚠️ Stable core,<br/>evolving ecosystem |
+| **Production Status** | ✅ v0.3.0 | ✅ Mature | ✅ Mature | ✅ Mature | ⚠️ Stable core,<br/>evolving ecosystem |
 
 ### When to Choose SyncKit
 
@@ -345,13 +345,15 @@ Different libraries make different trade-offs. Here's how SyncKit compares:
 - **`@synckit-js/sdk/lite`** - Lightweight version (local-only, 46KB gzipped)
 
 ### Servers
-- **`@synckit-js/server`** - Bun + Hono reference server (production-ready)
+- **`@synckit-js/server`** - Bun + Hono TypeScript server (production-ready)
+- **Python Server** - FastAPI implementation (production-ready, v0.3.0)
+- **Go Server** - High-performance goroutine-based server (production-ready, v0.3.0)
 
 ---
 
 ## 🚦 Status
 
-**Current Version:** v0.2.0
+**Current Version:** v0.3.0
 
 ### Production Ready ✅
 
@@ -366,30 +368,24 @@ The core sync engine is battle-tested and ready for production:
 - ✅ **Core Rust Engine** - Memory-safe WASM with zero unsafe blocks
 - ✅ **WASM Compilation** - 154KB gzipped (46KB lite), optimized performance
 - ✅ **TypeScript SDK** - Document, Text, RichText, Counter, Set APIs
-- ✅ **Storage Adapters** - IndexedDB and Memory storage
-- ✅ **TypeScript Server** - WebSocket sync server with Bun + Hono
-- ✅ **1,081+ Tests** - 87% code coverage, 100% pass rate
+- ✅ **Storage Adapters** - IndexedDB, Memory, and OPFS
+- ✅ **Multi-Language Servers** - TypeScript, Python, and Go (all production-ready)
+- ✅ **Undo/Redo** - Cross-tab undo with persistent history
+- ✅ **Awareness & Presence** - Real-time user tracking with cursor sharing
+- ✅ **Cross-Tab Sync** - BroadcastChannel-based synchronization
+- ✅ **Framework Adapters** - React hooks, Vue 3 composables, Svelte 5 stores
+- ✅ **Quill Integration** - QuillBinding for Quill editor
+- ✅ **Snapshot API** - Document snapshots with automatic scheduling
+- ✅ **Benchmark Suite** - Cross-server performance comparison
+- ✅ **1,415+ Tests** - 100% pass rate across TypeScript, Rust, Python, and Go
 - ✅ **Example Applications** - Todo app, collaborative editor, project management
-
-### Public Beta 🔶
-
-New features we're testing with the community - stable but gathering feedback:
-
-- 🔶 **Undo/Redo** - Cross-tab undo with persistent history
-- 🔶 **Awareness & Presence** - Real-time user tracking
-- 🔶 **Cursor Sharing** - Live cursor positions with animations
-- 🔶 **Cross-Tab Sync** - BroadcastChannel-based synchronization
-- 🔶 **React Hooks** - useSyncText, useRichText, usePresence, useOthers, useUndo
-- 🔶 **Vue 3 Composables** - Composition API integration
-- 🔶 **Svelte 5 Stores** - Reactive stores with runes support
-- 🔶 **Quill Integration** - QuillBinding for Quill editor
 
 ### What's Next 🚧
 
-- 🚧 **Multi-Language Servers** - Python, Go, Rust implementations
-- 🚧 **Advanced Storage** - OPFS (Origin Private File System), SQLite adapter
+- 🚧 **Rust Server** - Native Rust server implementation
+- 🚧 **SQLite Storage** - For Node.js, Bun, and Electron
+- 🚧 **SQL Sync** - Multi-table relational sync
 - 🚧 **Conflict UI** - Visual conflict resolution interface
-- 🚧 **Performance** - Large document optimization (>10K chars)
 
 **[Full roadmap →](ROADMAP.md)**
 
@@ -403,7 +399,7 @@ We welcome contributions from the community!
 - 🐛 **Bug Reports** - [Open an issue](https://github.com/Dancode-188/synckit/issues)
 - 📚 **Documentation** - Improve guides, fix typos
 - 🧪 **Tests** - Add test coverage
-- 🌐 **Servers** - Implement Python/Go/Rust servers
+- 🌐 **Servers** - Implement Rust server
 - 💡 **Features** - Propose new features in discussions
 
 **[Contributing guide →](CONTRIBUTING.md)**

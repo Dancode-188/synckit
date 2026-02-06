@@ -25,7 +25,7 @@ SyncKit is designed for **"fast enough for real-world use, easy to optimize"** r
 
 ### Performance Goals
 
-| Metric | Target | SyncKit v0.2.3 Achieves |
+| Metric | Target | SyncKit v0.3.0 Achieves |
 |--------|--------|------------------|
 | **Local operation** | <1ms | ~0.005ms (message encoding) |
 | **Queue operation** | <1ms | ~0.021ms (offline queue) |
@@ -811,8 +811,7 @@ function TodoList({ todos }: { todos: Todo[] }) {
 import { computed, ref, onMounted, onUnmounted } from 'vue'
 import { SyncKit } from '@synckit-js/sdk'
 
-// Note: @synckit-js/sdk/vue coming in v0.2.0
-// For now, use the core SDK with Vue reactivity
+// Vue 3 composables available via @synckit-js/sdk/vue
 const synckit = new SyncKit({
   storage: 'indexeddb',
   name: 'my-app',
@@ -848,8 +847,7 @@ const completedTodos = computed(() =>
   import { onMount } from 'svelte'
   import { SyncKit } from '@synckit-js/sdk'
 
-  // Note: @synckit-js/sdk/svelte coming in v0.2.0
-  // For now, use the core SDK with Svelte stores
+  // Svelte 5 stores available via @synckit-js/sdk/svelte
   const synckit = new SyncKit({
     storage: 'indexeddb',
     name: 'my-app',

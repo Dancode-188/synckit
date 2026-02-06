@@ -4,20 +4,20 @@ Welcome to SyncKit! Build collaborative, offline-first apps without the complexi
 
 ---
 
-## ✨ What's New in v0.2.0
+## ✨ What's New in v0.3.0
 
-**Everything you need for real-time collaboration.**
+**Production-ready multi-language servers with comprehensive security.**
 
-v0.2.0 is production-ready with features that used to take months to build:
+v0.3.0 brings full server parity across TypeScript, Python, and Go:
 
-- **✍️ Rich text editing** - Formatting conflicts resolved automatically (Peritext CRDT)
-- **↩️ Cross-tab undo/redo** - Works across browser tabs and persists across sessions
-- **👥 Live presence** - See who's editing in real-time
-- **🖱️ Cursor sharing** - Watch teammates type with animated cursors
-- **🎯 Counters & Sets** - PN-Counter and OR-Set CRDTs for distributed state
-- **⚛️ Framework adapters** - React, Vue 3, and Svelte 5 ready to use
+- **🐍 Python Server** - FastAPI with JWT, PostgreSQL, Redis pub/sub
+- **🐹 Go Server** - High-performance goroutine-based WebSocket server
+- **💾 OPFS Storage** - 4-30x faster than IndexedDB for browser storage
+- **🔒 Security Hardening** - SQL injection prevention, JWT enforcement, rate limiting
+- **📸 Snapshot API** - Document snapshots with automatic scheduling
+- **📊 Benchmark Suite** - Cross-server performance comparison
 
-**Backed by 1,081 passing tests** (87% coverage). Zero critical bugs. Production-ready.
+**Backed by 1,415+ passing tests** across TypeScript, Rust, Python, and Go. Production-ready.
 
 **[Get started in 5 minutes →](guides/getting-started.md)**
 
@@ -158,7 +158,7 @@ Learn from working examples:
 - Network sync: 10-50ms p95 (faster than most REST APIs)
 - Multi-client convergence: <100ms (real-time collaboration)
 
-**Stress-tested:** 24-hour continuous operation, 1,081 tests, zero memory leaks.
+**Stress-tested:** 24-hour continuous operation, 1,415+ tests, zero memory leaks.
 
 **[Learn more about performance →](guides/performance.md)** | **[Bundle size optimization →](guides/bundle-size-optimization.md)**
 
@@ -247,35 +247,35 @@ We welcome contributions!
 
 ## 📊 Status
 
-**Current Release:** v0.2.0 (December 2025)
-**Production Ready:** Complete local-first collaboration platform ✅
+**Current Release:** v0.3.0 (February 2026)
+**Production Ready:** Complete local-first collaboration platform with multi-language servers ✅
 
 ### What's Complete ✅
 
+- ✅ **Multi-Language Servers** - TypeScript, Python, and Go (all production-ready)
+- ✅ **OPFS Storage** - 4-30x faster browser storage with IndexedDB fallback
+- ✅ **Snapshot API** - Document snapshots with automatic scheduling
+- ✅ **Benchmark Suite** - Cross-server performance comparison
+- ✅ **Security Hardening** - SQL injection prevention, JWT enforcement, rate limiting
 - ✅ **Text CRDT (Fugue)** - Collaborative text editing with conflict-free convergence
 - ✅ **Rich Text (Peritext)** - Bold, italic, links with formatting conflict resolution
 - ✅ **Undo/Redo** - Cross-tab undo with persistent history
-- ✅ **Awareness & Presence** - Real-time user tracking
-- ✅ **Cursor Sharing** - Live cursor positions with animations
+- ✅ **Awareness & Presence** - Real-time user tracking with cursor sharing
 - ✅ **Counters & Sets** - PN-Counter and OR-Set CRDTs
-- ✅ **Vue 3 Adapter** - Complete composables with Composition API
-- ✅ **Svelte 5 Adapter** - Reactive stores with runes support
+- ✅ **Framework Adapters** - React hooks, Vue 3 composables, Svelte 5 stores
 - ✅ Core Rust engine (LWW sync, full CRDT suite, protocol)
 - ✅ TypeScript SDK (Document, Text, RichText, Counter, Set APIs)
 - ✅ Network sync layer (WebSocket, offline queue, auto-reconnect)
 - ✅ Cross-tab sync (BroadcastChannel + server-mediated)
-- ✅ React integration (complete hook library for all features)
-- ✅ TypeScript server (WebSocket sync, JWT auth, PostgreSQL)
 - ✅ Example applications (todo app, collaborative editor, project management)
-- ✅ **1,081+ tests** (87% coverage)
-- ✅ Documentation (complete API reference, guides, migration docs)
+- ✅ **1,415+ tests** across TypeScript, Rust, Python, and Go
 - ✅ Formal verification (TLA+, 118K states explored)
 
 ### What's Next 🚧
 
-- 🚧 Multi-language servers (Python, Go, Rust)
-- 🚧 Advanced storage adapters (OPFS, SQLite)
-- 🚧 Performance optimization (large documents >10K chars)
+- 🚧 Rust server implementation
+- 🚧 SQLite storage adapter
+- 🚧 SQL sync engine
 
 **[Full roadmap →](../ROADMAP.md)**
 
