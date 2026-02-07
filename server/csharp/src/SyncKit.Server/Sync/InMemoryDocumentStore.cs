@@ -13,16 +13,16 @@ namespace SyncKit.Server.Sync;
 public class InMemoryDocumentStore : InMemoryStorageAdapter
 {
     public InMemoryDocumentStore(ILogger<InMemoryDocumentStore> logger)
-        : base(new LoggerAdapter(logger))
+        : base(new LoggerAdapter<InMemoryStorageAdapter>(logger))
     {
     }
 }
 
 /// <summary>
-/// Minimal adapter that adapts ILogger<T> instances to a non-generic ILogger
+/// Minimal adapter that adapts ILogger&lt;T&gt; instances to ILogger&lt;TTarget&gt;
 /// so that the storage implementation can be used from both the old and new wrappers.
 /// </summary>
-internal class LoggerAdapter : ILogger
+internal class LoggerAdapter<TTarget> : ILogger<TTarget>
 {
     private readonly ILogger _inner;
 
