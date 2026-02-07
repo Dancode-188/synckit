@@ -25,7 +25,11 @@ public enum MessageType
     Unsubscribe,
     SyncRequest,
     SyncResponse,
+    SyncStep1,
+    SyncStep2,
     Delta,
+    DeltaBatch,
+    DeltaBatchChunk,
     Ack,
 
     // Awareness (presence)

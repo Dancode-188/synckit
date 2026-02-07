@@ -129,9 +129,9 @@ public class ConnectionManager : IConnectionManager
                     UserId = "anonymous",
                     Permissions = new Auth.DocumentPermissions
                     {
-                        CanRead = [],
-                        CanWrite = [],
-                        IsAdmin = true
+                        CanRead = ["*"],
+                        CanWrite = ["*"],
+                        IsAdmin = false
                     }
                 };
                 _logger.LogInformation("Connection {ConnectionId} auto-authenticated (auth disabled)", connectionId);

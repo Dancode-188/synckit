@@ -606,7 +606,7 @@ public class AuthMessageHandlerTests
     }
 
     [Fact]
-    public async Task HandleAsync_AnonymousAuth_HasAdminPermissions()
+    public async Task HandleAsync_AnonymousAuth_HasNonAdminWildcardPermissions()
     {
         // Arrange
         var connection = CreateMockConnection();
@@ -620,10 +620,10 @@ public class AuthMessageHandlerTests
         // Act
         await _handlerAuthDisabled.HandleAsync(connection.Object, authMessage);
 
-        // Assert - Anonymous should have admin permissions for dev/test mode
+        // Assert - Anonymous should have wildcard read/write but NOT admin (matches TypeScript server)
         connection.Verify(c => c.Send(It.Is<AuthSuccessMessage>(m =>
             m.Permissions.ValueKind != System.Text.Json.JsonValueKind.Undefined &&
-            TestHelpers.GetBool(m.Permissions, "isAdmin") == true)), Times.Once);
+            TestHelpers.GetBool(m.Permissions, "isAdmin") == false)), Times.Once);
     }
 
     #endregion

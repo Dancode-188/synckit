@@ -92,9 +92,9 @@ public class AuthMessageHandler : IMessageHandler
                 UserId = "anonymous",
                 Permissions = new DocumentPermissions
                 {
-                    CanRead = [],
-                    CanWrite = [],
-                    IsAdmin = true // Give admin permissions for test/dev mode
+                    CanRead = ["*"],
+                    CanWrite = ["*"],
+                    IsAdmin = false
                 }
             };
         }
