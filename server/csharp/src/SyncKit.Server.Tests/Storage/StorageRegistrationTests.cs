@@ -39,7 +39,7 @@ public class StorageRegistrationTests
         var dict = new Dictionary<string, string?>
         {
             ["Storage:Provider"] = "postgresql",
-            ["Storage:PostgreSql:ConnectionString"] = "Host=localhost;Database=synckit;Username=postgres;Password=postgres"
+            ["Storage:PostgreSql:ConnectionString"] = "Host=localhost;Database=synckit;Username=postgres;Password=postgres" // pragma: allowlist secret
         };
         var config = new ConfigurationBuilder().AddInMemoryCollection(dict).Build();
         var services = new ServiceCollection();
