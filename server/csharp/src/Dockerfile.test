@@ -1,0 +1,54 @@
+ARG VARIANT=alpine
+
+FROM mcr.microsoft.com/dotnet/sdk:10.0-preview-alpine AS build
+WORKDIR /src
+
+# Copy solution and project files from repo root path (${SRC_ROOT})
+COPY server/csharp/src/SyncKit.Server.sln .
+COPY server/csharp/src/Directory.Build.props .
+COPY server/csharp/src/SyncKit.Server/SyncKit.Server.csproj SyncKit.Server/
+COPY server/csharp/src/SyncKit.Server.Tests/SyncKit.Server.Tests.csproj SyncKit.Server.Tests/
+
+# Restore only the server project to avoid referencing optional solution projects
+RUN dotnet restore SyncKit.Server/SyncKit.Server.csproj
+
+# Copy source code
+COPY server/csharp/src/SyncKit.Server/ SyncKit.Server/
+COPY server/csharp/src/SyncKit.Server.Tests/ SyncKit.Server.Tests/
+
+# Build and publish release version
+WORKDIR /src/SyncKit.Server
+RUN dotnet publish -c Release -o /app/publish --no-restore \
+    /p:UseAppHost=false \
+    /p:PublishTrimmed=false
+
+FROM mcr.microsoft.com/dotnet/aspnet:10.0-preview-alpine AS runtime-alpine
+WORKDIR /app
+RUN apk add --no-cache curl
+RUN adduser -D -u 1001 appuser
+COPY --from=build /app/publish .
+RUN chown -R appuser:appuser /app
+USER appuser
+ENV ASPNETCORE_URLS=http://+:8080
+ENV ASPNETCORE_ENVIRONMENT=Production
+EXPOSE 8080
+HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
+    CMD curl -f http://localhost:8080/health || exit 1
+ENTRYPOINT ["dotnet", "SyncKit.Server.dll"]
+
+FROM mcr.microsoft.com/dotnet/aspnet:10.0-preview AS runtime-debian
+WORKDIR /app
+RUN apt-get update && apt-get install -y --no-install-recommends curl \
+    && rm -rf /var/lib/apt/lists/*
+RUN useradd --uid 1001 --create-home appuser
+COPY --from=build /app/publish .
+RUN chown -R appuser:appuser /app
+USER appuser
+ENV ASPNETCORE_URLS=http://+:8080
+ENV ASPNETCORE_ENVIRONMENT=Production
+EXPOSE 8080
+HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
+    CMD curl -f http://localhost:8080/health || exit 1
+ENTRYPOINT ["dotnet", "SyncKit.Server.dll"]
+
+FROM runtime-${VARIANT} AS runtime

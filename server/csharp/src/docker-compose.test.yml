@@ -1,0 +1,49 @@
+services:
+  postgres:
+    image: postgres:15-alpine
+    environment:
+      POSTGRES_DB: synckit_test
+      POSTGRES_USER: synckit
+      POSTGRES_PASSWORD: synckit_test
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U synckit -d synckit_test"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  synckit-dotnet:
+    image: mcr.microsoft.com/dotnet/sdk:10.0-preview-alpine
+    ports:
+      - "8080:8080"
+    environment:
+      - SYNCKIT__JWT__SECRET=test-secret-at-least-32-characters-long
+      - STORAGE__PROVIDER=postgresql
+      - STORAGE__POSTGRESQL__CONNECTIONSTRING=Host=postgres;Port=5432;Database=synckit_test;Username=synckit;Password=synckit_test
+      - STORAGE__REDIS__ENABLED=true
+      - STORAGE__REDIS__CONNECTIONSTRING=redis:6379
+    volumes:
+      - ../../..:/src
+    working_dir: /src/server/csharp/src/SyncKit.Server
+    command: sh -lc "dotnet restore && dotnet run --urls=http://+:8080"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:8080/health || exit 1"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
