@@ -34,13 +34,16 @@ jobs:
           key: ubuntu-cargo-index-${{ hashFiles('**/Cargo.lock') }}
 
       - name: Run LWW benchmarks
-        run: cd core && cargo bench --bench lww_bench
+        run: cd core && cargo bench --bench lww_bench 2>&1 | tee target/criterion/output.txt
 
       - name: Run Vector Clock benchmarks
-        run: cd core && cargo bench --bench vector_clock_bench
+        run: cd core && cargo bench --bench vector_clock_bench 2>&1 | tee -a target/criterion/output.txt
 
       - name: Run Delta benchmarks
-        run: cd core && cargo bench --bench delta_bench
+        run: cd core && cargo bench --bench delta_bench 2>&1 | tee -a target/criterion/output.txt
+
+      - name: Run Fugue benchmarks
+        run: cd core && cargo bench --bench fugue_bench 2>&1 | tee -a target/criterion/output.txt
 
       - name: Store benchmark results
         uses: benchmark-action/github-action-benchmark@v1
