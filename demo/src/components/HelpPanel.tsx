@@ -95,8 +95,6 @@ export function HelpPanel({ isOpen, onClose, onReplayTour }: HelpPanelProps) {
               <ShortcutRow shortcut="Ctrl/Cmd + B" description="Bold text" />
               <ShortcutRow shortcut="Ctrl/Cmd + I" description="Italic text" />
               <ShortcutRow shortcut="Ctrl/Cmd + K" description="Insert link" />
-              <ShortcutRow shortcut="Ctrl/Cmd + Z" description="Undo" />
-              <ShortcutRow shortcut="Ctrl/Cmd + Y" description="Redo" />
               <ShortcutRow shortcut="Shift + ?" description="Open this help panel" />
             </div>
           </section>
