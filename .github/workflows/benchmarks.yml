@@ -33,6 +33,9 @@ jobs:
           path: ~/.cargo/git
           key: ubuntu-cargo-index-${{ hashFiles('**/Cargo.lock') }}
 
+      - name: Create output directory
+        run: mkdir -p core/target/criterion
+
       - name: Run LWW benchmarks
         run: cd core && cargo bench --bench lww_bench 2>&1 | tee target/criterion/output.txt
 
