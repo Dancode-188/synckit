@@ -37,16 +37,16 @@ jobs:
         run: mkdir -p core/target/criterion
 
       - name: Run LWW benchmarks
-        run: cd core && cargo bench --bench lww_bench | tee target/criterion/output.txt
+        run: cd core && cargo bench --bench lww_bench -- --output-format bencher | tee target/criterion/output.txt
 
       - name: Run Vector Clock benchmarks
-        run: cd core && cargo bench --bench vector_clock_bench | tee -a target/criterion/output.txt
+        run: cd core && cargo bench --bench vector_clock_bench -- --output-format bencher | tee -a target/criterion/output.txt
 
       - name: Run Delta benchmarks
-        run: cd core && cargo bench --bench delta_bench | tee -a target/criterion/output.txt
+        run: cd core && cargo bench --bench delta_bench -- --output-format bencher | tee -a target/criterion/output.txt
 
       - name: Run Fugue benchmarks
-        run: cd core && cargo bench --bench fugue_bench | tee -a target/criterion/output.txt
+        run: cd core && cargo bench --bench fugue_bench -- --output-format bencher | tee -a target/criterion/output.txt
 
       - name: Store benchmark results
         uses: benchmark-action/github-action-benchmark@v1
