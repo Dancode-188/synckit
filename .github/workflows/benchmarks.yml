@@ -7,7 +7,7 @@ on:
   workflow_dispatch:  # Allow manual trigger
 
 env:
-  CARGO_TERM_COLOR: always
+  CARGO_TERM_COLOR: auto
 
 jobs:
   benchmark:
