@@ -142,18 +142,29 @@ server/
 │   ├── tests/                  # Server tests (pytest)
 │   └── pyproject.toml          # Python project config
 │
-└── go/                         # Go server (v0.3.0+)
-    ├── cmd/server/main.go      # Entry point
-    ├── internal/
-    │   ├── config/             # Configuration
-    │   ├── auth/               # JWT validation
-    │   ├── security/           # Rate limiting, middleware
-    │   ├── storage/            # PostgreSQL adapter
-    │   ├── server/             # HTTP/WebSocket server
-    │   └── websocket/          # Connection management
-    └── go.mod                  # Go module file
-
-Note: Rust server implementation planned for a future release.
+├── go/                         # Go server (v0.3.0+)
+│   ├── cmd/server/main.go      # Entry point
+│   ├── internal/
+│   │   ├── config/             # Configuration
+│   │   ├── auth/               # JWT validation
+│   │   ├── security/           # Rate limiting, middleware
+│   │   ├── storage/            # PostgreSQL adapter
+│   │   ├── server/             # HTTP/WebSocket server
+│   │   └── websocket/          # Connection management
+│   └── go.mod                  # Go module file
+│
+└── csharp/                     # C# server (community-contributed)
+    ├── src/SyncKit.Server/     # ASP.NET Core server
+    │   ├── Program.cs          # Entry point
+    │   ├── Configuration/      # SyncKitConfig
+    │   ├── Auth/               # JWT auth, API keys, RBAC
+    │   ├── Security/           # Rate limiting, headers
+    │   ├── Storage/            # PostgreSQL adapter
+    │   ├── Sync/               # Document store, vector clocks
+    │   ├── WebSockets/         # Connection management, protocol
+    │   └── Awareness/          # Presence tracking
+    ├── src/SyncKit.Server.Tests/ # Test suite (711 tests)
+    └── src/SyncKit.Server.sln  # Solution file
 ```
 
 **Key Responsibilities:**

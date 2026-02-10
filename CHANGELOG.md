@@ -19,7 +19,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 **Production-Ready Multi-Language Servers!**
 
-This release brings full server parity across TypeScript, Python, and Go, with comprehensive security hardening, OPFS storage, and a benchmark suite for cross-server performance comparison.
+This release brings full server parity across TypeScript, Python, Go, and C#, with comprehensive security hardening, OPFS storage, and a benchmark suite for cross-server performance comparison.
 
 ### Added
 
@@ -44,6 +44,17 @@ This release brings full server parity across TypeScript, Python, and Go, with c
   - UNSUBSCRIBE handler for protocol completeness
   - Periodic awareness cleanup to prevent memory leaks
   - Comprehensive test suite (51 tests)
+
+- **🔷 C# Server** - ASP.NET Core implementation (community-contributed by @matthewcorven)
+  - Full binary WebSocket protocol support with JSON and binary modes
+  - JWT authentication with RBAC (canRead/canWrite/isAdmin)
+  - PostgreSQL storage adapter
+  - Redis pub/sub for multi-server coordination
+  - Rate limiting, CORS, and security header middleware
+  - Awareness subsystem with Redis store and TTL cleanup
+  - ACK tracking with configurable retries
+  - Delta batching service with per-document coalescing
+  - Comprehensive test suite (711 tests)
 
 #### Storage
 

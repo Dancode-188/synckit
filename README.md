@@ -119,7 +119,7 @@ Open source and self-hostable. No vendor lock-in, no surprise $2,000/month bills
 ### 🛡️ **Data Integrity Guaranteed**
 - Zero data loss with automatic conflict resolution (Last-Write-Wins)
 - Formal verification with TLA+ (3 bugs found and fixed)
-- 1,415+ comprehensive tests across TypeScript, Rust, Python, and Go (unit, integration, chaos, load)
+- 2,100+ comprehensive tests across TypeScript, Rust, Python, Go, and C# (unit, integration, chaos, load)
 
 ---
 
@@ -228,7 +228,7 @@ graph TD
 
     C --> D[IndexedDB Storage<br/>Your local source of truth]
 
-    D -.->|Optional| E[SyncKit Server<br/>TypeScript/Python/Go/Rust]
+    D -.->|Optional| E[SyncKit Server<br/>TypeScript/Python/Go/C#]
 
     E -->|Real-time sync| E1[WebSocket]
     E -->|Persistence| E2[PostgreSQL/MongoDB]
@@ -367,6 +367,7 @@ Different libraries make different trade-offs. Here's how SyncKit compares:
 - **`@synckit-js/server`** - Bun + Hono TypeScript server (production-ready)
 - **Python Server** - FastAPI implementation (production-ready, v0.3.0)
 - **Go Server** - High-performance goroutine-based server (production-ready, v0.3.0)
+- **C# Server** - ASP.NET Core implementation (production-ready, community-contributed)
 
 ---
 
@@ -388,7 +389,7 @@ The core sync engine is battle-tested and ready for production:
 - ✅ **WASM Compilation** - 154KB gzipped (46KB lite), optimized performance
 - ✅ **TypeScript SDK** - Document, Text, RichText, Counter, Set APIs
 - ✅ **Storage Adapters** - IndexedDB, Memory, and OPFS
-- ✅ **Multi-Language Servers** - TypeScript, Python, and Go (all production-ready)
+- ✅ **Multi-Language Servers** - TypeScript, Python, Go, and C# (all production-ready)
 - ✅ **Undo/Redo** - Cross-tab undo with persistent history
 - ✅ **Awareness & Presence** - Real-time user tracking with cursor sharing
 - ✅ **Cross-Tab Sync** - BroadcastChannel-based synchronization
@@ -396,7 +397,7 @@ The core sync engine is battle-tested and ready for production:
 - ✅ **Quill Integration** - QuillBinding for Quill editor
 - ✅ **Snapshot API** - Document snapshots with automatic scheduling
 - ✅ **Benchmark Suite** - Cross-server performance comparison
-- ✅ **1,415+ Tests** - 100% pass rate across TypeScript, Rust, Python, and Go
+- ✅ **2,100+ Tests** - 100% pass rate across TypeScript, Rust, Python, Go, and C#
 - ✅ **Example Applications** - Todo app, collaborative editor, project management
 
 ### What's Next 🚧

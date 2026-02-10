@@ -95,7 +95,7 @@ All sizes are **gzipped** for fair comparison:
 
 ## Test Coverage
 
-- **Total tests**: 1,415+ across TypeScript, Rust, Python, and Go
+- **Total tests**: 2,100+ across TypeScript, Rust, Python, Go, and C#
 - **Unit tests**: 100% passing ✅
 - **Integration tests**: 100% passing ✅
 - **Performance tests**: All passing ✅
@@ -113,7 +113,7 @@ npm test -- performance/benchmarks.test.ts --run
 ## Version History
 
 ### v0.3.0 (Current)
-- Multi-language server implementations (TypeScript, Python, Go)
+- Multi-language server implementations (TypeScript, Python, Go, C#)
 - OPFS storage adapter (4-30x faster than IndexedDB)
 - Comprehensive benchmark suite
 - Performance benchmarks established
