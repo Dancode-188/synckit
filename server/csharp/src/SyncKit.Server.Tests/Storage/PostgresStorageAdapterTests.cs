@@ -21,10 +21,11 @@ public class PostgresStorageAdapterTests : IAsyncLifetime
     {
         _postgresContainer = new TestcontainersBuilder<TestcontainersContainer>()
             .WithImage("postgres:15")
+            .WithCleanUp(true)
             .WithEnvironment("POSTGRES_USER", "synckit")
             .WithEnvironment("POSTGRES_PASSWORD", "synckit_test")
             .WithEnvironment("POSTGRES_DB", "synckit_test")
-            .WithPortBinding(54320, 5432)
+            .WithPortBinding(0, 5432)
             .WithWaitStrategy(Wait.ForUnixContainer().UntilPortIsAvailable(5432))
             .Build();
     }
@@ -46,13 +47,24 @@ public class PostgresStorageAdapterTests : IAsyncLifetime
         var port = _postgresContainer.GetMappedPublicPort(5432);
         _connectionString = $"Host={host};Port={port};Username=synckit;Password=synckit_test;Database=synckit_test";
 
-        // Apply schema.sql
+        // Apply schema.sql with retry to handle Postgres startup race condition
         var schema = File.ReadAllText(Path.Combine("..", "..", "..", "..", "..", "..", "..", "server", "typescript", "src", "storage", "schema.sql"));
-        await using var conn = new NpgsqlConnection(_connectionString);
-        await conn.OpenAsync();
-        await using var cmd = conn.CreateCommand();
-        cmd.CommandText = schema;
-        await cmd.ExecuteNonQueryAsync();
+        for (var attempt = 0; attempt < 5; attempt++)
+        {
+            try
+            {
+                await using var conn = new NpgsqlConnection(_connectionString);
+                await conn.OpenAsync();
+                await using var cmd = conn.CreateCommand();
+                cmd.CommandText = schema;
+                await cmd.ExecuteNonQueryAsync();
+                break;
+            }
+            catch when (attempt < 4)
+            {
+                await Task.Delay(1000 * (attempt + 1));
+            }
+        }
 
         _adapter = new PostgresStorageAdapter(_connectionString!, new NullLogger<PostgresStorageAdapter>());
         await _adapter.ConnectAsync();

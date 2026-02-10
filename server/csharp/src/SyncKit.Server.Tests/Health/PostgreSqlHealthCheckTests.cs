@@ -1,6 +1,7 @@
 using System;
 using System.Threading.Tasks;
 using DotNet.Testcontainers.Builders;
+using DotNet.Testcontainers.Configurations;
 using DotNet.Testcontainers.Containers;
 using Microsoft.Extensions.Diagnostics.HealthChecks;
 using Xunit;
@@ -18,11 +19,11 @@ public class PostgreSqlHealthCheckTests : IAsyncLifetime
         _postgresContainer = new TestcontainersBuilder<TestcontainersContainer>()
             .WithImage("postgres:15")
             .WithCleanUp(true)
-            .WithName("synckit-test-postgres-health")
             .WithEnvironment("POSTGRES_USER", "synckit")
             .WithEnvironment("POSTGRES_PASSWORD", "synckit_test")
             .WithEnvironment("POSTGRES_DB", "synckit_test")
-            .WithPortBinding(54321, 5432)
+            .WithPortBinding(0, 5432)
+            .WithWaitStrategy(Wait.ForUnixContainer().UntilPortIsAvailable(5432))
             .Build();
     }
 
@@ -67,7 +68,15 @@ public class PostgreSqlHealthCheckTests : IAsyncLifetime
 
         var check = new SyncKit.Server.Health.PostgreSqlHealthCheck(connStr);
 
-        var res = await check.CheckHealthAsync(new HealthCheckContext());
+        // Retry to handle Postgres startup race condition
+        HealthCheckResult res = default;
+        for (var attempt = 0; attempt < 5; attempt++)
+        {
+            res = await check.CheckHealthAsync(new HealthCheckContext());
+            if (res.Status == HealthStatus.Healthy)
+                break;
+            await Task.Delay(1000 * (attempt + 1));
+        }
 
         Assert.Equal(HealthStatus.Healthy, res.Status);
     }
