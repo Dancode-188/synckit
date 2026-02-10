@@ -5,7 +5,7 @@ namespace SyncKit.Server.Services;
 /// <summary>
 /// Centralized performance metrics for delta tracking and convergence analysis.
 /// These metrics help diagnose the 40% convergence gap between C# and TypeScript servers.
-/// 
+///
 /// Key metrics:
 /// - DeltasReceived: Deltas received from clients
 /// - DeltasBroadcast: Deltas sent to subscribers (fan-out count)
@@ -203,7 +203,7 @@ public static class PerformanceMetrics
     public static void IncrementPendingSends()
     {
         var current = Interlocked.Increment(ref _pendingSends);
-        
+
         // Track max
         long currentMax;
         do
@@ -248,7 +248,7 @@ public static class PerformanceMetrics
         var queueDepthSamples = Interlocked.Read(ref _totalQueueDepthSamples);
         var totalQueueDepth = Interlocked.Read(ref _totalQueueDepth);
         var maxQueueDepth = Interlocked.Read(ref _maxQueueDepth);
-        
+
         // Send timing breakdown
         var sendTimingSamples = Interlocked.Read(ref _sendTimingSamples);
         var totalSerializeUs = Interlocked.Read(ref _totalSerializeTimeUs);

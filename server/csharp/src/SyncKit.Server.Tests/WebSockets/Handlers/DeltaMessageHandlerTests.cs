@@ -78,7 +78,7 @@ public class DeltaMessageHandlerTests
         _mockCoordinator.Verify(c => c.ApplyDeltaAsync(
             documentId,
             It.IsAny<System.Text.Json.JsonElement>(),
-            It.IsAny<Dictionary<string,long>>(),
+            It.IsAny<Dictionary<string, long>>(),
             It.IsAny<long>(),
             It.Is<string>(id => id == clientId),
             It.IsAny<string>()),
@@ -294,7 +294,7 @@ public class DeltaMessageHandlerTests
 
         SetupAuthenticatedConnectionWithWriteAccess(connectionId, clientId, subscriptions, documentId);
 
-        Dictionary<string,long>? capturedVectorClock = null;
+        Dictionary<string, long>? capturedVectorClock = null;
         _mockCoordinator.Setup(c => c.ApplyDeltaAsync(
                 It.IsAny<string>(),
                 It.IsAny<System.Text.Json.JsonElement>(),
@@ -302,9 +302,9 @@ public class DeltaMessageHandlerTests
                 It.IsAny<long>(),
                 It.IsAny<string>(),
                 It.IsAny<string>()))
-            .Callback<string, System.Text.Json.JsonElement, Dictionary<string,long>, long, string, string>((docId, deltaJson, vc, ts, clientId, deltaId) =>
+            .Callback<string, System.Text.Json.JsonElement, Dictionary<string, long>, long, string, string>((docId, deltaJson, vc, ts, clientId, deltaId) =>
             {
-                capturedVectorClock = vc == null ? null : new Dictionary<string,long>(vc);
+                capturedVectorClock = vc == null ? null : new Dictionary<string, long>(vc);
             })
             .ReturnsAsync(new Dictionary<string, object?> { { "field", "value" } });
         _mockConnectionManager.Setup(cm => cm.BroadcastToDocumentAsync(
@@ -348,7 +348,7 @@ public class DeltaMessageHandlerTests
                 It.IsAny<long>(),
                 It.IsAny<string>(),
                 It.IsAny<string>()))
-            .Callback<string, System.Text.Json.JsonElement, Dictionary<string,long>, long, string, string>((docId, deltaJson, vc, ts, clientId, deltaId) =>
+            .Callback<string, System.Text.Json.JsonElement, Dictionary<string, long>, long, string, string>((docId, deltaJson, vc, ts, clientId, deltaId) =>
             {
                 capturedClientId = clientId;
             })
@@ -645,7 +645,7 @@ public class DeltaMessageHandlerTests
         _mockCoordinator.Verify(c => c.ApplyDeltaAsync(
             documentId,
             It.IsAny<System.Text.Json.JsonElement>(),
-            It.IsAny<Dictionary<string,long>>(),
+            It.IsAny<Dictionary<string, long>>(),
             It.IsAny<long>(),
             It.Is<string>(id => id == "admin-client"),
             It.IsAny<string>()), Times.Once);

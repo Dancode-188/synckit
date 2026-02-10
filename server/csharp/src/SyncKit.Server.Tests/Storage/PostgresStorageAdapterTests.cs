@@ -47,7 +47,7 @@ public class PostgresStorageAdapterTests : IAsyncLifetime
         _connectionString = $"Host={host};Port={port};Username=synckit;Password=synckit_test;Database=synckit_test";
 
         // Apply schema.sql
-        var schema = File.ReadAllText(Path.Combine("..", "..", "..", "..", "..", "server", "typescript", "src", "storage", "schema.sql"));
+        var schema = File.ReadAllText(Path.Combine("..", "..", "..", "..", "..", "..", "..", "server", "typescript", "src", "storage", "schema.sql"));
         await using var conn = new NpgsqlConnection(_connectionString);
         await conn.OpenAsync();
         await using var cmd = conn.CreateCommand();

@@ -334,7 +334,8 @@ public class SingleThreadDocument
 
     public IReadOnlyList<StoredDelta> GetDeltasSince(VectorClock? since)
     {
-        if (since == null) return _deltas.ToList();
+        if (since == null)
+            return _deltas.ToList();
         return _deltas.Where(d => !d.VectorClock.HappensBefore(since) && !d.VectorClock.Equals(since)).ToList();
     }
 

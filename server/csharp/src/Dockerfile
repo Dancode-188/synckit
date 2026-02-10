@@ -23,6 +23,7 @@ COPY SyncKit.Server.sln .
 COPY Directory.Build.props .
 COPY SyncKit.Server/SyncKit.Server.csproj SyncKit.Server/
 COPY SyncKit.Server.Tests/SyncKit.Server.Tests.csproj SyncKit.Server.Tests/
+COPY SyncKit.Server.Benchmarks/SyncKit.Server.Benchmarks.csproj SyncKit.Server.Benchmarks/
 
 # Restore dependencies (cached unless project files change)
 RUN dotnet restore SyncKit.Server.sln
@@ -30,6 +31,7 @@ RUN dotnet restore SyncKit.Server.sln
 # Copy source code
 COPY SyncKit.Server/ SyncKit.Server/
 COPY SyncKit.Server.Tests/ SyncKit.Server.Tests/
+COPY SyncKit.Server.Benchmarks/ SyncKit.Server.Benchmarks/
 
 # Build and publish release version
 WORKDIR /src/SyncKit.Server
