@@ -184,8 +184,8 @@ jobs:
 
       - name: Start test environment and run e2e tests
         run: |
-          chmod +x server/csharp/src/run-tests.sh
-          server/csharp/src/run-tests.sh
+          chmod +x ./run-tests.sh
+          ./run-tests.sh
 
       - name: Upload E2E Artifacts
         uses: actions/upload-artifact@v4

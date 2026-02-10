@@ -18,11 +18,11 @@ public class PostgreSqlHealthCheckTests : IAsyncLifetime
         _postgresContainer = new TestcontainersBuilder<TestcontainersContainer>()
             .WithImage("postgres:15")
             .WithCleanUp(true)
-            .WithName("synckit-test-postgres")
+            .WithName("synckit-test-postgres-health")
             .WithEnvironment("POSTGRES_USER", "synckit")
             .WithEnvironment("POSTGRES_PASSWORD", "synckit_test")
             .WithEnvironment("POSTGRES_DB", "synckit_test")
-            .WithPortBinding(54320, 5432)
+            .WithPortBinding(54321, 5432)
             .Build();
     }
 
