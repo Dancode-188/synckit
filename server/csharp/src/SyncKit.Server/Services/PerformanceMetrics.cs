@@ -113,7 +113,8 @@ public static class PerformanceMetrics
         do
         {
             currentMax = Interlocked.Read(ref _maxBroadcastLatencyMs);
-            if (milliseconds <= currentMax) break;
+            if (milliseconds <= currentMax)
+                break;
         } while (Interlocked.CompareExchange(ref _maxBroadcastLatencyMs, milliseconds, currentMax) != currentMax);
     }
 
@@ -129,7 +130,8 @@ public static class PerformanceMetrics
         do
         {
             currentMax = Interlocked.Read(ref _maxProcessingLatencyMs);
-            if (milliseconds <= currentMax) break;
+            if (milliseconds <= currentMax)
+                break;
         } while (Interlocked.CompareExchange(ref _maxProcessingLatencyMs, milliseconds, currentMax) != currentMax);
     }
 
@@ -150,7 +152,8 @@ public static class PerformanceMetrics
         do
         {
             currentMax = Interlocked.Read(ref _maxQueueDepth);
-            if (depth <= currentMax) break;
+            if (depth <= currentMax)
+                break;
         } while (Interlocked.CompareExchange(ref _maxQueueDepth, depth, currentMax) != currentMax);
     }
 
@@ -173,21 +176,24 @@ public static class PerformanceMetrics
         do
         {
             currentMax = Interlocked.Read(ref _maxSerializeTimeUs);
-            if (serializeUs <= currentMax) break;
+            if (serializeUs <= currentMax)
+                break;
         } while (Interlocked.CompareExchange(ref _maxSerializeTimeUs, serializeUs, currentMax) != currentMax);
 
         // Track max semaphore wait time
         do
         {
             currentMax = Interlocked.Read(ref _maxSemaphoreWaitTimeUs);
-            if (semaphoreWaitUs <= currentMax) break;
+            if (semaphoreWaitUs <= currentMax)
+                break;
         } while (Interlocked.CompareExchange(ref _maxSemaphoreWaitTimeUs, semaphoreWaitUs, currentMax) != currentMax);
 
         // Track max websocket send time
         do
         {
             currentMax = Interlocked.Read(ref _maxWebSocketSendTimeUs);
-            if (webSocketSendUs <= currentMax) break;
+            if (webSocketSendUs <= currentMax)
+                break;
         } while (Interlocked.CompareExchange(ref _maxWebSocketSendTimeUs, webSocketSendUs, currentMax) != currentMax);
     }
 
@@ -203,7 +209,8 @@ public static class PerformanceMetrics
         do
         {
             currentMax = Interlocked.Read(ref _maxPendingSends);
-            if (current <= currentMax) break;
+            if (current <= currentMax)
+                break;
         } while (Interlocked.CompareExchange(ref _maxPendingSends, current, currentMax) != currentMax);
     }
 

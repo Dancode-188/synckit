@@ -100,14 +100,6 @@ try
         Log.Information("Using SYNCKIT_SERVER_URL: {Url}", httpUrl);
     }
 
-    // Add Aspire service defaults when running under Aspire orchestration
-    // This provides OpenTelemetry, service discovery, and resilience patterns
-    var isAspireManaged = !string.IsNullOrEmpty(builder.Configuration["OTEL_EXPORTER_OTLP_ENDPOINT"]);
-    if (isAspireManaged)
-    {
-        builder.AddServiceDefaults();
-        Log.Information("Running under Aspire orchestration - service defaults enabled");
-    }
 
     // Configure Serilog from appsettings.json
     builder.Host.UseSerilog((context, services, configuration) => configuration
@@ -235,11 +227,6 @@ try
     // Enable WebSocket support with SyncKit middleware
     app.UseSyncKitWebSockets();
 
-    // Map Aspire default endpoints when running under orchestration
-    if (isAspireManaged)
-    {
-        app.MapDefaultEndpoints();
-    }
 
     // Attempt to connect storage provider; FallbackStorageAdapter handles degradation
     var storage = app.Services.GetRequiredService<IStorageAdapter>();
