@@ -341,7 +341,9 @@ public class LwwConflictResolutionTests
         // Rebuild from constructor
         var clock = new VectorClock(new Dictionary<string, long>
         {
-            ["clientA"] = 2, ["clientB"] = 1, ["clientC"] = 1
+            ["clientA"] = 2,
+            ["clientB"] = 1,
+            ["clientC"] = 1
         });
         var docRebuilt = new Document("doc-1", clock, deltas);
         var stateRebuilt = docRebuilt.BuildState();
@@ -375,7 +377,9 @@ public class LwwConflictResolutionTests
 
         var clock = new VectorClock(new Dictionary<string, long>
         {
-            ["clientA"] = 1, ["clientB"] = 1, ["clientC"] = 1
+            ["clientA"] = 1,
+            ["clientB"] = 1,
+            ["clientC"] = 1
         });
         var docRebuilt = new Document("doc-1", clock, deltas);
 
@@ -459,10 +463,12 @@ public class LwwConflictResolutionTests
 
         // Try forward and reverse ordering
         var doc1 = new Document("doc-1");
-        foreach (var d in deltas) doc1.AddDelta(d);
+        foreach (var d in deltas)
+            doc1.AddDelta(d);
 
         var doc2 = new Document("doc-2");
-        foreach (var d in deltas.AsEnumerable().Reverse()) doc2.AddDelta(d);
+        foreach (var d in deltas.AsEnumerable().Reverse())
+            doc2.AddDelta(d);
 
         var state1 = doc1.BuildState();
         var state2 = doc2.BuildState();

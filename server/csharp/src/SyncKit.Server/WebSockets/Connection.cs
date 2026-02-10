@@ -75,7 +75,7 @@ public class Connection : IConnection
     private readonly SemaphoreSlim _sendLock = new(1, 1); // Serializes WebSocket sends (required by .NET WebSocket)
     private readonly SemaphoreSlim? _pendingSendLimit; // Limits concurrent fire-and-forget sends (null = unlimited)
     private readonly int _maxPendingSends;
-    
+
     /// <summary>
     /// Default maximum pending sends per connection.
     /// Can be overridden via WS_MAX_PENDING_SENDS_PER_CONNECTION environment variable.
@@ -135,13 +135,13 @@ public class Connection : IConnection
         _binaryHandler = binaryHandler ?? throw new ArgumentNullException(nameof(binaryHandler));
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
         _maxPendingSends = maxPendingSends;
-        
+
         // Initialize pending send limiter (null = unlimited)
         if (maxPendingSends > 0)
         {
             _pendingSendLimit = new SemaphoreSlim(maxPendingSends, maxPendingSends);
         }
-        
+
         State = ConnectionState.Connecting;
         LastActivity = DateTime.UtcNow;
         _lastPong = DateTime.UtcNow;
@@ -324,13 +324,13 @@ public class Connection : IConnection
         {
             // Time serialization
             var serializeStart = Stopwatch.GetTimestamp();
-            
+
             // Select the correct protocol handler based on detected protocol
             var handler = Protocol == ProtocolType.Json ? _jsonHandler : _binaryHandler;
 
             // Serialize the message
             var data = handler.Serialize(message);
-            
+
             var serializeUs = (Stopwatch.GetTimestamp() - serializeStart) * 1_000_000 / Stopwatch.Frequency;
 
             if (data.Length == 0)
@@ -349,7 +349,7 @@ public class Connection : IConnection
             // Fire-and-forget async send with semaphore protection
             // SendDirectAsync will release _pendingSendLimit when done
             _ = SendDirectAsync(message, messageType, data, serializeUs);
-            
+
             return true;
         }
         catch (Exception ex)
@@ -368,17 +368,17 @@ public class Connection : IConnection
     private async Task SendDirectAsync(IMessage message, WebSocketMessageType messageType, ReadOnlyMemory<byte> data, long serializeUs)
     {
         PerformanceMetrics.IncrementPendingSends();
-        
+
         try
         {
             // Time semaphore wait
             var semaphoreStart = Stopwatch.GetTimestamp();
-            
+
             // Acquire send lock (required because .NET WebSocket doesn't support concurrent sends)
             await _sendLock.WaitAsync(_cts.Token);
-            
+
             var semaphoreWaitUs = (Stopwatch.GetTimestamp() - semaphoreStart) * 1_000_000 / Stopwatch.Frequency;
-            
+
             try
             {
                 if (_webSocket.State != WebSocketState.Open)
@@ -391,10 +391,10 @@ public class Connection : IConnection
                 var sendStart = Stopwatch.GetTimestamp();
                 await _webSocket.SendAsync(data, messageType, true, _cts.Token);
                 var webSocketSendUs = (Stopwatch.GetTimestamp() - sendStart) * 1_000_000 / Stopwatch.Frequency;
-                
+
                 // Record detailed timing for CI profiling
                 PerformanceMetrics.RecordSendTiming(serializeUs, semaphoreWaitUs, webSocketSendUs);
-                
+
                 var totalMs = (serializeUs + semaphoreWaitUs + webSocketSendUs) / 1000;
                 Interlocked.Increment(ref _totalSendSuccesses);
                 Interlocked.Add(ref _totalSendTimeMs, totalMs);
@@ -404,7 +404,8 @@ public class Connection : IConnection
                 do
                 {
                     currentMax = Interlocked.Read(ref _maxSendTimeMs);
-                    if (totalMs <= currentMax) break;
+                    if (totalMs <= currentMax)
+                        break;
                 } while (Interlocked.CompareExchange(ref _maxSendTimeMs, totalMs, currentMax) != currentMax);
 
                 _logger.LogTrace("Sent message {MessageType} {MessageId} to connection {ConnectionId} ({ByteCount} bytes, {TotalMs}ms = ser:{SerUs}us + sem:{SemUs}us + ws:{WsUs}us)",

@@ -312,7 +312,8 @@ public class ConnectionManager : IConnectionManager
         do
         {
             currentMax = Interlocked.Read(ref _maxBroadcastTimeMs);
-            if (elapsedMs <= currentMax) break;
+            if (elapsedMs <= currentMax)
+                break;
         } while (Interlocked.CompareExchange(ref _maxBroadcastTimeMs, elapsedMs, currentMax) != currentMax);
 
         // Log timing breakdown for broadcasts that take > 1ms

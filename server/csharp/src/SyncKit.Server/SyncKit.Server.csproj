@@ -16,8 +16,5 @@
     <PackageReference Include="StackExchange.Redis" Version="2.8.0" />
   </ItemGroup>
 
-  <ItemGroup>
-    <ProjectReference Include="..\..\..\..\orchestration\aspire\SyncKit.ServiceDefaults\SyncKit.ServiceDefaults.csproj" />
-  </ItemGroup>
 
 </Project>
