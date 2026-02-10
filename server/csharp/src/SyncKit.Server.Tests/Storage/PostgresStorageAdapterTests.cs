@@ -200,10 +200,14 @@ public class PostgresStorageAdapterTests : IAsyncLifetime
 
         await Assert.ThrowsAsync<InvalidOperationException>(async () => await adapter.ConnectAsync());
 
+        // Clear connection pools to release all connections to the empty database
+        // before dropping it (Postgres rejects DROP while connections exist)
+        NpgsqlConnection.ClearAllPools();
+
         await using var cleanConn = new NpgsqlConnection(_connectionString);
         await cleanConn.OpenAsync();
         await using var dropCmd = cleanConn.CreateCommand();
-        dropCmd.CommandText = $"DROP DATABASE IF EXISTS \"{emptyDbName}\"";
+        dropCmd.CommandText = $"DROP DATABASE IF EXISTS \"{emptyDbName}\" WITH (FORCE)";
         await dropCmd.ExecuteNonQueryAsync();
     }
 }
