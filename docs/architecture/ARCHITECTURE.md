@@ -33,7 +33,7 @@ SyncKit is a **local-first sync engine** designed for modern web and mobile appl
 - 📦 **Production Bundle**: 154KB gzipped (46KB lite) - Complete solution with all collaboration features
 - 🌐 **Universal**: Works everywhere (browser, Node.js, mobile, desktop)
 - 🔒 **Data Integrity**: Formally verified with TLA+ (zero data loss guarantee)
-- 🧪 **Battle-Tested**: 1,415+ passing tests across TypeScript, Rust, Python, and Go
+- 🧪 **Battle-Tested**: 2,100+ passing tests across TypeScript, Rust, Python, Go, and C#
 
 **Target Use Cases:**
 - Collaborative applications (Google Docs-style)
@@ -794,4 +794,4 @@ SyncKit's architecture is designed for **performance**, **correctness**, and **s
 ✅ **Scalability:** Horizontal scaling + partial sync = millions of users
 ✅ **Security:** JWT + RBAC + TLS = production-ready security
 
-**Implementation Status:** All core architecture components implemented and production-verified. Includes cross-tab synchronization via BroadcastChannel API, Vue 3/Svelte 5 framework adapters, OPFS storage, Text/Counter/Set CRDT APIs exposed in SDK, and multi-language server implementations (TypeScript, Python, Go). Future enhancements: Protobuf protocol, SQLite storage, Rust server.
+**Implementation Status:** All core architecture components implemented and production-verified. Includes cross-tab synchronization via BroadcastChannel API, Vue 3/Svelte 5 framework adapters, OPFS storage, Text/Counter/Set CRDT APIs exposed in SDK, and multi-language server implementations (TypeScript, Python, Go, C#). Future enhancements: Protobuf protocol, SQLite storage, Rust server.

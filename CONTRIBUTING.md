@@ -109,10 +109,11 @@ Help us improve test coverage!
 
 ### 🌐 Multi-Language Servers
 
-Python and Go server implementations are complete and production-ready in v0.3.0. We welcome contributions to the **Rust server**:
+Python, Go, and C# server implementations are complete and production-ready in v0.3.0. We welcome contributions to the **Rust server**:
 
 - ✅ **Python Server** - Complete (FastAPI, JWT, PostgreSQL, Redis)
 - ✅ **Go Server** - Complete (gorilla/websocket, JWT, PostgreSQL, Redis)
+- ✅ **C# Server** - Complete (ASP.NET Core, JWT, PostgreSQL, Redis)
 - 🚧 **Rust Server** - Contributions welcome!
 
 **Requirements for Rust server:**

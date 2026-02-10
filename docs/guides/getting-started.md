@@ -6,7 +6,7 @@ SyncKit is a production-ready sync engine that makes building local-first applic
 
 > **What you'll build:** A todo app that works offline, persists data locally, and syncs in real-time with a server—in just 5 minutes.
 >
-> **v0.3.0 includes:** Multi-language servers (TypeScript, Python, Go), OPFS storage, snapshot API, security hardening, plus text editing (Fugue), rich text (Peritext), undo/redo, presence tracking, cursor sharing, counters, sets, and framework adapters for React, Vue 3, and Svelte 5.
+> **v0.3.0 includes:** Multi-language servers (TypeScript, Python, Go, C#), OPFS storage, snapshot API, security hardening, plus text editing (Fugue), rich text (Peritext), undo/redo, presence tracking, cursor sharing, counters, sets, and framework adapters for React, Vue 3, and Svelte 5.
 
 ---
 

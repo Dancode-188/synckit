@@ -1,6 +1,6 @@
 # SyncKit Benchmark Suite
 
-Comprehensive performance benchmarks comparing TypeScript, Python, and Go server implementations.
+Comprehensive performance benchmarks comparing TypeScript, Python, and Go server implementations. The C# server includes its own BenchmarkDotNet suite in `server/csharp/src/SyncKit.Server.Benchmarks/`.
 
 ## Quick Start
 

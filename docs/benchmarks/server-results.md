@@ -4,9 +4,11 @@
 **Date:** February 2026
 **Servers Tested:** TypeScript, Python, Go
 
+> **Note:** The C# server (ASP.NET Core) is also production-ready but was not included in these benchmarks. It ships with its own BenchmarkDotNet suite in `server/csharp/src/SyncKit.Server.Benchmarks/`. Cross-server comparison results for C# will be added in a future update.
+
 ## Executive Summary
 
-All three SyncKit server implementations (TypeScript, Python, Go) are production-ready with excellent performance characteristics:
+All three benchmarked SyncKit server implementations (TypeScript, Python, Go) are production-ready with excellent performance characteristics:
 
 - **Go** leads in raw throughput (~1,200 ops/sec) and lowest latency
 - **TypeScript** provides balanced performance (~800 ops/sec) with the richest ecosystem
@@ -145,6 +147,6 @@ bun run benchmarks/run-benchmarks.ts --all --output results.json
 
 ## Conclusion
 
-SyncKit v0.3.0 delivers production-ready performance across all three server implementations. Choose based on your team's expertise and infrastructure requirements rather than raw performance—all servers exceed typical real-time collaboration requirements.
+SyncKit v0.3.0 delivers production-ready performance across all benchmarked server implementations. Choose based on your team's expertise and infrastructure requirements rather than raw performance -- all servers exceed typical real-time collaboration requirements. The C# server is also available for .NET teams.
 
 For most teams, **TypeScript** offers the best balance of performance, ecosystem, and developer experience. Teams with high-throughput requirements or Go expertise should consider the **Go** implementation.

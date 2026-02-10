@@ -1063,7 +1063,7 @@ Each phase is complete when:
 |---------|----------|--------|--------------|
 | v0.1.0 | Nov 2025 | ✅ Complete | Foundation, LWW Sync, TypeScript SDK |
 | v0.2.0 | Dec 2025 | ✅ Complete | Collaborative Editing, Rich Text |
-| v0.3.0 | Feb 2026 | ✅ Complete | Multi-Language Servers, OPFS, Benchmarks |
+| v0.3.0 | Feb 2026 | ✅ Complete | Multi-Language Servers (TS, Python, Go, C#), OPFS, Benchmarks |
 | v0.4.0+ | 2026 | 📋 Planned | SQL Sync, Advanced Features |
 
 ---

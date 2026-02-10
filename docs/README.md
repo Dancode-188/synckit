@@ -8,16 +8,17 @@ Welcome to SyncKit! Build collaborative, offline-first apps without the complexi
 
 **Production-ready multi-language servers with comprehensive security.**
 
-v0.3.0 brings full server parity across TypeScript, Python, and Go:
+v0.3.0 brings full server parity across TypeScript, Python, Go, and C#:
 
 - **🐍 Python Server** - FastAPI with JWT, PostgreSQL, Redis pub/sub
 - **🐹 Go Server** - High-performance goroutine-based WebSocket server
+- **🔷 C# Server** - ASP.NET Core with JWT, PostgreSQL, Redis pub/sub
 - **💾 OPFS Storage** - 4-30x faster than IndexedDB for browser storage
 - **🔒 Security Hardening** - SQL injection prevention, JWT enforcement, rate limiting
 - **📸 Snapshot API** - Document snapshots with automatic scheduling
 - **📊 Benchmark Suite** - Cross-server performance comparison
 
-**Backed by 1,415+ passing tests** across TypeScript, Rust, Python, and Go. Production-ready.
+**Backed by 2,100+ passing tests** across TypeScript, Rust, Python, Go, and C#. Production-ready.
 
 **[Get started in 5 minutes →](guides/getting-started.md)**
 
@@ -158,7 +159,7 @@ Learn from working examples:
 - Network sync: 10-50ms p95 (faster than most REST APIs)
 - Multi-client convergence: <100ms (real-time collaboration)
 
-**Stress-tested:** 24-hour continuous operation, 1,415+ tests, zero memory leaks.
+**Stress-tested:** 14-day continuous operation (1.2M+ operations), 2,100+ tests.
 
 **[Learn more about performance →](guides/performance.md)** | **[Bundle size optimization →](guides/bundle-size-optimization.md)**
 
@@ -251,7 +252,7 @@ We welcome contributions!
 
 ### What's Complete ✅
 
-- ✅ **Multi-Language Servers** - TypeScript, Python, and Go (all production-ready)
+- ✅ **Multi-Language Servers** - TypeScript, Python, Go, and C# (all production-ready)
 - ✅ **OPFS Storage** - 4-30x faster browser storage with IndexedDB fallback
 - ✅ **Snapshot API** - Document snapshots with automatic scheduling
 - ✅ **Benchmark Suite** - Cross-server performance comparison
@@ -267,7 +268,7 @@ We welcome contributions!
 - ✅ Network sync layer (WebSocket, offline queue, auto-reconnect)
 - ✅ Cross-tab sync (BroadcastChannel + server-mediated)
 - ✅ Example applications (todo app, collaborative editor, project management)
-- ✅ **1,415+ tests** across TypeScript, Rust, Python, and Go
+- ✅ **2,100+ tests** across TypeScript, Rust, Python, Go, and C#
 - ✅ Formal verification (TLA+, 118K states explored)
 
 ### What's Next 🚧

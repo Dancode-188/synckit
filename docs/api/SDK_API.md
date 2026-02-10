@@ -7,7 +7,7 @@
 
 ## ✅ v0.3.0 - Production Ready
 
-**SyncKit v0.3.0 is production-ready with multi-language servers (TypeScript, Python, Go), OPFS storage, and comprehensive security hardening.**
+**SyncKit v0.3.0 is production-ready with multi-language servers (TypeScript, Python, Go, C#), OPFS storage, and comprehensive security hardening.**
 
 ### What's New in v0.3.0
 
