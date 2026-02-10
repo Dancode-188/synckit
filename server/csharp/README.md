@@ -44,6 +44,95 @@ JWT_SECRET="test-secret-key-for-development-32-chars" dotnet run
 # Health check: http://localhost:8080/health
 ```
 
+## Local development with demo app 🔁
+
+Follow these steps to run the .NET server and the demo app together for fast, integrated local development (no Aspire required):
+
+1) Start the server (development JWT required)
+
+```bash
+# from repo root
+JWT_SECRET="test-secret-key-for-development-32-chars" \
+  dotnet run --project server/csharp/src/SyncKit.Server/SyncKit.Server.csproj
+
+# or from the server folder
+cd server/csharp/src/SyncKit.Server
+JWT_SECRET="test-secret-key-for-development-32-chars" dotnet run
+```
+
+- Server endpoints:
+  - HTTP: http://localhost:8080/
+  - Health: http://localhost:8080/health
+  - WebSocket: ws://localhost:8080/ws
+
+2) Point the demo at your local server and run it
+
+- Quick (manual) approach: edit `demo/src/lib/synckit.ts` and change the `serverUrl` to the local WebSocket endpoint:
+
+```ts
+// demo/src/lib/synckit.ts
+// before
+serverUrl: 'wss://synckit-localwrite.fly.dev/ws',
+
+// change to
+serverUrl: 'ws://localhost:8080/ws',
+```
+
+- Recommended (env-driven) option: make the demo configurable via Vite and run with an env var. Replace the `serverUrl` in `demo/src/lib/synckit.ts` with:
+
+```ts
+const SERVER_URL = import.meta.env.VITE_SERVER_URL || 'wss://synckit-localwrite.fly.dev/ws';
+// pass SERVER_URL into new SyncKit({ serverUrl: SERVER_URL, ... })
+```
+
+Then start the demo:
+
+```bash
+cd demo
+npm install
+# run with local server URL
+VITE_SERVER_URL=ws://localhost:8080 npm run dev
+```
+
+Open the demo in your browser (Vite default: http://localhost:5173). The demo will connect to `ws://localhost:8080/ws`.
+
+3) Optional: start Redis / PostgreSQL for multi-server features
+
+- Redis (pub/sub / awareness):
+
+```bash
+docker run -p 6379:6379 -d redis:7
+export REDIS_URL=redis://localhost:6379
+# restart server with REDIS_URL set
+```
+
+- PostgreSQL (persistent storage):
+
+```bash
+docker run -p 5432:5432 -e POSTGRES_PASSWORD=postgres -e POSTGRES_USER=postgres -e POSTGRES_DB=synckit -d postgres:15
+export DATABASE_URL="Host=localhost;Port=5432;Database=synckit;Username=postgres;Password=[default password]"
+# restart server with DATABASE_URL set
+```
+
+4) Quick verification & auth
+
+```bash
+# health
+curl -s http://localhost:8080/health
+
+# test auth login (demo uses demo login endpoint)
+curl -X POST http://localhost:8080/auth/login -H "Content-Type: application/json" -d '{"email":"user@example.com","password":"password123"}'
+```
+
+Notes & troubleshooting:
+
+- `JWT_SECRET` must be set for development (32+ chars). The server will error if missing.
+- CORS is permissive (`*`) by default, so the Vite dev origin should be allowed.
+- If the demo is not connecting, ensure the demo's `serverUrl` points to `ws://localhost:8080/ws` (or set `VITE_SERVER_URL` and restart Vite).
+- For multi-server behavior (awareness/pubsub), ensure Redis is running and `REDIS_URL` is exported before starting the server.
+
+---
+
 ## Documentation
 
 | Document | Description |
