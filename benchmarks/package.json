@@ -1,0 +1,21 @@
+{
+  "name": "synckit-benchmarks",
+  "version": "0.3.0",
+  "private": true,
+  "description": "SyncKit server performance benchmarks",
+  "scripts": {
+    "bench": "bun run run-benchmarks.ts",
+    "bench:quick": "bun run run-benchmarks.ts --quick",
+    "bench:all": "bun run run-benchmarks.ts --all",
+    "bench:server": "bun run run-benchmarks.ts --server",
+    "bench:memory": "bun run --expose-gc run-benchmarks.ts --memory",
+    "bench:latency": "bun run run-benchmarks.ts --latency"
+  },
+  "dependencies": {
+    "ws": "^8.16.0"
+  },
+  "devDependencies": {
+    "@types/ws": "^8.5.10",
+    "typescript": "^5.3.3"
+  }
+}

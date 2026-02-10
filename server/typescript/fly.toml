@@ -1,14 +1,11 @@
 # SyncKit Server - Fly.io Configuration
 # Deploy with: fly deploy
 
-app = "synckit-server"
+app = "synckit-localwrite"
 primary_region = "sjc"  # San Jose, CA (change to your preferred region)
 
 # Build configuration
 [build]
-
-# Use Dockerfile for build
-[build.dockerfile]
   dockerfile = "Dockerfile"
 
 # Environment variables (set via fly secrets)
@@ -16,6 +13,7 @@ primary_region = "sjc"  # San Jose, CA (change to your preferred region)
   NODE_ENV = "production"
   HOST = "0.0.0.0"
   PORT = "8080"
+  SYNCKIT_AUTH_REQUIRED = "false"  # Disable auth for public playground
 
 # HTTP service configuration
 [[services]]
@@ -48,14 +46,9 @@ primary_region = "sjc"  # San Jose, CA (change to your preferred region)
     handlers = ["tls", "http"]
     port = 443
 
-  # WebSocket configuration
-  [[services.ports]]
-    handlers = ["tls", "http"]
-    port = 443
-    
     [services.ports.http_options]
-      idle_timeout = "60s"
-      h2_backend = true
+      # 5min idle timeout to accommodate WebSocket connections
+      idle_timeout = 300
 
 # Concurrency configuration
 [services.concurrency]
@@ -97,9 +90,8 @@ primary_region = "sjc"  # San Jose, CA (change to your preferred region)
   port = 9091
   path = "/metrics"
 
-# Process groups (optional - for multi-process apps)
-[processes]
-  app = "bun run start"
+# Process command removed - conflicts with services config
+# Command is defined in Dockerfile CMD instead
 
 # Deploy command examples:
 # 

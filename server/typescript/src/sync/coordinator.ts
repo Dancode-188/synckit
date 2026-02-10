@@ -1,6 +1,32 @@
 import { WasmDocument, WasmDelta, WasmVectorClock } from '../../wasm/synckit_core';
+import initWasm, { WasmFugueText } from '../../wasm/synckit_core';
 import type { StorageAdapter } from '../storage/interface';
 import type { RedisPubSub } from '../storage/redis';
+
+// WASM initialization state for FugueText merge support
+let wasmInitialized = false;
+let wasmInitPromise: Promise<void> | null = null;
+
+async function ensureWasmInitialized(): Promise<boolean> {
+  if (wasmInitialized) return true;
+  if (wasmInitPromise) {
+    await wasmInitPromise;
+    return wasmInitialized;
+  }
+
+  wasmInitPromise = (async () => {
+    try {
+      await initWasm();
+      wasmInitialized = true;
+    } catch (error) {
+      console.warn('[WASM] Failed to initialize FugueText WASM module:', error);
+      wasmInitialized = false;
+    }
+  })();
+
+  await wasmInitPromise;
+  return wasmInitialized;
+}
 
 /**
  * Document State - tracks in-memory document state
@@ -51,6 +77,16 @@ export class SyncCoordinator {
   private pubsub?: RedisPubSub;
   private serverId: string;
 
+  // LRU cache tracking to prevent unbounded memory growth
+  private documentAccessOrder: string[] = [];
+  private readonly MAX_CACHED_DOCUMENTS = 1000; // Keep last 1000 documents in memory
+
+  // In-memory cache for text document CRDT states (SyncText/Fugue)
+  private textDocuments: Map<string, { crdtState: string; content: string; clock: number }> = new Map();
+
+  // Per-document save serialization to prevent concurrent read-modify-write races
+  private textSaveLocks: Map<string, Promise<void>> = new Map();
+
   constructor(options?: {
     storage?: StorageAdapter;
     pubsub?: RedisPubSub;
@@ -96,6 +132,9 @@ export class SyncCoordinator {
    */
   async getDocument(documentId: string): Promise<DocumentState> {
     let state = this.documents.get(documentId);
+
+    // Track access for LRU
+    this.trackDocumentAccess(documentId);
 
     if (!state) {
       // Try to load from storage first
@@ -205,10 +244,53 @@ export class SyncCoordinator {
   }
 
   /**
+   * Track document access for LRU eviction
+   */
+  private trackDocumentAccess(documentId: string) {
+    // Remove from current position if exists
+    const index = this.documentAccessOrder.indexOf(documentId);
+    if (index > -1) {
+      this.documentAccessOrder.splice(index, 1);
+    }
+
+    // Add to end (most recently used)
+    this.documentAccessOrder.push(documentId);
+
+    // Evict LRU documents if cache is too large
+    this.evictLRUDocuments();
+  }
+
+  /**
+   * Evict least recently used documents to keep cache size bounded
+   */
+  private evictLRUDocuments() {
+    while (this.documents.size > this.MAX_CACHED_DOCUMENTS) {
+      const lruDocId = this.documentAccessOrder.shift();
+      if (!lruDocId) break;
+
+      const state = this.documents.get(lruDocId);
+      if (state && state.subscribers.size === 0) {
+        // Safe to evict - no active subscribers
+        state.wasmDoc.free();
+        state.vectorClock.free();
+        this.documents.delete(lruDocId);
+        // console.log(`Evicted LRU document: ${lruDocId}`);
+      } else {
+        // Document has subscribers, keep it and re-add to end
+        this.documentAccessOrder.push(lruDocId);
+        break; // Stop evicting if we hit an active document
+      }
+    }
+  }
+
+  /**
    * Get or create document state (sync version for backward compatibility)
    */
   getDocumentSync(documentId: string): DocumentState {
     let state = this.documents.get(documentId);
+
+    // Track access for LRU
+    this.trackDocumentAccess(documentId);
 
     if (!state) {
       // For tests, use plain JS objects instead of WASM
@@ -524,7 +606,7 @@ export class SyncCoordinator {
   getVectorClock(documentId: string): Record<string, number> {
     const state = this.documents.get(documentId);
     if (!state) return {};
-    
+
     try {
       const clockJson = state.vectorClock.toJSON();
       return JSON.parse(clockJson);
@@ -532,6 +614,115 @@ export class SyncCoordinator {
       console.error('Error getting vector clock:', error);
       return {};
     }
+  }
+
+  // ===================
+  // Text Document (SyncText/Fugue CRDT) Management
+  // ===================
+
+  /**
+   * Save text CRDT state
+   * Called when receiving text-state operations from clients.
+   * Merges incoming state with existing state using the Fugue CRDT merge algorithm
+   * to prevent data loss during concurrent editing.
+   */
+  async saveTextState(
+    documentId: string,
+    crdtState: string,
+    clientId: string,
+    clock: number
+  ): Promise<void> {
+    // Chain onto previous save for this document to prevent concurrent read-modify-write races
+    const previousSave = this.textSaveLocks.get(documentId) ?? Promise.resolve();
+    const thisSave = previousSave.then(() =>
+      this._doSaveTextState(documentId, crdtState, clientId, clock)
+    );
+    this.textSaveLocks.set(documentId, thisSave.catch(() => {})); // Don't propagate errors to next save
+    await thisSave;
+  }
+
+  private async _doSaveTextState(
+    documentId: string,
+    crdtState: string,
+    clientId: string,
+    clock: number
+  ): Promise<void> {
+    const existing = this.textDocuments.get(documentId);
+
+    let mergedState = crdtState;
+    let mergedClock = clock;
+
+    // Merge with existing state if available (prevents overwrite data loss)
+    if (existing?.crdtState) {
+      const wasmReady = await ensureWasmInitialized();
+      if (wasmReady) {
+        try {
+          const existingText = WasmFugueText.fromJSON(existing.crdtState);
+          const incomingText = WasmFugueText.fromJSON(crdtState);
+
+          existingText.merge(incomingText);
+          mergedState = existingText.toJSON();
+          mergedClock = Math.max(existing.clock, clock);
+
+          existingText.free();
+          incomingText.free();
+        } catch (error) {
+          console.error(`[saveTextState] Merge failed for ${documentId}, using incoming state:`, error);
+          // Fallback: use incoming state (previous overwrite behavior)
+        }
+      }
+    }
+
+    // Update in-memory cache with merged state
+    this.textDocuments.set(documentId, {
+      crdtState: mergedState,
+      content: '',
+      clock: mergedClock,
+    });
+
+    // Persist to storage if available
+    if (this.storage) {
+      try {
+        await this.storage.saveTextDocument(documentId, '', mergedState, BigInt(mergedClock));
+      } catch (error) {
+        console.error(`[saveTextState] Failed to persist ${documentId}:`, error);
+      }
+    }
+  }
+
+  /**
+   * Get text CRDT state for a document
+   * Returns cached state or loads from storage
+   */
+  async getTextState(
+    documentId: string
+  ): Promise<{ crdtState: string; content: string; clock: number } | null> {
+    // Check in-memory cache first
+    const cached = this.textDocuments.get(documentId);
+    if (cached) {
+      return cached;
+    }
+
+    // Try to load from storage
+    if (this.storage) {
+      try {
+        const stored = await this.storage.getTextDocument(documentId);
+        if (stored) {
+          const state = {
+            crdtState: stored.crdtState,
+            content: stored.content,
+            clock: Number(stored.clock),
+          };
+          // Cache for future access
+          this.textDocuments.set(documentId, state);
+          return state;
+        }
+      } catch (error) {
+        console.error(`[getTextState] Failed to load ${documentId}:`, error);
+      }
+    }
+
+    return null;
   }
 
   /**
@@ -560,6 +751,8 @@ export class SyncCoordinator {
     }
     // Clear the documents map
     this.documents.clear();
+    // Clear text documents cache
+    this.textDocuments.clear();
   }
 
   // ===================
@@ -666,6 +859,11 @@ export class SyncCoordinator {
     const awarenessState = this.awarenessStates.get(documentId);
     if (awarenessState) {
       awarenessState.subscribers.delete(connectionId);
+
+      // FIX: Remove awareness state if no subscribers and no clients (prevents memory leak)
+      if (awarenessState.subscribers.size === 0 && awarenessState.clients.size === 0) {
+        this.awarenessStates.delete(documentId);
+      }
     }
   }
 

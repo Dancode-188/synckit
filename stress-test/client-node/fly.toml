@@ -1,0 +1,38 @@
+# SyncKit Stress Test Client - Fly.io Configuration
+# 48-day production stress test (runs 24/7)
+
+app = "synckit-stress-test-client"
+primary_region = "sjc"  # San Jose, CA
+
+# OOM protection: Add swap to prevent kernel from killing the process
+swap_size_mb = 512
+
+# Build configuration
+[build]
+  dockerfile = "Dockerfile"
+
+# Environment variables
+[env]
+  NODE_ENV = "production"
+  METRICS_DIR = "/app/metrics"
+
+# No HTTP service needed for stress test - just runs as a background process
+# Uses CMD from Dockerfile
+
+# Resource allocation - increased due to memory growth observed
+[vm]
+  cpu_kind = "shared"
+  cpus = 1
+  memory_mb = 1024  # Increased from 256 to handle CRDT state growth
+
+# Persistent storage for metrics
+[mounts]
+  source = "stress_test_metrics"
+  destination = "/app/metrics"
+
+# Deploy command:
+# cd stress-test/client-node
+# fly apps create synckit-stress-test-client --region sjc
+# fly volumes create stress_test_metrics --region sjc --size 1
+# fly secrets set SERVER_URL=wss://synckit-stress-test.fly.dev
+# fly deploy

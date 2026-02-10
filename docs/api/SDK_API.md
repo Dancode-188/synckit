@@ -1,15 +1,24 @@
 # SyncKit SDK API Reference
 
-**Version:** 0.2.3
-**Last Updated:** January 1, 2026
+**Version:** 0.3.0
+**Last Updated:** February 6, 2026
 
 ---
 
-## ✅ v0.2.0 - Production Ready
+## ✅ v0.3.0 - Production Ready
 
-**SyncKit v0.2.0 is production-ready with collaborative editing, rich text, undo/redo, and framework adapters.**
+**SyncKit v0.3.0 is production-ready with multi-language servers (TypeScript, Python, Go, C#), OPFS storage, and comprehensive security hardening.**
 
-### What's New in v0.2.0
+### What's New in v0.3.0
+
+**Multi-Language Servers:**
+- ✅ Python server (FastAPI, JWT, PostgreSQL, Redis)
+- ✅ Go server (gorilla/websocket, JWT, PostgreSQL, Redis)
+- ✅ OPFS storage adapter (4-30x faster than IndexedDB)
+- ✅ Snapshot API with automatic scheduling
+- ✅ Security hardening across all servers
+
+### Features from v0.2.0
 
 **Collaborative Text Editing:**
 - ✅ `SyncText` - Plain text collaboration with Fugue CRDT

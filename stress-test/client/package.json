@@ -1,0 +1,19 @@
+{
+  "name": "@synckit-stress-test/client",
+  "version": "0.3.0",
+  "description": "48-day production stress test client for SyncKit v0.3.0",
+  "type": "module",
+  "private": true,
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview",
+    "test": "node --experimental-vm-modules stress-test.js"
+  },
+  "dependencies": {
+    "@synckit-js/sdk": "file:../../sdk"
+  },
+  "devDependencies": {
+    "vite": "^5.0.0"
+  }
+}

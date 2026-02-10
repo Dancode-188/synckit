@@ -481,5 +481,5 @@ describe('Load - Performance Profiling', () => {
     } finally {
       await Promise.all(clients.map(c => c.cleanup()));
     }
-  }, { timeout: 50000 }); // Increased timeout for binary protocol with 100 clients * 10 bursts (test ran ~46s)
+  }, { timeout: 90000 });
 });

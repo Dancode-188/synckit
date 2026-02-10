@@ -24,8 +24,9 @@ const configSchema = z.object({
   jwtRefreshExpiresIn: z.string().default('7d'),
   
   // WebSocket
-  wsHeartbeatInterval: z.number().int().positive().default(30000), // 30s
-  wsHeartbeatTimeout: z.number().int().positive().default(60000),  // 60s
+  // Reduced from 30s to 10s to keep Fly.io proxy connections alive (4-min timeout)
+  wsHeartbeatInterval: z.number().int().positive().default(10000), // 10s
+  wsHeartbeatTimeout: z.number().int().positive().default(30000),  // 30s
   wsMaxConnections: z.number().int().positive().default(10000),
   
   // Sync
@@ -51,7 +52,11 @@ export function loadConfig(): Config {
     redisUrl: process.env.REDIS_URL || 'redis://localhost:6379',
     redisChannelPrefix: process.env.REDIS_CHANNEL_PREFIX || 'synckit:',
     
-    jwtSecret: process.env.JWT_SECRET || 'development-secret-change-in-production',
+    jwtSecret: process.env.JWT_SECRET || (
+      (process.env.NODE_ENV === 'production')
+        ? (() => { throw new Error('JWT_SECRET environment variable is required in production'); })()
+        : 'development-secret-do-not-use-in-production'
+    ),
     jwtExpiresIn: process.env.JWT_EXPIRES_IN || '24h',
     jwtRefreshExpiresIn: process.env.JWT_REFRESH_EXPIRES_IN || '7d',
     

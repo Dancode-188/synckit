@@ -9,7 +9,7 @@
 
 export interface SyncKitConfig {
   /** Storage adapter to use */
-  storage?: 'indexeddb' | 'memory' | StorageAdapter
+  storage?: 'indexeddb' | 'memory' | 'opfs' | StorageAdapter
 
   /** Application name (used for storage namespacing) */
   name?: string
@@ -90,6 +90,13 @@ export interface StorageAdapter {
    * Clear all documents
    */
   clear(): Promise<void>
+
+  /**
+   * Subscribe to storage changes from other sources (e.g., other tabs)
+   * Optional - only implemented by storage adapters that support cross-tab sync
+   * @returns Unsubscribe function
+   */
+  onChange?: (listener: (change: { type: 'set' | 'delete' | 'clear', docId?: string }) => void) => () => void
 }
 
 export interface StoredDocument {
@@ -97,6 +104,72 @@ export interface StoredDocument {
   data: Record<string, unknown>
   version: Record<string, number>
   updatedAt: number
+}
+
+/**
+ * Snapshot metadata returned after creating a snapshot
+ */
+export interface SnapshotMetadata {
+  documentId: string
+  version: Record<string, number>
+  timestamp: number
+  sizeBytes: number
+  compressed?: boolean
+}
+
+/**
+ * Options for creating snapshots
+ */
+export interface SnapshotOptions {
+  compress?: boolean
+  key?: string  // Optional custom key for storing snapshot
+}
+
+/**
+ * Configuration for automatic snapshot scheduling
+ */
+export interface AutoSnapshotConfig {
+  /**
+   * Enable automatic snapshots
+   * @default false
+   */
+  enabled?: boolean
+
+  /**
+   * Trigger snapshot when document size exceeds this threshold (in bytes)
+   * @default 10 * 1024 * 1024 (10 MB)
+   */
+  sizeThresholdBytes?: number
+
+  /**
+   * Trigger snapshot at regular time intervals (in milliseconds)
+   * @default 3600000 (1 hour)
+   */
+  timeIntervalMs?: number
+
+  /**
+   * Trigger snapshot after this many operations
+   * @default 1000
+   */
+  operationCount?: number
+
+  /**
+   * Maximum number of snapshots to keep (oldest deleted first)
+   * @default 5
+   */
+  maxSnapshots?: number
+
+  /**
+   * Whether to compress snapshots
+   * @default false
+   */
+  compress?: boolean
+
+  /**
+   * Custom prefix for snapshot keys
+   * @default 'snapshot'
+   */
+  keyPrefix?: string
 }
 
 // ====================

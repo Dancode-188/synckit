@@ -22,7 +22,11 @@ export enum MessageTypeCode {
   UNSUBSCRIBE = 0x11,
   SYNC_REQUEST = 0x12,
   SYNC_RESPONSE = 0x13,
+  SYNC_STEP1 = 0x14,
+  SYNC_STEP2 = 0x15,
   DELTA = 0x20,
+  DELTA_BATCH = 0x50,
+  DELTA_BATCH_CHUNK = 0x23,
   ACK = 0x21,
   PING = 0x30,
   PONG = 0x31,
@@ -52,7 +56,11 @@ export enum MessageType {
   UNSUBSCRIBE = 'unsubscribe',
   SYNC_REQUEST = 'sync_request',
   SYNC_RESPONSE = 'sync_response',
+  SYNC_STEP1 = 'sync_step1',
+  SYNC_STEP2 = 'sync_step2',
   DELTA = 'delta',
+  DELTA_BATCH = 'delta_batch',
+  DELTA_BATCH_CHUNK = 'delta_batch_chunk',
   ACK = 'ack',
 
   // Awareness (presence)
@@ -125,11 +133,38 @@ export interface SyncResponseMessage extends BaseMessage {
   deltas?: any[]; // Delta updates
 }
 
+export interface SyncStep1Message extends BaseMessage {
+  type: MessageType.SYNC_STEP1;
+  documentId: string;
+  stateVector: Record<string, number>; // Maps clientId -> highest seq seen
+}
+
+export interface SyncStep2Message extends BaseMessage {
+  type: MessageType.SYNC_STEP2;
+  documentId: string;
+  operations: any[]; // Operations client is missing
+}
+
 export interface DeltaMessage extends BaseMessage {
   type: MessageType.DELTA;
   documentId: string;
   delta: any;
   vectorClock: Record<string, number>;
+}
+
+
+export interface DeltaBatchMessage extends BaseMessage {
+  type: MessageType.DELTA_BATCH;
+  documentId: string;
+  deltas: any[]; // Array of delta operations
+}
+
+export interface DeltaBatchChunkMessage extends BaseMessage {
+  type: MessageType.DELTA_BATCH_CHUNK;
+  chunkId: string; // Unique ID for this chunk set
+  totalChunks: number; // Total number of chunks
+  chunkIndex: number; // Index of this chunk (0-based)
+  data: string; // Base64-encoded chunk data
 }
 
 export interface AckMessage extends BaseMessage {
@@ -177,7 +212,11 @@ export type Message =
   | UnsubscribeMessage
   | SyncRequestMessage
   | SyncResponseMessage
+  | SyncStep1Message
+  | SyncStep2Message
   | DeltaMessage
+  | DeltaBatchMessage
+  | DeltaBatchChunkMessage
   | AckMessage
   | AwarenessUpdateMessage
   | AwarenessSubscribeMessage
@@ -195,7 +234,11 @@ const TYPE_CODE_TO_NAME: Record<number, MessageType> = {
   [MessageTypeCode.UNSUBSCRIBE]: MessageType.UNSUBSCRIBE,
   [MessageTypeCode.SYNC_REQUEST]: MessageType.SYNC_REQUEST,
   [MessageTypeCode.SYNC_RESPONSE]: MessageType.SYNC_RESPONSE,
+  [MessageTypeCode.SYNC_STEP1]: MessageType.SYNC_STEP1,
+  [MessageTypeCode.SYNC_STEP2]: MessageType.SYNC_STEP2,
   [MessageTypeCode.DELTA]: MessageType.DELTA,
+  [MessageTypeCode.DELTA_BATCH]: MessageType.DELTA_BATCH,
+  [MessageTypeCode.DELTA_BATCH_CHUNK]: MessageType.DELTA_BATCH_CHUNK,
   [MessageTypeCode.ACK]: MessageType.ACK,
   [MessageTypeCode.PING]: MessageType.PING,
   [MessageTypeCode.PONG]: MessageType.PONG,
@@ -216,7 +259,11 @@ const TYPE_NAME_TO_CODE: Record<MessageType, number> = {
   [MessageType.UNSUBSCRIBE]: MessageTypeCode.UNSUBSCRIBE,
   [MessageType.SYNC_REQUEST]: MessageTypeCode.SYNC_REQUEST,
   [MessageType.SYNC_RESPONSE]: MessageTypeCode.SYNC_RESPONSE,
+  [MessageType.SYNC_STEP1]: MessageTypeCode.SYNC_STEP1,
+  [MessageType.SYNC_STEP2]: MessageTypeCode.SYNC_STEP2,
   [MessageType.DELTA]: MessageTypeCode.DELTA,
+  [MessageType.DELTA_BATCH]: MessageTypeCode.DELTA_BATCH,
+  [MessageType.DELTA_BATCH_CHUNK]: MessageTypeCode.DELTA_BATCH_CHUNK,
   [MessageType.ACK]: MessageTypeCode.ACK,
   [MessageType.PING]: MessageTypeCode.PING,
   [MessageType.PONG]: MessageTypeCode.PONG,
@@ -234,8 +281,13 @@ const TYPE_NAME_TO_CODE: Record<MessageType, number> = {
 export function parseMessage(data: Buffer | string): Message | null {
   // Detect protocol type
   if (typeof data === 'string') {
-    // Legacy JSON protocol
     return parseJsonMessage(data);
+  }
+
+  // Check if Buffer contains JSON (starts with '{' = 0x7b)
+  if (data.length > 0 && data[0] === 0x7b) {
+    const jsonString = data.toString('utf8');
+    return parseJsonMessage(jsonString);
   }
 
   // Binary protocol (Buffer)
@@ -305,11 +357,22 @@ function parseBinaryMessage(data: Buffer): Message | null {
 function parseJsonMessage(raw: string): Message | null {
   try {
     const data = JSON.parse(raw);
+
     if (!data.type || !data.id || !data.timestamp) {
+      console.error('[Protocol] Message missing required fields');
       return null;
     }
+    // If SDK sends nested payload, flatten it
+    if (data.payload && typeof data.payload === 'object') {
+      const { payload, ...rest } = data;
+      // Preserve message type, exclude operation type from payload
+      const { type: _operationType, ...payloadWithoutType} = payload;
+      const flattened = { ...rest, ...payloadWithoutType } as Message;
+      return flattened;
+    }
     return data as Message;
-  } catch {
+  } catch (error) {
+    console.error('[Protocol] JSON parse error:', error);
     return null;
   }
 }

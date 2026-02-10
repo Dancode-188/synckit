@@ -1,6 +1,6 @@
 # Conflict Resolution in SyncKit
 
-**v0.2.0 Production Status**
+**v0.3.0 Production Status**
 
 SyncKit v0.2.0 provides complete conflict resolution for all data types:
 

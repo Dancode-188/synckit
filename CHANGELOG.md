@@ -10,10 +10,187 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### In Progress
-- 🚧 Python server implementation
-- 🚧 Go server implementation
 - 🚧 Rust server implementation
-- 🚧 Advanced storage adapters (OPFS, SQLite)
+- 🚧 SQLite storage adapter
+
+---
+
+## [0.3.0] - 2026-02-06
+
+**Production-Ready Multi-Language Servers!**
+
+This release brings full server parity across TypeScript, Python, Go, and C#, with comprehensive security hardening, OPFS storage, and a benchmark suite for cross-server performance comparison.
+
+### Added
+
+#### Multi-Language Servers
+
+- **🐍 Python Server** - Production-ready FastAPI implementation
+  - Full WebSocket sync protocol support
+  - JWT authentication with RBAC (canRead/canWrite/isAdmin)
+  - PostgreSQL storage adapter with asyncpg
+  - Redis pub/sub for multi-server coordination
+  - Rate limiting and security middleware
+  - Periodic awareness cleanup (30-second timeout)
+  - Comprehensive test suite
+
+- **🐹 Go Server** - High-performance implementation
+  - Gorilla WebSocket with efficient connection handling
+  - JWT validation using golang-jwt/v5
+  - PostgreSQL storage via pgx/v5
+  - Redis pub/sub via go-redis/v9
+  - Connection and message rate limiting
+  - WebSocket origin validation
+  - UNSUBSCRIBE handler for protocol completeness
+  - Periodic awareness cleanup to prevent memory leaks
+  - Comprehensive test suite (51 tests)
+
+- **🔷 C# Server** - ASP.NET Core implementation (community-contributed by @matthewcorven)
+  - Full binary WebSocket protocol support with JSON and binary modes
+  - JWT authentication with RBAC (canRead/canWrite/isAdmin)
+  - PostgreSQL storage adapter
+  - Redis pub/sub for multi-server coordination
+  - Rate limiting, CORS, and security header middleware
+  - Awareness subsystem with Redis store and TTL cleanup
+  - ACK tracking with configurable retries
+  - Delta batching service with per-document coalescing
+  - Comprehensive test suite (711 tests)
+
+#### Storage
+
+- **💾 OPFS Storage Adapter** - Origin Private File System for browsers
+  - 4-30x faster writes than IndexedDB (benchmark verified)
+  - 3-6x faster reads than IndexedDB
+  - Automatic fallback to IndexedDB for Safari/unsupported browsers
+  - Multi-tab coordination via SharedWorker
+
+#### Benchmark Suite
+
+- **📊 Cross-Server Benchmarks** (`benchmarks/`)
+  - Server performance comparison (throughput, latency, connections)
+  - Memory leak detection with severity classification
+  - Sync latency scenarios (single client, multi-client, large docs, burst)
+  - CLI runner with quick and full modes
+  - Documented methodology and results
+
+#### SDK & Sync
+
+- **📸 Snapshot API** - Document state snapshots with automatic scheduling
+  - `doc.createSnapshot()` and `doc.restoreSnapshot()` APIs
+  - Automatic snapshot scheduling with configurable intervals
+  - Server-side snapshot persistence in PostgreSQL
+  - Comprehensive test coverage (850+ lines of tests)
+
+- **🔄 SyncText Persistence** - Fugue CRDT text state persistence
+  - Server-side storage for collaborative text documents
+  - Automatic state restoration on reconnection
+  - Cross-session text synchronization
+
+- **🏠 Rooms API** - `/rooms` endpoint for room management
+  - List active rooms with participant counts
+  - Per-connection rate limiting
+
+#### Demo Improvements (LocalWrite)
+
+- **✍️ Enhanced Collaborative Editor**
+  - Typing indicators for live collaboration
+  - Milestone celebrations with confetti
+  - Contribution stats dashboard
+  - Emoji reactions for text selections
+  - Time-lapse replay for document creation
+  - Onboarding hints for new visitors
+  - Word Wall with live voting and tag cloud
+
+### Security
+
+- **🔒 Security Hardening** - Critical vulnerability fixes
+  - SQL injection prevention in cleanup queries (PostgreSQL `make_interval()`)
+  - JWT secret enforcement in production (32+ characters required)
+  - Anonymous authentication rejection by default
+  - Server-only message types removed from client validation
+  - Proper auth/authz checks on all protected operations
+  - Rate limiting enforcement on all servers
+  - WebSocket origin validation (Go server)
+
+### Changed
+
+- **TypeScript Server** - Security and performance improvements
+  - JWT secret validation in production mode
+  - Parameterized SQL queries for cleanup operations
+  - Enhanced rate limiting checks
+
+### Fixed
+
+- **🔧 Concurrent Edit Divergence** - Split-to-match merge algorithm (#72)
+  - Fixed text divergence when multiple users edit simultaneously
+  - Implemented split-to-match merge in Rust Fugue CRDT
+  - Ensures eventual consistency across all clients
+
+- **🔧 Bidirectional Real-Time Sync** - CRDT text editing fixes (#67, #68)
+  - Fixed one-way sync issues with server-authoritative values
+  - Resolved ContentEditable remote update handling
+  - Improved cursor stability and new block focus
+
+- **🔧 Delta Batch Message Loss** - Infrastructure fix (#66)
+  - Fixed delta_batch messages being dropped on deployed infrastructure
+  - Improved WebSocket message handling reliability
+  - Enhanced connection error recovery
+
+- **🔧 Server Memory Leaks** - 4 leaks plugged (#56)
+  - Fixed connection cleanup in sync coordinator
+  - Proper awareness state cleanup on disconnect
+  - Subscription map memory management
+
+- **🔧 SDK Awareness Warning** - Downgraded to debug level
+  - Reduced noise for unregistered document awareness updates
+  - Cleaner console output in production
+
+- **🐛 Test Suite Stability** - Fixed 30 flaky tests in load and chaos suites
+  - Increased timeouts for convergence tests
+  - Better cleanup between test runs
+  - Stabilized concurrent client tests
+
+### Documentation
+
+- **📚 Benchmark Documentation** (`docs/benchmarks/`)
+  - `methodology.md` - How benchmarks are conducted
+  - `server-results.md` - Performance comparison across servers
+
+### Performance
+
+- **🦀 Rust Core Optimizations** (#69)
+  - Improved Fugue CRDT text operations performance
+  - Optimized split-to-match merge algorithm
+  - Reduced memory allocations in text operations
+
+- **Server Comparison** (50 concurrent clients, 60-second test):
+  - Go: ~1,200 ops/sec, p95 ~12ms
+  - TypeScript: ~800 ops/sec, p95 ~18ms
+  - Python: ~600 ops/sec, p95 ~25ms
+  - All servers: No memory leaks detected
+
+- **OPFS vs IndexedDB**:
+  - Write (small docs): 30x faster
+  - Write (large docs): 5x faster
+  - Read: 6x faster
+  - Delete: 28x faster
+
+### Migration from v0.2.x
+
+All v0.2.x APIs remain compatible. New multi-language servers are drop-in replacements:
+
+```bash
+# TypeScript (existing)
+cd server/typescript && bun run start
+
+# Python (new)
+cd server/python && uvicorn src.synckit_server.main:app
+
+# Go (new)
+cd server/go && go run cmd/server/main.go
+```
+
+All servers use the same binary protocol and are interchangeable.
 
 ---
 
@@ -343,11 +520,11 @@ We follow [Semantic Versioning](https://semver.org/):
 
 ### Release Cadence
 
-- **v0.1.0:** Initial production release with network sync and cross-tab sync (current - 2025-11-26)
+- **v0.1.0:** Initial production release with network sync and cross-tab sync (2025-11-26)
 - **v0.2.x:** Text CRDT and custom CRDTs in TypeScript SDK, BroadcastChannel-based cross-tab sync
-- **v0.3.x:** Multi-language servers (Python, Go, Rust)
-- **v0.4.x:** Vue & Svelte adapters
-- **v0.5.x:** Advanced storage (OPFS, SQLite)
+- **v0.3.0:** Multi-language servers (Python, Go), OPFS storage, benchmark suite (current - 2026-02-06)
+- **v0.4.x:** SQL sync, advanced RBAC
+- **v0.5.x:** SQLite storage, native mobile SDKs
 - **v1.0.0:** Stable API, production-ready for enterprise
 
 ### Breaking Changes
@@ -416,6 +593,8 @@ Migration guides will be provided for all breaking changes in future versions.
 
 | Version | Supported          | End of Life |
 |---------|--------------------|-------------|
+| 0.3.x   | ✅ Yes (current)   | TBD         |
+| 0.2.x   | ✅ Yes             | TBD         |
 | 0.1.x   | ✅ Yes             | TBD         |
 | Pre-0.1 | ❌ No (development) | 2025-11-26  |
 
@@ -478,13 +657,20 @@ This is the **first production-ready release** of SyncKit. We've spent significa
 - ✅ Conflict resolution (Last-Write-Wins)
 - ✅ Complete example applications
 
-**What's coming in v0.2+:**
-- 🚧 Text CRDT exposed in TypeScript SDK
-- 🚧 Custom CRDTs (Counter, Set) exposed in TypeScript SDK
-- 🚧 BroadcastChannel-based cross-tab sync (direct client-to-client)
-- 🚧 Multi-language servers (Python, Go, Rust)
-- 🚧 Vue & Svelte adapters
-- 🚧 Advanced storage adapters (OPFS, SQLite)
+**Delivered in v0.2.0:**
+- ✅ Text CRDT exposed in TypeScript SDK
+- ✅ Custom CRDTs (Counter, Set) exposed in TypeScript SDK
+- ✅ BroadcastChannel-based cross-tab sync
+
+**Delivered in v0.3.0:**
+- ✅ Multi-language servers (Python, Go)
+- ✅ OPFS storage adapter
+- ✅ Benchmark suite
+
+**Coming in v0.4+:**
+- 🚧 Rust server implementation
+- 🚧 SQLite storage adapter
+- 🚧 SQL sync
 
 ---
 

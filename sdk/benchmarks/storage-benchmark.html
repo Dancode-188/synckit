@@ -1,0 +1,189 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>SyncKit Storage Benchmark</title>
+  <style>
+    body {
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      max-width: 1200px;
+      margin: 40px auto;
+      padding: 20px;
+      background: #f5f5f5;
+    }
+    h1 {
+      color: #333;
+      border-bottom: 3px solid #3b82f6;
+      padding-bottom: 10px;
+    }
+    .info {
+      background: #fff;
+      padding: 20px;
+      border-radius: 8px;
+      margin: 20px 0;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    }
+    .controls {
+      margin: 20px 0;
+    }
+    button {
+      background: #3b82f6;
+      color: white;
+      border: none;
+      padding: 12px 24px;
+      font-size: 16px;
+      border-radius: 6px;
+      cursor: pointer;
+      margin-right: 10px;
+    }
+    button:hover {
+      background: #2563eb;
+    }
+    button:disabled {
+      background: #94a3b8;
+      cursor: not-allowed;
+    }
+    #results {
+      background: #1e293b;
+      color: #e2e8f0;
+      padding: 20px;
+      border-radius: 8px;
+      font-family: 'Courier New', monospace;
+      font-size: 14px;
+      line-height: 1.6;
+      white-space: pre-wrap;
+      max-height: 600px;
+      overflow-y: auto;
+      margin: 20px 0;
+      display: none;
+    }
+    #results.visible {
+      display: block;
+    }
+    .warning {
+      background: #fef3c7;
+      border-left: 4px solid #f59e0b;
+      padding: 12px;
+      margin: 20px 0;
+      border-radius: 4px;
+    }
+    .status {
+      padding: 10px;
+      border-radius: 4px;
+      margin: 10px 0;
+      font-weight: 500;
+    }
+    .status.running {
+      background: #dbeafe;
+      color: #1e40af;
+    }
+    .status.complete {
+      background: #d1fae5;
+      color: #065f46;
+    }
+    .status.error {
+      background: #fee2e2;
+      color: #991b1b;
+    }
+  </style>
+</head>
+<body>
+  <h1>🏁 SyncKit Storage Adapter Benchmark</h1>
+
+  <div class="info">
+    <h2>About This Benchmark</h2>
+    <p>
+      This benchmark compares OPFS (Origin Private File System) vs IndexedDB performance
+      for typical SyncKit storage operations.
+    </p>
+    <p><strong>Tests include:</strong></p>
+    <ul>
+      <li>Write performance (small, medium, large documents)</li>
+      <li>Read performance</li>
+      <li>List operations</li>
+      <li>Delete operations</li>
+    </ul>
+  </div>
+
+  <div class="warning">
+    <strong>Note:</strong> This benchmark will clear any existing data in the
+    <code>benchmark-idb</code> and <code>benchmark-opfs</code> storage instances.
+    Your actual SyncKit data will not be affected.
+  </div>
+
+  <div class="controls">
+    <button id="runBtn" onclick="runBenchmark()">▶️ Run Benchmark</button>
+    <button id="copyBtn" onclick="copyResults()" disabled>📋 Copy Results</button>
+  </div>
+
+  <div id="status"></div>
+  <div id="results"></div>
+
+  <script type="module">
+    import { runBenchmarks, displayResults, exportResults } from './storage-comparison.bundle.js'
+
+    window.benchmarkResults = null
+
+    window.runBenchmark = async function() {
+      const runBtn = document.getElementById('runBtn')
+      const copyBtn = document.getElementById('copyBtn')
+      const statusDiv = document.getElementById('status')
+      const resultsDiv = document.getElementById('results')
+
+      runBtn.disabled = true
+      copyBtn.disabled = true
+      resultsDiv.classList.remove('visible')
+      statusDiv.innerHTML = '<div class="status running">⏳ Running benchmarks... (this may take 30-60 seconds)</div>'
+
+      // Redirect console.log to results div
+      const originalLog = console.log
+      let logOutput = ''
+
+      console.log = function(...args) {
+        const message = args.map(arg =>
+          typeof arg === 'object' ? JSON.stringify(arg, null, 2) : String(arg)
+        ).join(' ')
+        logOutput += message + '\n'
+        resultsDiv.textContent = logOutput
+        resultsDiv.classList.add('visible')
+        originalLog.apply(console, args)
+      }
+
+      try {
+        const results = await runBenchmarks()
+        displayResults(results)
+
+        window.benchmarkResults = exportResults(results)
+
+        statusDiv.innerHTML = '<div class="status complete">✅ Benchmark complete!</div>'
+        copyBtn.disabled = false
+
+      } catch (error) {
+        console.error('Benchmark failed:', error)
+        statusDiv.innerHTML = '<div class="status error">❌ Benchmark failed. Check console for details.</div>'
+
+      } finally {
+        console.log = originalLog
+        runBtn.disabled = false
+      }
+    }
+
+    window.copyResults = function() {
+      if (!window.benchmarkResults) return
+
+      navigator.clipboard.writeText(window.benchmarkResults).then(() => {
+        const copyBtn = document.getElementById('copyBtn')
+        const originalText = copyBtn.textContent
+        copyBtn.textContent = '✅ Copied!'
+        setTimeout(() => {
+          copyBtn.textContent = originalText
+        }, 2000)
+      })
+    }
+
+    // Show initial instructions
+    console.log('Click "Run Benchmark" to start')
+  </script>
+</body>
+</html>

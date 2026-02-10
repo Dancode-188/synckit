@@ -5,8 +5,11 @@ import { cors } from 'hono/cors';
 import { config } from './config';
 import { SyncWebSocketServer } from './websocket/server';
 import { auth } from './routes/auth';
+import { createSnapshotRoutes } from './routes/snapshots';
+import { createRoomRoutes } from './routes/rooms';
 import { PostgresAdapter } from './storage/postgres';
 import { RedisPubSub } from './storage/redis';
+import { getCSPHeaders } from './security/middleware';
 
 /**
  * SyncKit TypeScript Reference Server
@@ -22,12 +25,24 @@ const app = new Hono();
 // Middleware
 app.use('*', logger());
 app.use('*', cors({
-  origin: '*', // TODO: Configure in production
+  origin: process.env.CORS_ORIGIN || '*',
   credentials: true,
 }));
 
+// Security headers (CSP, XSS protection, etc.)
+app.use('*', async (c, next) => {
+  // Add security headers
+  const headers = getCSPHeaders();
+  Object.entries(headers).forEach(([key, value]) => {
+    c.header(key, value);
+  });
+  await next();
+});
+
 // Mount routes
 app.route('/auth', auth);
+
+// Note: Snapshot routes will be mounted after wsServer initialization
 
 // Health check endpoint
 app.get('/health', (c) => {
@@ -36,7 +51,7 @@ app.get('/health', (c) => {
   return c.json({
     status: 'healthy',
     timestamp: new Date().toISOString(),
-    version: '0.1.0',
+    version: '0.3.0',
     uptime: process.uptime(),
     connections: stats?.connections || { totalConnections: 0, totalUsers: 0, totalClients: 0 },
     documents: stats?.documents || { totalDocuments: 0, documents: [] },
@@ -47,7 +62,7 @@ app.get('/health', (c) => {
 app.get('/', (c) => {
   return c.json({
     name: 'SyncKit Server',
-    version: '0.1.0',
+    version: '0.3.0',
     description: 'Production-ready WebSocket sync server',
     endpoints: {
       health: '/health',
@@ -84,6 +99,8 @@ if (config.databaseUrl && !config.databaseUrl.includes('localhost')) {
   try {
     // console.log('🔌 Connecting to PostgreSQL...');
     await storage.connect();
+    // Ensure database schema exists (safe to run multiple times)
+    await storage.ensureSchema();
     storageConnected = true;
     // console.log('✅ PostgreSQL connected');
   } catch (error) {
@@ -138,6 +155,12 @@ const wsServer = new SyncWebSocketServer(
     pubsub: redisConnected ? pubsub : undefined,
   }
 );
+
+// Mount snapshot routes (requires wsServer for in-memory access)
+app.route('/snapshots', createSnapshotRoutes(storage, wsServer));
+
+// Mount room stats routes (for Stage landing page)
+app.route('/rooms', createRoomRoutes(wsServer));
 
 // console.log(`🚀 SyncKit Server running on ${config.host}:${config.port}`);
 // console.log(`📊 Health check: http://${config.host}:${config.port}/health`);

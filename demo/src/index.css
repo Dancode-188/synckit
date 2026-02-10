@@ -1,0 +1,297 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  * {
+    @apply border-gray-200 dark:border-gray-700;
+  }
+
+  body {
+    @apply bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100;
+  }
+}
+
+@layer components {
+  /* Custom scrollbar styles */
+  .scrollbar-thin::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+  }
+
+  .scrollbar-thin::-webkit-scrollbar-track {
+    @apply bg-gray-100 dark:bg-gray-800;
+  }
+
+  .scrollbar-thin::-webkit-scrollbar-thumb {
+    @apply bg-gray-300 dark:bg-gray-600 rounded-full;
+  }
+
+  .scrollbar-thin::-webkit-scrollbar-thumb:hover {
+    @apply bg-gray-400 dark:bg-gray-500;
+  }
+
+  /* Rich text formatting styles */
+  [contenteditable] strong {
+    @apply font-bold text-gray-900 dark:text-gray-100;
+  }
+
+  [contenteditable] em {
+    @apply italic text-gray-900 dark:text-gray-100;
+  }
+
+  [contenteditable] code.inline-code {
+    @apply font-mono text-sm bg-gray-100 dark:bg-gray-800 text-red-600 dark:text-red-400 px-1.5 py-0.5 rounded;
+  }
+
+  [contenteditable] a.link {
+    @apply text-blue-600 dark:text-blue-400 underline hover:text-blue-700 dark:hover:text-blue-300 cursor-pointer;
+  }
+
+  /* Dialog animations */
+  .animate-fade-in {
+    animation: fadeIn 0.15s ease-out;
+  }
+
+  .animate-scale-in {
+    animation: scaleIn 0.2s ease-out;
+  }
+
+  /* Block animations */
+  .animate-block-change {
+    animation: blockChange 0.2s ease-out;
+  }
+
+  .animate-slide-in {
+    animation: slideIn 0.2s ease-out;
+  }
+
+  @keyframes fadeIn {
+    from {
+      opacity: 0;
+    }
+    to {
+      opacity: 1;
+    }
+  }
+
+  @keyframes scaleIn {
+    from {
+      opacity: 0;
+      transform: scale(0.95);
+    }
+    to {
+      opacity: 1;
+      transform: scale(1);
+    }
+  }
+
+  @keyframes blockChange {
+    0% {
+      transform: scale(1);
+      opacity: 1;
+    }
+    50% {
+      transform: scale(0.98);
+      opacity: 0.8;
+    }
+    100% {
+      transform: scale(1);
+      opacity: 1;
+    }
+  }
+
+  @keyframes slideIn {
+    from {
+      opacity: 0;
+      transform: translateY(-8px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+
+  /* Enhanced focus states */
+  [contenteditable]:focus {
+    outline: none;
+    @apply ring-2 ring-primary-500/20 ring-offset-0;
+  }
+
+  /* Smooth transitions for all interactive elements */
+  .group:hover .drag-handle {
+    @apply opacity-100;
+  }
+
+  /* Typing indicator animation */
+  .typing-dot {
+    @apply text-white font-bold text-sm;
+    animation: typingDot 1.2s ease-in-out infinite;
+  }
+
+  @keyframes typingDot {
+    0%, 60%, 100% {
+      opacity: 0.3;
+      transform: translateY(0);
+    }
+    30% {
+      opacity: 1;
+      transform: translateY(-4px);
+    }
+  }
+
+  /* Toast animations */
+  .animate-toast-slide-in {
+    animation: toastSlideIn 0.3s ease-out;
+  }
+
+  @keyframes toastSlideIn {
+    from {
+      transform: translateX(100%);
+      opacity: 0;
+    }
+    to {
+      transform: translateX(0);
+      opacity: 1;
+    }
+  }
+
+  /* Confetti animation */
+  .animate-confetti-fall {
+    animation: confettiFall 3s ease-out forwards;
+  }
+
+  @keyframes confettiFall {
+    0% {
+      transform: translateY(0) rotate(0deg);
+      opacity: 1;
+    }
+    100% {
+      transform: translateY(100vh) rotate(720deg);
+      opacity: 0;
+    }
+  }
+
+  /* Crown bounce animation */
+  .animate-crown-bounce {
+    display: inline-block;
+    animation: crownBounce 1s ease-in-out infinite;
+  }
+
+  @keyframes crownBounce {
+    0%, 100% {
+      transform: translateY(0);
+    }
+    50% {
+      transform: translateY(-3px);
+    }
+  }
+
+  /* Reaction float animation */
+  .animate-reaction-float {
+    animation: reactionFloat 2s ease-out forwards;
+  }
+
+  @keyframes reactionFloat {
+    0% {
+      transform: translate(-50%, -50%) scale(1);
+      opacity: 1;
+    }
+    50% {
+      transform: translate(-50%, calc(-50% - 40px)) scale(1.4);
+      opacity: 1;
+    }
+    100% {
+      transform: translate(-50%, calc(-50% - 80px)) scale(1);
+      opacity: 0;
+    }
+  }
+
+  /* ========================================================================
+   * Word Pulse Styles
+   * ======================================================================== */
+
+  .pulse-container {
+    position: relative;
+    width: 100%;
+    min-height: 350px;
+    height: 100%;
+    border-radius: 1rem;
+    overflow: hidden;
+    background: #0f172a;
+  }
+
+  .pulse-canvas {
+    display: block;
+    width: 100%;
+    height: 100%;
+  }
+
+  .pulse-presence {
+    position: absolute;
+    top: 12px;
+    left: 12px;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 12px;
+    color: rgba(255, 255, 255, 0.6);
+    background: rgba(0, 0, 0, 0.4);
+    backdrop-filter: blur(8px);
+    padding: 6px 12px;
+    border-radius: 6px;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+  }
+
+  .pulse-presence-dot {
+    width: 8px;
+    height: 8px;
+    background: #22c55e;
+    border-radius: 50%;
+    animation: pulse-dot 2s ease-in-out infinite;
+  }
+
+  @keyframes pulse-dot {
+    0%, 100% { opacity: 1; transform: scale(1); }
+    50% { opacity: 0.6; transform: scale(0.9); }
+  }
+
+  .pulse-tooltip {
+    position: absolute;
+    background: rgba(15, 23, 42, 0.95);
+    color: #e2e8f0;
+    font-size: 11px;
+    padding: 4px 8px;
+    border-radius: 4px;
+    pointer-events: none;
+    white-space: nowrap;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    z-index: 10;
+  }
+
+  .pulse-empty {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: rgba(255, 255, 255, 0.4);
+    font-size: 14px;
+    pointer-events: none;
+  }
+
+  /* Responsive adjustments */
+  @media (max-width: 640px) {
+    .pulse-presence {
+      font-size: 11px;
+      padding: 4px 8px;
+      top: 8px;
+      left: 8px;
+    }
+
+    .pulse-presence-dot {
+      width: 6px;
+      height: 6px;
+    }
+  }
+}

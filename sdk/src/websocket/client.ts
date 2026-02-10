@@ -62,6 +62,7 @@ export interface WebSocketMessage {
   type: MessageType
   payload: any
   timestamp: number
+  id?: string  // Message ID for tracking
 }
 
 export type MessageType =
@@ -71,6 +72,8 @@ export type MessageType =
   | 'subscribe'
   | 'unsubscribe'
   | 'delta'
+  | 'delta_batch'
+  | 'delta_batch_chunk'
   | 'sync_request'
   | 'sync_response'
   | 'ack'
@@ -91,6 +94,8 @@ enum MessageTypeCode {
   SYNC_REQUEST = 0x12,
   SYNC_RESPONSE = 0x13,
   DELTA = 0x20,
+  DELTA_BATCH = 0x50,
+  DELTA_BATCH_CHUNK = 0x23,
   ACK = 0x21,
   PING = 0x30,
   PONG = 0x31,
@@ -146,6 +151,9 @@ export class WebSocketError extends Error {
 // WebSocket Client
 // ====================
 
+// Note: All delta_batch messages are sent via HTTP to bypass Fly.io's WebSocket filtering
+// WebSocket is used for smaller messages (ping, awareness, subscribe, etc.)
+
 export class WebSocketClient {
   private ws: WebSocket | null = null
   private _state: ConnectionState = 'disconnected'
@@ -160,6 +168,9 @@ export class WebSocketClient {
   private messageHandlers = new Map<MessageType, Set<(payload: any) => void>>()
   private stateChangeHandlers = new Set<(state: ConnectionState) => void>()
   private oneTimeHandlers = new Map<MessageType, Set<(payload: any) => void>>()
+
+  // Visibility change handling
+  private visibilityHandler: (() => void) | null = null
 
   // Configuration with defaults (getAuthToken remains optional)
   private readonly config: InternalWebSocketConfig
@@ -201,6 +212,9 @@ export class WebSocketClient {
     this._state = 'connecting'
     this.emitStateChange('connecting')
 
+    // Setup visibility change detection for tab suspension handling
+    this.setupVisibilityHandler()
+
     try {
       await this.establishConnection()
       this.reconnectAttempts = 0
@@ -229,6 +243,9 @@ export class WebSocketClient {
     // Stop heartbeat
     this.stopHeartbeat()
 
+    // Remove visibility change listener
+    this.removeVisibilityHandler()
+
     // Close WebSocket
     if (this.ws) {
       this.ws.close()
@@ -247,17 +264,58 @@ export class WebSocketClient {
    */
   send(message: WebSocketMessage): void {
     if (this.isConnected() && this.ws?.readyState === WebSocket.OPEN) {
-      // Send immediately
-      try {
-        const encoded = this.encodeMessage(message)
-        this.ws.send(encoded)
-      } catch (error) {
-        console.error('Failed to send message:', error)
-        // Queue for retry
-        this.queueMessage(message)
+      // For delta_batch, wait for buffer to drain first to avoid interference with other messages
+      // This prevents message loss when awareness updates are buffered
+      if (message.type === 'delta_batch' && this.ws.bufferedAmount > 0) {
+        const startTime = Date.now()
+        const BUFFER_DRAIN_TIMEOUT = 5000 // 5 seconds max wait
+
+        const waitForDrain = () => {
+          // Check for timeout - if buffer hasn't drained in 5 seconds,
+          // connection is likely dead. Queue and trigger reconnection.
+          if (Date.now() - startTime > BUFFER_DRAIN_TIMEOUT) {
+            console.warn('[WS] Buffer drain timeout - connection may be dead, queueing message')
+            this.queueMessage(message)
+            // Trigger connection health check
+            this.handleConnectionLost()
+            return
+          }
+
+          if (!this.ws || this.ws.readyState !== WebSocket.OPEN) {
+            this.queueMessage(message)
+            return
+          }
+          if (this.ws.bufferedAmount === 0) {
+            this.sendImmediate(message)
+          } else {
+            setTimeout(waitForDrain, 10)
+          }
+        }
+        setTimeout(waitForDrain, 10)
+        return
       }
+
+      this.sendImmediate(message)
     } else {
-      // Queue for later
+      // Queue for later delivery when connection is restored
+      this.queueMessage(message)
+    }
+  }
+
+  /**
+   * Send message immediately without buffer check
+   */
+  private sendImmediate(message: WebSocketMessage): void {
+    if (!this.ws || this.ws.readyState !== WebSocket.OPEN) {
+      this.queueMessage(message)
+      return
+    }
+
+    try {
+      const encoded = this.encodeMessage(message)
+      this.ws.send(encoded)
+    } catch (error) {
+      console.error('[WS] Failed to send message:', error)
       this.queueMessage(message)
     }
   }
@@ -455,11 +513,27 @@ export class WebSocketClient {
 
     this.reconnectTimer = setTimeout(async () => {
       try {
+        // Clear any stale connection state before reconnecting
+        // This ensures fresh auth token fetch and clean WebSocket state
+        if (this.ws) {
+          this.ws.onopen = null
+          this.ws.onmessage = null
+          this.ws.onclose = null
+          this.ws.onerror = null
+        }
+
         await this.establishConnection()
         this.reconnectAttempts = 0
         // console.log('Reconnected successfully')
       } catch (error) {
-        console.error('Reconnection failed:', error)
+        // Log reconnection failures with error details for debugging
+        if (error instanceof WebSocketError &&
+            error.code === WebSocketErrorCode.AUTH_FAILED) {
+          console.error('Reconnection failed due to authentication:', error.message)
+        } else {
+          console.error('Reconnection failed:', error)
+        }
+
         await this.reconnect()
       }
     }, totalDelay)
@@ -590,6 +664,64 @@ export class WebSocketClient {
   }
 
   /**
+   * Setup visibility change detection
+   * When tab becomes visible after being suspended, verify connection health
+   */
+  private setupVisibilityHandler(): void {
+    if (typeof document === 'undefined') return // Not in browser
+
+    this.visibilityHandler = () => {
+      if (document.visibilityState === 'visible' && this._state === 'connected') {
+        // Tab just became visible - verify connection is still alive
+        // Browser may have suspended timers and connection could be dead
+        this.verifyConnectionHealth()
+      }
+    }
+
+    document.addEventListener('visibilitychange', this.visibilityHandler)
+  }
+
+  /**
+   * Remove visibility change listener
+   */
+  private removeVisibilityHandler(): void {
+    if (this.visibilityHandler && typeof document !== 'undefined') {
+      document.removeEventListener('visibilitychange', this.visibilityHandler)
+      this.visibilityHandler = null
+    }
+  }
+
+  /**
+   * Verify connection is still alive by sending a ping
+   */
+  private verifyConnectionHealth(): void {
+    if (!this.ws || this.ws.readyState !== WebSocket.OPEN) {
+      // Connection already known to be dead
+      this.handleConnectionLost()
+      return
+    }
+
+    // Send ping and wait for pong
+    const healthCheckTimeout = setTimeout(() => {
+      console.warn('[WS] Health check failed - no pong received after tab became visible')
+      this.handleConnectionLost()
+    }, this.config.heartbeat.timeout)
+
+    // Set up one-time pong handler for this health check
+    const pongHandler = () => {
+      clearTimeout(healthCheckTimeout)
+    }
+    this.once('pong', pongHandler)
+
+    // Send ping
+    this.send({
+      type: 'ping',
+      payload: {},
+      timestamp: Date.now(),
+    })
+  }
+
+  /**
    * Queue message for later delivery
    */
   private queueMessage(message: WebSocketMessage): void {
@@ -658,9 +790,22 @@ export class WebSocketClient {
   }
 
   /**
-   * Decode binary message
+   * Decode message (supports both JSON string and binary ArrayBuffer)
    */
-  private decodeMessage(data: ArrayBuffer): WebSocketMessage {
+  private decodeMessage(data: ArrayBuffer | string): WebSocketMessage {
+    // Handle JSON string format
+    if (typeof data === 'string') {
+      const message = JSON.parse(data)
+      // Extract type, timestamp, id from top level
+      const { type, timestamp, id, ...payload } = message
+      return {
+        type,
+        payload,  // Everything EXCEPT type/timestamp/id
+        timestamp,
+      }
+    }
+
+    // Handle binary format
     const view = new DataView(data)
 
     // Read type code
@@ -697,6 +842,8 @@ export class WebSocketClient {
       sync_request: MessageTypeCode.SYNC_REQUEST,
       sync_response: MessageTypeCode.SYNC_RESPONSE,
       delta: MessageTypeCode.DELTA,
+      delta_batch: MessageTypeCode.DELTA_BATCH,
+      delta_batch_chunk: MessageTypeCode.DELTA_BATCH_CHUNK,
       ack: MessageTypeCode.ACK,
       ping: MessageTypeCode.PING,
       pong: MessageTypeCode.PONG,
@@ -722,6 +869,8 @@ export class WebSocketClient {
       [MessageTypeCode.SYNC_REQUEST]: 'sync_request',
       [MessageTypeCode.SYNC_RESPONSE]: 'sync_response',
       [MessageTypeCode.DELTA]: 'delta',
+      [MessageTypeCode.DELTA_BATCH]: 'delta_batch',
+      [MessageTypeCode.DELTA_BATCH_CHUNK]: 'delta_batch_chunk',
       [MessageTypeCode.ACK]: 'ack',
       [MessageTypeCode.PING]: 'ping',
       [MessageTypeCode.PONG]: 'pong',

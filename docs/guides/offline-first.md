@@ -1,6 +1,6 @@
 # Offline-First Patterns with SyncKit
 
-**v0.2.0 Production Status**
+**v0.3.0 Production Status**
 
 SyncKit v0.2.0 provides complete offline-first architecture for production apps.
 
@@ -492,7 +492,7 @@ self.addEventListener('sync', (event) => {
 })
 ```
 
-**SyncKit integration (coming in v0.2.0):**
+**SyncKit integration:**
 
 ```typescript
 const sync = new SyncKit({

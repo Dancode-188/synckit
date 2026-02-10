@@ -40,6 +40,28 @@ export interface SessionEntry {
   metadata?: Record<string, any>;
 }
 
+export interface SnapshotEntry {
+  id: string;
+  documentId: string;
+  state: any; // JSONB document state
+  version: Record<string, bigint>; // Vector clock at time of snapshot
+  sizeBytes: number;
+  createdAt: Date;
+  compressed?: boolean;
+}
+
+/**
+ * Text document state for SyncText (Fugue CRDT) persistence
+ */
+export interface TextDocumentState {
+  id: string;
+  content: string;      // Plain text content (for display/search)
+  crdtState: string;    // Full Fugue CRDT JSON state
+  clock: bigint;        // Lamport clock
+  createdAt: Date;
+  updatedAt: Date;
+}
+
 /**
  * Storage adapter interface
  */
@@ -72,11 +94,24 @@ export interface StorageAdapter {
   deleteSession(sessionId: string): Promise<boolean>;
   getSessions(userId: string): Promise<SessionEntry[]>;
 
+  // Snapshot operations (optional - for state snapshots)
+  saveSnapshot(snapshot: Omit<SnapshotEntry, 'id' | 'createdAt'>): Promise<SnapshotEntry>;
+  getSnapshot(snapshotId: string): Promise<SnapshotEntry | null>;
+  getLatestSnapshot(documentId: string): Promise<SnapshotEntry | null>;
+  listSnapshots(documentId: string, limit?: number): Promise<SnapshotEntry[]>;
+  deleteSnapshot(snapshotId: string): Promise<boolean>;
+
+  // Text document operations (for SyncText/Fugue CRDT persistence)
+  saveTextDocument(id: string, content: string, crdtState: string, clock: bigint): Promise<TextDocumentState>;
+  getTextDocument(id: string): Promise<TextDocumentState | null>;
+
   // Maintenance
-  cleanup(options?: { 
-    oldSessionsHours?: number; 
-    oldDeltasDays?: number; 
-  }): Promise<{ sessionsDeleted: number; deltasDeleted: number }>;
+  cleanup(options?: {
+    oldSessionsHours?: number;
+    oldDeltasDays?: number;
+    oldSnapshotsDays?: number;
+    maxSnapshotsPerDocument?: number;
+  }): Promise<{ sessionsDeleted: number; deltasDeleted: number; snapshotsDeleted: number }>;
 }
 
 /**

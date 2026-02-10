@@ -1,4 +1,7 @@
 import pg from 'pg';
+import { readFileSync } from 'fs';
+import { join, dirname } from 'path';
+import { fileURLToPath } from 'url';
 import type {
   StorageAdapter,
   StorageConfig,
@@ -6,6 +9,8 @@ import type {
   VectorClockEntry,
   DeltaEntry,
   SessionEntry,
+  SnapshotEntry,
+  TextDocumentState,
 } from './interface';
 import {
   ConnectionError,
@@ -53,6 +58,44 @@ export class PostgresAdapter implements StorageAdapter {
     } catch (error) {
       this.connected = false;
       throw new ConnectionError('Failed to connect to PostgreSQL', error as Error);
+    }
+  }
+
+  /**
+   * Ensure database schema exists by running schema.sql
+   * Safe to call multiple times (uses IF NOT EXISTS)
+   */
+  async ensureSchema(): Promise<void> {
+    try {
+      // Schema file is at /app/src/storage/schema.sql in the Docker container
+      // Use multiple possible paths for different environments
+      const possiblePaths = [
+        join(process.cwd(), 'src', 'storage', 'schema.sql'),  // Docker: /app/src/storage/schema.sql
+        join(dirname(fileURLToPath(import.meta.url)), 'schema.sql'),  // Dev: relative to source file
+      ];
+
+      let schema: string | null = null;
+      let usedPath: string | null = null;
+
+      for (const schemaPath of possiblePaths) {
+        try {
+          schema = readFileSync(schemaPath, 'utf-8');
+          usedPath = schemaPath;
+          break;
+        } catch {
+          // Try next path
+        }
+      }
+
+      if (!schema) {
+        console.warn('⚠️  Could not find schema.sql at any expected path');
+        return;
+      }
+
+      await this.pool.query(schema);
+    } catch (error) {
+      console.warn('⚠️  Failed to ensure database schema:', error instanceof Error ? error.message : String(error));
+      // Don't throw - server can still work with existing tables
     }
   }
 
@@ -382,33 +425,238 @@ export class PostgresAdapter implements StorageAdapter {
   }
 
   // ==========================================================================
+  // SNAPSHOT OPERATIONS
+  // ==========================================================================
+
+  /**
+   * Save a snapshot
+   */
+  async saveSnapshot(snapshot: Omit<SnapshotEntry, 'id' | 'createdAt'>): Promise<SnapshotEntry> {
+    try {
+      const result = await this.pool.query<SnapshotEntry>(
+        `INSERT INTO snapshots (document_id, state, version, size_bytes, compressed)
+         VALUES ($1, $2, $3, $4, $5)
+         RETURNING id, document_id as "documentId", state, version, size_bytes as "sizeBytes",
+                   created_at as "createdAt", compressed`,
+        [
+          snapshot.documentId,
+          JSON.stringify(snapshot.state),
+          JSON.stringify(snapshot.version),
+          snapshot.sizeBytes,
+          snapshot.compressed || false
+        ]
+      );
+
+      return result.rows[0];
+    } catch (error) {
+      throw new QueryError(`Failed to save snapshot for ${snapshot.documentId}`, error as Error);
+    }
+  }
+
+  /**
+   * Get a specific snapshot by ID
+   */
+  async getSnapshot(snapshotId: string): Promise<SnapshotEntry | null> {
+    try {
+      const result = await this.pool.query<SnapshotEntry>(
+        `SELECT id, document_id as "documentId", state, version, size_bytes as "sizeBytes",
+                created_at as "createdAt", compressed
+         FROM snapshots
+         WHERE id = $1`,
+        [snapshotId]
+      );
+
+      return result.rows[0] || null;
+    } catch (error) {
+      throw new QueryError(`Failed to get snapshot ${snapshotId}`, error as Error);
+    }
+  }
+
+  /**
+   * Get the latest snapshot for a document
+   */
+  async getLatestSnapshot(documentId: string): Promise<SnapshotEntry | null> {
+    try {
+      const result = await this.pool.query<SnapshotEntry>(
+        `SELECT id, document_id as "documentId", state, version, size_bytes as "sizeBytes",
+                created_at as "createdAt", compressed
+         FROM snapshots
+         WHERE document_id = $1
+         ORDER BY created_at DESC
+         LIMIT 1`,
+        [documentId]
+      );
+
+      return result.rows[0] || null;
+    } catch (error) {
+      throw new QueryError(`Failed to get latest snapshot for ${documentId}`, error as Error);
+    }
+  }
+
+  /**
+   * List snapshots for a document
+   */
+  async listSnapshots(documentId: string, limit: number = 10): Promise<SnapshotEntry[]> {
+    try {
+      const result = await this.pool.query<SnapshotEntry>(
+        `SELECT id, document_id as "documentId", state, version, size_bytes as "sizeBytes",
+                created_at as "createdAt", compressed
+         FROM snapshots
+         WHERE document_id = $1
+         ORDER BY created_at DESC
+         LIMIT $2`,
+        [documentId, limit]
+      );
+
+      return result.rows;
+    } catch (error) {
+      throw new QueryError(`Failed to list snapshots for ${documentId}`, error as Error);
+    }
+  }
+
+  /**
+   * Delete a snapshot
+   */
+  async deleteSnapshot(snapshotId: string): Promise<boolean> {
+    try {
+      const result = await this.pool.query('DELETE FROM snapshots WHERE id = $1', [snapshotId]);
+      return (result.rowCount || 0) > 0;
+    } catch (error) {
+      throw new QueryError(`Failed to delete snapshot ${snapshotId}`, error as Error);
+    }
+  }
+
+  // ==========================================================================
+  // TEXT DOCUMENT OPERATIONS (SyncText/Fugue CRDT)
+  // ==========================================================================
+
+  /**
+   * Save text document with Fugue CRDT state
+   * Uses the existing documents table with a special state format for text
+   */
+  async saveTextDocument(
+    id: string,
+    content: string,
+    crdtState: string,
+    clock: bigint
+  ): Promise<TextDocumentState> {
+    try {
+      const state = {
+        type: 'text',
+        content,
+        crdt: crdtState,
+        clock: Number(clock),
+      };
+
+      const result = await this.pool.query(
+        `INSERT INTO documents (id, state, version)
+         VALUES ($1, $2, 1)
+         ON CONFLICT (id) DO UPDATE
+         SET state = $2, updated_at = NOW()
+         RETURNING id, state, created_at as "createdAt", updated_at as "updatedAt"`,
+        [id, JSON.stringify(state)]
+      );
+
+      const row = result.rows[0];
+      const parsedState = typeof row.state === 'string' ? JSON.parse(row.state) : row.state;
+
+      return {
+        id: row.id,
+        content: parsedState.content || '',
+        crdtState: parsedState.crdt || '',
+        clock: BigInt(parsedState.clock || 0),
+        createdAt: row.createdAt,
+        updatedAt: row.updatedAt,
+      };
+    } catch (error) {
+      throw new QueryError(`Failed to save text document ${id}`, error as Error);
+    }
+  }
+
+  /**
+   * Get text document by ID
+   * Returns null if document doesn't exist or is not a text document
+   */
+  async getTextDocument(id: string): Promise<TextDocumentState | null> {
+    try {
+      const result = await this.pool.query(
+        `SELECT id, state, created_at as "createdAt", updated_at as "updatedAt"
+         FROM documents WHERE id = $1`,
+        [id]
+      );
+
+      if (!result.rows[0]) {
+        return null;
+      }
+
+      const row = result.rows[0];
+      const state = typeof row.state === 'string' ? JSON.parse(row.state) : row.state;
+
+      // Check if this is a text document
+      if (state.type !== 'text' || !state.crdt) {
+        return null;
+      }
+
+      return {
+        id: row.id,
+        content: state.content || '',
+        crdtState: state.crdt,
+        clock: BigInt(state.clock || 0),
+        createdAt: row.createdAt,
+        updatedAt: row.updatedAt,
+      };
+    } catch (error) {
+      throw new QueryError(`Failed to get text document ${id}`, error as Error);
+    }
+  }
+
+  // ==========================================================================
   // MAINTENANCE
   // ==========================================================================
 
   /**
    * Cleanup old data
    */
-  async cleanup(options?: { 
-    oldSessionsHours?: number; 
-    oldDeltasDays?: number; 
-  }): Promise<{ sessionsDeleted: number; deltasDeleted: number }> {
+  async cleanup(options?: {
+    oldSessionsHours?: number;
+    oldDeltasDays?: number;
+    oldSnapshotsDays?: number;
+    maxSnapshotsPerDocument?: number;
+  }): Promise<{ sessionsDeleted: number; deltasDeleted: number; snapshotsDeleted: number }> {
     const sessionsHours = options?.oldSessionsHours || 24;
     const deltasDays = options?.oldDeltasDays || 30;
+    const snapshotsDays = options?.oldSnapshotsDays || 7;
+    const maxSnapshotsPerDoc = options?.maxSnapshotsPerDocument || 10;
 
     try {
-      // Clean sessions
+      // Clean sessions (parameterized to prevent SQL injection)
       const sessionsResult = await this.pool.query(
-        `DELETE FROM sessions WHERE last_seen < NOW() - INTERVAL '${sessionsHours} hours'`
+        `DELETE FROM sessions WHERE last_seen < NOW() - make_interval(hours => $1)`,
+        [sessionsHours]
       );
 
-      // Clean deltas
+      // Clean deltas (parameterized to prevent SQL injection)
       const deltasResult = await this.pool.query(
-        `DELETE FROM deltas WHERE timestamp < NOW() - INTERVAL '${deltasDays} days'`
+        `DELETE FROM deltas WHERE timestamp < NOW() - make_interval(days => $1)`,
+        [deltasDays]
       );
+
+      // Clean old snapshots (keep only maxSnapshotsPerDocument recent snapshots per document)
+      const snapshotsResult = await this.pool.query(`
+        DELETE FROM snapshots
+        WHERE id IN (
+          SELECT id FROM (
+            SELECT id, ROW_NUMBER() OVER (PARTITION BY document_id ORDER BY created_at DESC) as rn
+            FROM snapshots
+          ) ranked
+          WHERE rn > $1 OR created_at < NOW() - make_interval(days => $2)
+        )
+      `, [maxSnapshotsPerDoc, snapshotsDays]);
 
       return {
         sessionsDeleted: sessionsResult.rowCount || 0,
         deltasDeleted: deltasResult.rowCount || 0,
+        snapshotsDeleted: snapshotsResult.rowCount || 0,
       };
     } catch (error) {
       throw new QueryError('Failed to cleanup old data', error as Error);

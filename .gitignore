@@ -4,6 +4,34 @@ target/
 *.pdb
 *.backup
 
+# .NET / C#
+bin/
+obj/
+*.dll
+*.exe
+*.nupkg
+*.snupkg
+*.user
+*.suo
+*.userosscache
+*.sln.docstates
+project.lock.json
+*.nuget.props
+*.nuget.targets
+.nuget/
+launchSettings.json.user
+
+# .NET Aspire
+.aspire/
+*.dcproj.user
+
+# Visual Studio
+.vs/
+*.csproj.user
+*.dbmdl
+*.jfm
+*.publishsettings
+
 # Lock file strategy:
 # - Ignore for libraries (core/, sdk/) - users will use their own versions
 # - Track for applications (server/*/) - ensures reproducible builds

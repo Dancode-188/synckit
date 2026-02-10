@@ -41,25 +41,43 @@ await doc.update({ completed: true })
 
 ### 🎬 See It In Action
 
-**⚡ [Try Live Demo](https://synckit-demo.netlify.app)** - Open in two tabs to see real-time sync!
+**⚡ [Try Live Demo →](https://localwrite-demo.fly.dev)**
 
-**1. Complex State (Kanban)**
-SyncKit handles structural data like lists and nested objects with automatic conflict resolution.
+**LocalWrite** - Full-featured collaborative editor showcasing SyncKit's capabilities.
 
-![SyncKit Kanban Demo](demo.gif)
+**Quick test (30 seconds):**
+1. Open [localwrite-demo.fly.dev](https://localwrite-demo.fly.dev) in two browser tabs
+2. Click "Join a Room" in both tabs (auto-joins same room)
+3. Type in one tab → appears instantly in the other
+4. Watch live cursors showing each user's position
 
-**2. Collaborative Text (New in v0.2.0)**
-Add Google Docs-style collaboration to your app with a single hook.
+**What you'll see:**
+- **Character-level sync** - No debouncing, no lag
+- **Conflict-free merging** - Multiple users editing simultaneously
+- **Block-based editor** - Slash commands (`/h1`, `/list`) with real-time formatting
+- **Presence & cursors** - See who's online, where they're typing
+- **Offline-first** - Disconnect your network, keep editing, auto-sync on reconnect
+- **Word Wall** - Community voting feature (bonus: shows OR-Set CRDT in action)
 
+**Real-world example:**
 ```typescript
-// It's this simple:
-import { useSyncText } from '@synckit-js/sdk/react'
+import { SyncKit } from '@synckit-js/sdk'
+import { useSyncDocument } from '@synckit-js/sdk/react'
 
-function Editor() {
-  // ✨ Automatic conflict resolution & real-time sync
-  const [text, { insert, delete: del }] = useSyncText('doc-1')
+// Initialize once
+const sync = new SyncKit()
+await sync.init()
 
-  return <textarea value={text} onChange={e => insert(0, e.target.value)} />
+// Use in components
+function TaskList() {
+  const [tasks, { update }] = useSyncDocument<Task[]>('tasks')
+
+  const toggleTask = (id: string) => {
+    update(tasks.map(t =>
+      t.id === id ? { ...t, completed: !t.completed } : t
+    ))
+  }
+  // Syncs across all connected clients automatically
 }
 ```
 
@@ -101,7 +119,7 @@ Open source and self-hostable. No vendor lock-in, no surprise $2,000/month bills
 ### 🛡️ **Data Integrity Guaranteed**
 - Zero data loss with automatic conflict resolution (Last-Write-Wins)
 - Formal verification with TLA+ (3 bugs found and fixed)
-- 1,081+ comprehensive tests across TypeScript and Rust (unit, integration, chaos, load)
+- 2,100+ comprehensive tests across TypeScript, Rust, Python, Go, and C# (unit, integration, chaos, load)
 
 ---
 
@@ -210,7 +228,7 @@ graph TD
 
     C --> D[IndexedDB Storage<br/>Your local source of truth]
 
-    D -.->|Optional| E[SyncKit Server<br/>TypeScript/Python/Go/Rust]
+    D -.->|Optional| E[SyncKit Server<br/>TypeScript/Python/Go/C#]
 
     E -->|Real-time sync| E1[WebSocket]
     E -->|Persistence| E2[PostgreSQL/MongoDB]
@@ -246,6 +264,7 @@ graph TD
 - **[From Yjs/Automerge](docs/guides/migration-from-yjs.md)** - Simplify your stack
 
 ### Examples
+- **[LocalWrite Demo](https://localwrite-demo.fly.dev)** - Full-featured collaborative editor (live demo, see source in `demo/`)
 - **[Vanilla Counter](examples/vanilla-counter/)** - Minimal example with no build tools (just open in browser!)
 - **[Todo App](examples/todo-app/)** - Simple CRUD with filters
 - **[Collaborative Editor](examples/collaborative-editor/)** - Real-time text editing with CodeMirror 6
@@ -316,7 +335,7 @@ Different libraries make different trade-offs. Here's how SyncKit compares:
 | **Works Without Server** | ✅ Yes | ❌ No | ❌ No | ✅ Yes | ✅ Yes |
 | **Self-Hosted** | ✅ Yes | ❌ No | ✅ Yes | ✅ Yes | ✅ Yes |
 | **TypeScript Support** | ✅ Native | ✅ Good | ✅ Good | ⚠️ Issues | ✅ Good |
-| **Production Status** | ✅ v0.2.0 | ✅ Mature | ✅ Mature | ✅ Mature | ⚠️ Stable core,<br/>evolving ecosystem |
+| **Production Status** | ✅ v0.3.0 | ✅ Mature | ✅ Mature | ✅ Mature | ⚠️ Stable core,<br/>evolving ecosystem |
 
 ### When to Choose SyncKit
 
@@ -345,13 +364,16 @@ Different libraries make different trade-offs. Here's how SyncKit compares:
 - **`@synckit-js/sdk/lite`** - Lightweight version (local-only, 46KB gzipped)
 
 ### Servers
-- **`@synckit-js/server`** - Bun + Hono reference server (production-ready)
+- **`@synckit-js/server`** - Bun + Hono TypeScript server (production-ready)
+- **Python Server** - FastAPI implementation (production-ready, v0.3.0)
+- **Go Server** - High-performance goroutine-based server (production-ready, v0.3.0)
+- **C# Server** - ASP.NET Core implementation (production-ready, community-contributed)
 
 ---
 
 ## 🚦 Status
 
-**Current Version:** v0.2.0
+**Current Version:** v0.3.0
 
 ### Production Ready ✅
 
@@ -366,30 +388,24 @@ The core sync engine is battle-tested and ready for production:
 - ✅ **Core Rust Engine** - Memory-safe WASM with zero unsafe blocks
 - ✅ **WASM Compilation** - 154KB gzipped (46KB lite), optimized performance
 - ✅ **TypeScript SDK** - Document, Text, RichText, Counter, Set APIs
-- ✅ **Storage Adapters** - IndexedDB and Memory storage
-- ✅ **TypeScript Server** - WebSocket sync server with Bun + Hono
-- ✅ **1,081+ Tests** - 87% code coverage, 100% pass rate
+- ✅ **Storage Adapters** - IndexedDB, Memory, and OPFS
+- ✅ **Multi-Language Servers** - TypeScript, Python, Go, and C# (all production-ready)
+- ✅ **Undo/Redo** - Cross-tab undo with persistent history
+- ✅ **Awareness & Presence** - Real-time user tracking with cursor sharing
+- ✅ **Cross-Tab Sync** - BroadcastChannel-based synchronization
+- ✅ **Framework Adapters** - React hooks, Vue 3 composables, Svelte 5 stores
+- ✅ **Quill Integration** - QuillBinding for Quill editor
+- ✅ **Snapshot API** - Document snapshots with automatic scheduling
+- ✅ **Benchmark Suite** - Cross-server performance comparison
+- ✅ **2,100+ Tests** - 100% pass rate across TypeScript, Rust, Python, Go, and C#
 - ✅ **Example Applications** - Todo app, collaborative editor, project management
-
-### Public Beta 🔶
-
-New features we're testing with the community - stable but gathering feedback:
-
-- 🔶 **Undo/Redo** - Cross-tab undo with persistent history
-- 🔶 **Awareness & Presence** - Real-time user tracking
-- 🔶 **Cursor Sharing** - Live cursor positions with animations
-- 🔶 **Cross-Tab Sync** - BroadcastChannel-based synchronization
-- 🔶 **React Hooks** - useSyncText, useRichText, usePresence, useOthers, useUndo
-- 🔶 **Vue 3 Composables** - Composition API integration
-- 🔶 **Svelte 5 Stores** - Reactive stores with runes support
-- 🔶 **Quill Integration** - QuillBinding for Quill editor
 
 ### What's Next 🚧
 
-- 🚧 **Multi-Language Servers** - Python, Go, Rust implementations
-- 🚧 **Advanced Storage** - OPFS (Origin Private File System), SQLite adapter
+- 🚧 **Rust Server** - Native Rust server implementation
+- 🚧 **SQLite Storage** - For Node.js, Bun, and Electron
+- 🚧 **SQL Sync** - Multi-table relational sync
 - 🚧 **Conflict UI** - Visual conflict resolution interface
-- 🚧 **Performance** - Large document optimization (>10K chars)
 
 **[Full roadmap →](ROADMAP.md)**
 
@@ -403,7 +419,7 @@ We welcome contributions from the community!
 - 🐛 **Bug Reports** - [Open an issue](https://github.com/Dancode-188/synckit/issues)
 - 📚 **Documentation** - Improve guides, fix typos
 - 🧪 **Tests** - Add test coverage
-- 🌐 **Servers** - Implement Python/Go/Rust servers
+- 🌐 **Servers** - Implement Rust server
 - 💡 **Features** - Propose new features in discussions
 
 **[Contributing guide →](CONTRIBUTING.md)**

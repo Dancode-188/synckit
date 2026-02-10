@@ -21,8 +21,11 @@ export type { Operation, VectorClock } from './queue'
 // ====================
 
 export interface SyncManagerConfig {
-  /** WebSocket client instance */
+  /** WebSocket client instance for sync/delta traffic */
   websocket: WebSocketClient
+
+  /** WebSocket client instance for awareness traffic (optional, uses main websocket if not provided) */
+  awarenessWebsocket?: WebSocketClient
 
   /** Storage adapter for persistence */
   storage: StorageAdapter
@@ -46,15 +49,6 @@ export interface DocumentSyncState {
 }
 
 // ====================
-// Conflict Types
-// ====================
-
-interface Conflict {
-  local: Operation
-  remote: Operation
-}
-
-// ====================
 // Document Interface
 // ====================
 
@@ -71,6 +65,7 @@ export interface SyncableDocument {
 
 export class SyncManager {
   private websocket: WebSocketClient
+  private awarenessWebsocket: WebSocketClient  // Separate connection for awareness
   private offlineQueue: OfflineQueue
   private awarenessManager: AwarenessManager
 
@@ -85,20 +80,25 @@ export class SyncManager {
   // Buffer for operations that arrive before documents are registered
   private bufferedOperations = new Map<string, Operation[]>()
 
-  // ACK tracking
-  private pendingAcks = new Map<string, { operation: Operation; timeout: NodeJS.Timeout }>()
-  private readonly ACK_TIMEOUT = 5000 // 5 seconds
 
   // Listeners
   private stateChangeListeners = new Map<string, Set<(state: DocumentSyncState) => void>>()
 
+  // Delta batching (temporarily disabled)
+  private deltaBatchQueue = new Map<string, Operation[]>()
+  private deltaBatchTimers = new Map<string, NodeJS.Timeout>()
+  private readonly DELTA_BATCH_DELAY = 50
+  private readonly DELTA_BATCH_MAX_SIZE = 50
+
   constructor(config: SyncManagerConfig) {
     this.websocket = config.websocket
+    // Use separate awareness websocket if provided, otherwise fall back to main websocket
+    this.awarenessWebsocket = config.awarenessWebsocket ?? config.websocket
     this.offlineQueue = config.offlineQueue
 
-    // Initialize awareness manager
+    // Initialize awareness manager with its own dedicated websocket
     this.awarenessManager = new AwarenessManager({
-      websocket: this.websocket,
+      websocket: this.awarenessWebsocket,
     })
 
     this.setupMessageHandlers()
@@ -233,47 +233,67 @@ export class SyncManager {
    * Push local operation to server
    * Queues operation if offline
    */
-  async pushOperation(operation: Operation, forceSend = false): Promise<void> {
+  async pushOperation(operation: Operation): Promise<void> {
     const { documentId } = operation
 
-    // Increment pending count
-    this.incrementPendingOperations(documentId)
-
-    try {
-      if (forceSend || this.websocket.isConnected()) {
-        // Send immediately
-        // console.log(`[SyncManager] 📤 Sending operation ${forceSend ? '(FORCED)' : 'online'}:`, documentId, operation.field, operation.value)
-        const messageId = this.generateMessageId()
-
-        this.websocket.send({
-          type: 'delta',
-          payload: { ...operation, messageId },
-          timestamp: Date.now(),
-        })
-
-        // Wait for ACK
-        await this.waitForAck(messageId, operation)
-
-        // Decrement pending count
-        this.decrementPendingOperations(documentId)
-        this.updateSyncState(documentId, { lastSyncedAt: Date.now() })
-      } else {
-        // Queue for offline replay
-        // console.log(`[SyncManager] 💾 Queuing operation (OFFLINE):`, documentId, operation.field, operation.value)
-        await this.offlineQueue.enqueue(operation)
-        // const stats = this.offlineQueue.getStats()
-        // console.log(`[SyncManager] 💾 Queue stats:`, stats)
-        this.updateSyncState(documentId, { state: 'offline' })
-        this.decrementPendingOperations(documentId)
-      }
-    } catch (error) {
-      // On error, also queue for retry
-      // console.log(`[SyncManager] ❌ Error sending operation, queuing:`, documentId, error)
-      await this.offlineQueue.enqueue(operation)
-      this.decrementPendingOperations(documentId)
-      throw error
+    if (!this.deltaBatchQueue.has(documentId)) {
+      this.deltaBatchQueue.set(documentId, [])
     }
+
+    const queue = this.deltaBatchQueue.get(documentId)!
+    const op = operation as any
+
+    // For text-state operations, replace previous text-state (full state supersedes)
+    if (op.type === 'text-state') {
+      const existingIdx = queue.findIndex((o: any) => o.type === 'text-state')
+      if (existingIdx >= 0) {
+        queue[existingIdx] = operation
+      } else {
+        queue.push(operation)
+      }
+    } else {
+      queue.push(operation)
+    }
+
+    const existingTimer = this.deltaBatchTimers.get(documentId)
+    if (existingTimer) clearTimeout(existingTimer)
+
+    const queueSize = this.deltaBatchQueue.get(documentId)!.length
+
+    if (queueSize >= this.DELTA_BATCH_MAX_SIZE) {
+      this.flushDeltaBatch(documentId)
+      return
+    }
+
+    const timer = setTimeout(() => this.flushDeltaBatch(documentId), this.DELTA_BATCH_DELAY)
+    this.deltaBatchTimers.set(documentId, timer)
   }
+
+  private flushDeltaBatch(documentId: string): void {
+    const batch = this.deltaBatchQueue.get(documentId)
+    if (!batch || batch.length === 0) {
+      return
+    }
+
+    const timer = this.deltaBatchTimers.get(documentId)
+    if (timer) {
+      clearTimeout(timer)
+      this.deltaBatchTimers.delete(documentId)
+    }
+
+    const messageId = this.generateMessageId()
+
+    this.websocket.send({
+      type: 'delta_batch',
+      payload: { documentId, deltas: batch, messageId },
+      timestamp: Date.now(),
+      id: messageId,
+    })
+
+    this.deltaBatchQueue.set(documentId, [])
+    this.updateSyncState(documentId, { lastSyncedAt: Date.now() })
+  }
+
 
   /**
    * Get sync state for document
@@ -346,11 +366,6 @@ export class SyncManager {
       this.unsubscribeDocument(documentId)
     }
 
-    // Clear all pending ACKs
-    for (const [, { timeout }] of this.pendingAcks) {
-      clearTimeout(timeout)
-    }
-    this.pendingAcks.clear()
 
     // Clear listeners
     this.stateChangeListeners.clear()
@@ -374,15 +389,62 @@ export class SyncManager {
       this.handleRemoteOperation(payload)
     })
 
-    // Handle ACK messages
-    this.websocket.on('ack', (payload) => {
-      this.handleAck(payload)
+    // Handle delta_batch messages (including text operations from server)
+    this.websocket.on('delta_batch', (payload) => {
+      this.handleRemoteDeltaBatch(payload)
     })
 
     // Handle errors
     this.websocket.on('error', (payload) => {
       console.error('Server error:', payload)
     })
+  }
+
+  /**
+   * Handle remote delta batch from server
+   * This handles both document field updates and text CRDT operations
+   */
+  private handleRemoteDeltaBatch(payload: any): void {
+    const { documentId, deltas, isTextOperation } = payload
+
+    if (!deltas || !Array.isArray(deltas)) {
+      console.warn('[SyncManager] Received invalid delta_batch:', payload)
+      return
+    }
+
+    for (const operation of deltas) {
+      // Handle text CRDT operations (state-based or legacy position-based)
+      if (operation.type === 'text-state' || operation.type === 'text' || isTextOperation) {
+        this.handleRemoteTextOperation(documentId, operation)
+      } else {
+        // Handle standard document field operations
+        this.handleRemoteOperation({ ...operation, documentId })
+      }
+    }
+  }
+
+  /**
+   * Handle remote text CRDT operation
+   */
+  private handleRemoteTextOperation(documentId: string, operation: any): void {
+    const document = this.documents.get(documentId)
+
+    if (!document) {
+      // Buffer the operation for when the document is registered
+      if (!this.bufferedOperations.has(documentId)) {
+        this.bufferedOperations.set(documentId, [])
+      }
+      this.bufferedOperations.get(documentId)!.push(operation)
+      return
+    }
+
+    // Apply the text operation
+    document.applyRemoteOperation(operation)
+
+    // Merge vector clocks if present
+    if (operation.clock) {
+      this.mergeVectorClocks(document, operation.clock)
+    }
   }
 
   /**
@@ -433,7 +495,7 @@ export class SyncManager {
     this.offlineQueue
       .replay((op) => {
         // console.log(`[SyncManager] 🔄 Replaying operation:`, op.documentId, op.field, op.value)
-        return this.pushOperation(op, true) // Force send, bypassing offline check
+        return this.pushOperation(op) // Force send, bypassing offline check
       })
       .then((_count) => {
         // console.log(`[SyncManager] ✅ Replay complete! Sent ${_count} operations`)
@@ -468,9 +530,10 @@ export class SyncManager {
 
   /**
    * Handle sync response from server
+   * Applies the full server state to the local document
    */
   private handleSyncResponse(payload: any): void {
-    const { documentId, state, clock } = payload
+    const { documentId, state, clock, textState, textClock } = payload
 
     const document = this.documents.get(documentId)
     if (!document) {
@@ -479,9 +542,37 @@ export class SyncManager {
     }
 
     // Apply server state if provided
-    if (state) {
-      // Server sent full state, apply it
-      // (This would need document-specific handling)
+    // The server sends the full document state as an object with field/value pairs
+    if (state && typeof state === 'object') {
+      // console.log(`[SyncManager] Applying server state for ${documentId}:`, Object.keys(state).length, 'fields')
+      for (const [field, value] of Object.entries(state)) {
+        // Create an operation for each field and apply it
+        const operation: Operation = {
+          type: 'set',
+          documentId,
+          field,
+          value,
+          clock: clock || {},
+          clientId: 'server',
+          timestamp: Date.now(),
+        }
+        document.applyRemoteOperation(operation)
+      }
+      // console.log(`[SyncManager] ✓ Applied ${Object.keys(state).length} fields from server state`)
+    }
+
+    // Apply text CRDT state if provided (for SyncText documents)
+    if (textState) {
+      const textOperation = {
+        type: 'text-state' as const,
+        state: textState,
+        documentId,
+        clientId: 'server',
+        timestamp: textClock || Date.now(),
+        clock: clock || {},
+      }
+      document.applyRemoteOperation(textOperation as any)
+      // console.log(`[SyncManager] ✓ Applied persisted text state for ${documentId}`)
     }
 
     // Merge vector clocks
@@ -514,28 +605,21 @@ export class SyncManager {
       return
     }
 
-    // console.log('[SyncManager] ✓ Document found, applying remote operation')
+    // Trust the server's authoritative value - the server has already resolved
+    // any conflicts using LWW, so we should always apply remote operations.
+    // This ensures real-time collaborative editing works correctly.
+    document.applyRemoteOperation(operation)
 
-    // Check for conflict
-    const localOps = this.pendingOperations.get(documentId) || []
-    const conflict = this.detectConflict(document, localOps, operation)
-
-    if (conflict) {
-      // Resolve using LWW
-      const resolution = this.resolveLWW(conflict.local, operation)
-
-      if (resolution === 'remote') {
-        // Apply remote operation
-        document.applyRemoteOperation(operation)
+    // Clear any pending local operations for this field since the server
+    // has given us the authoritative value
+    const pendingOps = this.pendingOperations.get(documentId)
+    if (pendingOps) {
+      const filteredOps = pendingOps.filter(op => op.field !== operation.field)
+      if (filteredOps.length > 0) {
+        this.pendingOperations.set(documentId, filteredOps)
       } else {
-        // Keep local, re-send our version to server
-        this.pushOperation(conflict.local).catch((error) => {
-          console.error('Failed to re-send local operation:', error)
-        })
+        this.pendingOperations.delete(documentId)
       }
-    } else {
-      // No conflict, apply directly
-      document.applyRemoteOperation(operation)
     }
 
     // Merge vector clocks
@@ -543,99 +627,6 @@ export class SyncManager {
 
     // Update sync state
     this.updateSyncState(documentId, { lastSyncedAt: Date.now() })
-  }
-
-  /**
-   * Handle ACK message
-   */
-  private handleAck(payload: any): void {
-    const { messageId } = payload
-
-    const pending = this.pendingAcks.get(messageId)
-    if (pending) {
-      clearTimeout(pending.timeout)
-      this.pendingAcks.delete(messageId)
-    }
-  }
-
-  /**
-   * Detect conflict between local and remote operations
-   */
-  private detectConflict(
-    document: SyncableDocument,
-    localOps: Operation[],
-    remoteOp: Operation
-  ): Conflict | null {
-    // Find local operation on same field
-    const localOp = localOps.find(
-      (op) => op.field === remoteOp.field && op.type === remoteOp.type
-    )
-
-    if (!localOp) {
-      return null // No conflict
-    }
-
-    // Check causality using vector clocks
-    const localClock = document.getVectorClock()
-    const remoteClock = remoteOp.clock
-
-    const localHappensAfterRemote = this.happensAfter(localClock, remoteClock)
-    const remoteHappensAfterLocal = this.happensAfter(remoteClock, localClock)
-
-    if (localHappensAfterRemote || remoteHappensAfterLocal) {
-      // Causal relationship, no conflict
-      return null
-    }
-
-    // Concurrent operations on same field = conflict
-    return {
-      local: localOp,
-      remote: remoteOp,
-    }
-  }
-
-  /**
-   * Check if clock A happens after clock B
-   */
-  private happensAfter(clockA: VectorClock, clockB: VectorClock): boolean {
-    let greater = false
-
-    // Check all clients in A
-    for (const clientId in clockA) {
-      const a = clockA[clientId] ?? 0
-      const b = clockB[clientId] ?? 0
-
-      if (a > b) {
-        greater = true
-      } else if (a < b) {
-        return false // B happened after A
-      }
-    }
-
-    // Check all clients in B that aren't in A
-    for (const clientId in clockB) {
-      if (!(clientId in clockA)) {
-        const b = clockB[clientId] ?? 0
-        if (b > 0) {
-          return false // B has events A doesn't know about
-        }
-      }
-    }
-
-    return greater
-  }
-
-  /**
-   * Resolve conflict using Last-Write-Wins
-   */
-  private resolveLWW(localOp: Operation, remoteOp: Operation): 'local' | 'remote' {
-    // Compare timestamps
-    if (localOp.timestamp !== remoteOp.timestamp) {
-      return localOp.timestamp > remoteOp.timestamp ? 'local' : 'remote'
-    }
-
-    // Timestamps equal, use client ID as tiebreaker
-    return localOp.clientId > remoteOp.clientId ? 'local' : 'remote'
   }
 
   /**
@@ -681,26 +672,6 @@ export class SyncManager {
   /**
    * Wait for ACK with timeout
    */
-  private waitForAck(messageId: string, operation: Operation): Promise<void> {
-    return new Promise((resolve, reject) => {
-      const timeout = setTimeout(() => {
-        this.pendingAcks.delete(messageId)
-        reject(new Error('ACK timeout'))
-      }, this.ACK_TIMEOUT)
-
-      this.pendingAcks.set(messageId, { operation, timeout })
-
-      // Listen for ACK
-      const checkAck = () => {
-        if (!this.pendingAcks.has(messageId)) {
-          resolve()
-        } else {
-          setTimeout(checkAck, 100)
-        }
-      }
-      checkAck()
-    })
-  }
 
   /**
    * Update sync state
@@ -730,22 +701,6 @@ export class SyncManager {
   /**
    * Increment pending operations count
    */
-  private incrementPendingOperations(documentId: string): void {
-    const state = this.getSyncState(documentId)
-    this.updateSyncState(documentId, {
-      pendingOperations: state.pendingOperations + 1,
-    })
-  }
-
-  /**
-   * Decrement pending operations count
-   */
-  private decrementPendingOperations(documentId: string): void {
-    const state = this.getSyncState(documentId)
-    this.updateSyncState(documentId, {
-      pendingOperations: Math.max(0, state.pendingOperations - 1),
-    })
-  }
 
   /**
    * Generate unique message ID
@@ -767,17 +722,25 @@ export class SyncManager {
     this.awarenessManager.registerAwareness(documentId, awareness)
 
     // Set up onChange callback to automatically broadcast updates to server
+    // Throttle awareness updates to max 10/second to prevent flooding
+    let lastAwarenessUpdate = 0
+    const AWARENESS_THROTTLE_MS = 100
+
     awareness.setOnChange((update) => {
-      this.websocket.send({
-        type: 'awareness_update',
-        payload: {
-          documentId,
-          clientId: update.client_id,
-          state: update.state,
-          clock: update.clock,
-        },
-        timestamp: Date.now(),
-      })
+      const now = Date.now()
+      if (now - lastAwarenessUpdate >= AWARENESS_THROTTLE_MS) {
+        lastAwarenessUpdate = now
+        this.awarenessWebsocket.send({
+          type: 'awareness_update',
+          payload: {
+            documentId,
+            clientId: update.client_id,
+            state: update.state,
+            clock: update.clock,
+          },
+          timestamp: Date.now(),
+        })
+      }
     })
   }
 

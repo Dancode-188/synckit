@@ -1,5 +1,6 @@
 import { WebSocketServer, WebSocket } from 'ws';
 import type { Server } from 'http';
+import type { IncomingMessage } from 'http';
 import { Connection, ConnectionState } from './connection';
 import { ConnectionRegistry } from './registry';
 import {
@@ -13,6 +14,8 @@ import {
   UnsubscribeMessage,
   SyncRequestMessage,
   SyncResponseMessage,
+  SyncStep1Message,
+  SyncStep2Message,
   DeltaMessage,
   AckMessage,
   AwarenessSubscribeMessage,
@@ -23,6 +26,12 @@ import { config } from '../config';
 import { verifyToken } from '../auth/jwt';
 import { canReadDocument, canWriteDocument } from '../auth/rbac';
 import { SyncCoordinator } from '../sync/coordinator';
+import {
+  securityManager,
+  validateMessage,
+  validateDocumentId,
+  canAccessDocument,
+} from '../security/middleware';
 
 /**
  * Pending ACK Info - tracks unacknowledged deltas
@@ -98,30 +107,68 @@ export class SyncWebSocketServer {
    * Setup WebSocket server handlers
    */
   private setupHandlers() {
-    this.wss.on('connection', this.handleConnection.bind(this));
-    
+    this.wss.on('connection', (ws: WebSocket, req: IncomingMessage) => {
+      this.handleConnection(ws, req);
+    });
+
     this.wss.on('error', (error) => {
       console.error('WebSocket server error:', error);
     });
   }
 
   /**
+   * Extract client IP from request
+   */
+  private getClientIP(req: IncomingMessage): string {
+    // Check X-Forwarded-For (Fly.io proxy)
+    const forwarded = req.headers['x-forwarded-for'];
+    if (forwarded) {
+      const ips = Array.isArray(forwarded) ? forwarded[0] : forwarded;
+      return ips.split(',')[0].trim();
+    }
+
+    // Check X-Real-IP
+    const realIP = req.headers['x-real-ip'];
+    if (realIP) {
+      return Array.isArray(realIP) ? realIP[0] : realIP;
+    }
+
+    // Fallback to socket address
+    return req.socket.remoteAddress || 'unknown';
+  }
+
+  /**
    * Handle new WebSocket connection
    */
-  private handleConnection(ws: WebSocket) {
-    // Check connection limit
+  private handleConnection(ws: WebSocket, req: IncomingMessage) {
+    // Extract client IP
+    const clientIP = this.getClientIP(req);
+
+    // Check per-IP connection limit (SECURITY)
+    if (!securityManager.connectionLimiter.canConnect(clientIP)) {
+      console.warn(`[SECURITY] Connection limit exceeded for IP: ${clientIP}`);
+      ws.close(1008, 'Too many connections from your IP');
+      return;
+    }
+
+    // Check server connection limit
     if (this.registry.count() >= config.wsMaxConnections) {
       ws.close(1008, 'Server at maximum capacity');
       return;
     }
 
+    // Increment connection count for IP
+    securityManager.connectionLimiter.addConnection(clientIP);
+
     // Create connection
     const connectionId = `conn-${++this.connectionCounter}`;
     const connection = new Connection(ws, connectionId);
-    
+
+    // Store client IP on connection (for rate limiting)
+    (connection as any).clientIP = clientIP;
+
     // Add to registry
     this.registry.add(connection);
-    // console.log(`New connection: ${connectionId} (total: ${this.registry.count()})`);
 
     // Start heartbeat
     connection.startHeartbeat(config.wsHeartbeatInterval);
@@ -130,19 +177,18 @@ export class SyncWebSocketServer {
     const authRequired = process.env.SYNCKIT_AUTH_REQUIRED !== 'false';
 
     if (!authRequired) {
-      // Auto-authenticate for development
+      // Auto-authenticate for public playground (SECURITY: No admin privileges!)
       connection.state = ConnectionState.AUTHENTICATED;
-      connection.userId = 'anonymous';
+      connection.userId = `anonymous-${clientIP}`;
       connection.tokenPayload = {
-        userId: 'anonymous',
+        userId: `anonymous-${clientIP}`,
         permissions: {
-          canRead: [],
-          canWrite: [],
-          isAdmin: true,
+          canRead: ['*'], // Can read all
+          canWrite: ['*'], // Can write all
+          isAdmin: false, // NO ADMIN PRIVILEGES (SECURITY FIX)
         },
       };
-      this.registry.linkUser(connection.id, 'anonymous');
-      // console.log(`Connection ${connection.id} auto-authenticated (auth disabled)`);
+      this.registry.linkUser(connection.id, `anonymous-${clientIP}`);
     }
 
     // Setup message handlers
@@ -151,6 +197,10 @@ export class SyncWebSocketServer {
     });
 
     connection.on('close', () => {
+      // Decrement connection count for IP (SECURITY)
+      securityManager.connectionLimiter.removeConnection(clientIP);
+      // Cleanup per-connection rate limiter
+      securityManager.connectionRateLimiter.removeConnection(connection.id);
       this.handleDisconnect(connection);
     });
   }
@@ -160,6 +210,26 @@ export class SyncWebSocketServer {
    */
   private async handleMessage(connection: Connection, message: Message) {
     try {
+      // Per-connection rate limiting (SECURITY)
+      // Uses connection ID instead of IP to avoid shared-IP retry storms
+      if (!securityManager.connectionRateLimiter.canSendMessage(connection.id)) {
+        console.warn(`[SECURITY] Rate limit exceeded for connection: ${connection.id}`);
+        connection.sendError('Too many messages. Please slow down.', {
+          code: 'RATE_LIMIT_EXCEEDED',
+        });
+        return;
+      }
+      securityManager.connectionRateLimiter.recordMessage(connection.id);
+
+      // Validate message format (SECURITY)
+      const validation = validateMessage(message);
+      if (!validation.valid) {
+        connection.sendError(validation.error || 'Invalid message format', {
+          code: 'INVALID_MESSAGE',
+        });
+        return;
+      }
+
       switch (message.type) {
         case MessageType.CONNECT:
           // CONNECT is handled during connection setup, acknowledge it
@@ -189,8 +259,16 @@ export class SyncWebSocketServer {
           await this.handleSyncRequest(connection, message as SyncRequestMessage);
           break;
 
+        case MessageType.SYNC_STEP1:
+          await this.handleSyncStep1(connection, message as any);
+          break;
+
         case MessageType.DELTA:
           await this.handleDelta(connection, message as DeltaMessage);
+          break;
+
+        case MessageType.DELTA_BATCH:
+          await this.handleDeltaBatch(connection, message as any);
           break;
 
         case MessageType.ACK:
@@ -235,14 +313,20 @@ export class SyncWebSocketServer {
         connection.sendError('API key authentication not yet implemented');
         return;
       } else {
-        // Anonymous connection (read-only by default, admin for tests)
+        // Anonymous connection - only allowed when auth is disabled
+        const authRequired = process.env.SYNCKIT_AUTH_REQUIRED !== 'false';
+        if (authRequired) {
+          connection.sendError('Authentication required', { code: 'AUTH_REQUIRED' });
+          connection.close(1008, 'Authentication required');
+          return;
+        }
         userId = 'anonymous';
         tokenPayload = {
           userId: 'anonymous',
           permissions: {
-            canRead: [],
-            canWrite: [],
-            isAdmin: true, // Give admin permissions for test mode
+            canRead: ['*'],
+            canWrite: ['*'],
+            isAdmin: false,
           },
         };
       }
@@ -288,11 +372,25 @@ export class SyncWebSocketServer {
   private async handleSubscribe(connection: Connection, message: SubscribeMessage) {
     const { documentId } = message;
 
-    // console.log(`[handleSubscribe] ${connection.id} subscribing to ${documentId}`);
 
     // Check authentication
     if (connection.state !== ConnectionState.AUTHENTICATED || !connection.tokenPayload) {
       connection.sendError('Not authenticated');
+      return;
+    }
+
+    // Validate document ID (SECURITY)
+    const docValidation = validateDocumentId(documentId);
+    if (!docValidation.valid) {
+      console.warn(`[SECURITY] Invalid document ID from ${connection.id}: ${docValidation.error}`);
+      connection.sendError(docValidation.error || 'Invalid document ID');
+      return;
+    }
+
+    // Check document access (SECURITY: Playground vs private rooms)
+    if (!canAccessDocument(documentId)) {
+      console.warn(`[SECURITY] Unauthorized document access attempt: ${documentId} by ${connection.id}`);
+      connection.sendError('Access denied to this document');
       return;
     }
 
@@ -314,6 +412,9 @@ export class SyncWebSocketServer {
       const state = this.coordinator.getDocumentState(documentId);
       const vectorClock = this.coordinator.getVectorClock(documentId);
 
+      // Load text CRDT state if this is a text document
+      const textState = await this.coordinator.getTextState(documentId);
+
       // Send sync response with current state
       const response: SyncResponseMessage = {
         type: MessageType.SYNC_RESPONSE,
@@ -328,9 +429,14 @@ export class SyncWebSocketServer {
       // Add clock to response payload for SDK compatibility (SDK uses 'clock' not 'vectorClock')
       (response as any).clock = vectorClock;
 
+      // Include text CRDT state if available
+      if (textState?.crdtState) {
+        (response as any).textState = textState.crdtState;
+        (response as any).textClock = textState.clock;
+      }
+
       connection.send(response);
 
-      // console.log(`[handleSubscribe] ${connection.id} subscribed to ${documentId}`);
     } catch (error) {
       console.error('[handleSubscribe] Error:', error);
       connection.sendError('Subscribe failed', { documentId });
@@ -407,6 +513,46 @@ export class SyncWebSocketServer {
     } catch (error) {
       console.error('Error handling sync request:', error);
       connection.sendError('Sync request failed', { documentId });
+    }
+  }
+
+  /**
+   * Handle SyncStep1 - client sends state vector for initial sync
+   * Yjs-style protocol: client tells us what operations it has, we respond with what it's missing
+   */
+  private async handleSyncStep1(connection: Connection, message: SyncStep1Message) {
+    const { documentId, stateVector } = message;
+
+    // Check authentication
+    if (connection.state !== ConnectionState.AUTHENTICATED || !connection.tokenPayload) {
+      connection.sendError('Not authenticated');
+      return;
+    }
+
+    // Check read permission
+    if (!canReadDocument(connection.tokenPayload, documentId)) {
+      connection.sendError('Permission denied', { documentId });
+      return;
+    }
+
+    try {
+      // TODO: Compute missing operations based on state vector
+      // For now, respond with empty array (client is up to date)
+      // In future: compare stateVector with server's operation history
+      // and send operations client is missing
+
+      const response: SyncStep2Message = {
+        type: MessageType.SYNC_STEP2,
+        id: createMessageId(),
+        timestamp: Date.now(),
+        documentId,
+        operations: [], // Empty for now - assume client is up to date
+      };
+
+      connection.send(response);
+    } catch (error) {
+      console.error('Error handling SyncStep1:', error);
+      connection.sendError('SyncStep1 failed', { documentId });
     }
   }
 
@@ -517,6 +663,152 @@ export class SyncWebSocketServer {
     } catch (error) {
       console.error('Error handling delta:', error);
       connection.sendError('Delta application failed', { documentId });
+    }
+  }
+
+  /**
+   * Handle batch of delta operations
+   */
+  private async handleDeltaBatch(connection: Connection, message: any) {
+    const { documentId, deltas } = message;
+
+    if (!deltas || !Array.isArray(deltas) || deltas.length === 0) {
+      connection.sendError('Invalid delta batch: missing or empty deltas array');
+      return;
+    }
+
+    if (connection.state !== ConnectionState.AUTHENTICATED || !connection.tokenPayload) {
+      connection.sendError('Not authenticated');
+      return;
+    }
+
+    if (!canWriteDocument(connection.tokenPayload, documentId)) {
+      connection.sendError('Permission denied', { documentId });
+      return;
+    }
+
+    try {
+      await this.coordinator.getDocument(documentId);
+      this.coordinator.subscribe(documentId, connection.id);
+      connection.addSubscription(documentId);
+
+      const clientId = connection.clientId || connection.id;
+      const authoritativeDelta: Record<string, any> = {};
+      const textOperations: any[] = [];
+
+      for (const operation of deltas) {
+        // Check if this is a text CRDT operation (state-based)
+        if (operation.type === 'text-state') {
+          // PERSIST: Save and merge text CRDT state with existing state
+          if (operation.state) {
+            const textDocId = operation.documentId || documentId;
+            await this.coordinator.saveTextState(
+              textDocId,
+              operation.state,
+              operation.clientId || clientId,
+              operation.timestamp || Date.now()
+            );
+
+            // RELAY: Broadcast the MERGED state (not raw incoming) to prevent divergence
+            const mergedState = await this.coordinator.getTextState(textDocId);
+            textOperations.push({
+              ...operation,
+              state: mergedState?.crdtState || operation.state,
+              clientId: operation.clientId || clientId,
+            });
+          }
+          continue;
+        }
+
+        // Legacy position-based text operations (deprecated, just relay)
+        if (operation.type === 'text') {
+          textOperations.push({
+            ...operation,
+            clientId: operation.clientId || clientId,
+          });
+          continue;
+        }
+
+        // Standard document field operation
+        const field = operation.field;
+        const value = operation.value;
+        const timestamp = operation.timestamp || message.timestamp;
+
+        if (field === undefined) {
+          console.warn('[DELTA_BATCH] Skipping operation without field:', operation);
+          continue;
+        }
+
+        const isTombstone = value !== null && typeof value === 'object' &&
+                           '__deleted' in value && value.__deleted === true;
+
+        if (isTombstone) {
+          const authoritativeValue = await this.coordinator.deleteField(documentId, field, clientId, timestamp);
+          authoritativeDelta[field] = authoritativeValue === null ? { __deleted: true } : authoritativeValue;
+        } else {
+          const authoritativeValue = await this.coordinator.setField(documentId, field, value, clientId, timestamp);
+          authoritativeDelta[field] = authoritativeValue;
+        }
+
+        if (operation.clock) {
+          this.coordinator.mergeVectorClock(documentId, operation.clock);
+        }
+      }
+
+      // Handle standard document field updates
+      if (Object.keys(authoritativeDelta).length > 0) {
+        this.addToBatch(documentId, authoritativeDelta);
+      }
+
+      // Broadcast text operations directly to other subscribers
+      if (textOperations.length > 0) {
+        this.broadcastTextOperations(documentId, textOperations, connection.id);
+      }
+
+      const originalMessageId = message.messageId || message.id;
+      const ack: AckMessage = {
+        type: MessageType.ACK,
+        id: createMessageId(),
+        timestamp: Date.now(),
+        messageId: originalMessageId,
+      };
+
+      connection.send(ack);
+    } catch (error) {
+      console.error('Error handling delta batch:', error);
+      connection.sendError('Delta batch application failed', { documentId });
+    }
+  }
+
+  /**
+   * Broadcast text CRDT operations to subscribers (except sender)
+   * Text operations use Fugue CRDT and need to be broadcast as-is
+   */
+  private broadcastTextOperations(documentId: string, operations: any[], senderId: string) {
+    const subscribers = this.coordinator.getSubscribers(documentId);
+
+    for (const connectionId of subscribers) {
+      // Don't send back to the sender
+      if (connectionId === senderId) {
+        continue;
+      }
+
+      const connection = this.registry.get(connectionId);
+      if (!connection || connection.state !== ConnectionState.AUTHENTICATED) {
+        continue;
+      }
+
+      // Send text operations as a delta_batch to other clients
+      const textBatchMessage: any = {
+        type: MessageType.DELTA_BATCH,
+        id: createMessageId(),
+        timestamp: Date.now(),
+        documentId,
+        deltas: operations,
+        isTextOperation: true, // Flag to help client identify text operations
+      };
+
+      connection.send(textBatchMessage);
     }
   }
 
@@ -791,6 +1083,20 @@ export class SyncWebSocketServer {
       this.pendingAcks.delete(key);
     }
 
+    // FIX: Clear pending batch timers to prevent memory leak
+    // When connection disconnects, any pending batch timers for documents
+    // this connection was subscribed to should be cleared
+    for (const documentId of subscriptions) {
+      const batch = this.pendingBatches.get(documentId);
+      if (batch) {
+        clearTimeout(batch.timer);
+        this.pendingBatches.delete(documentId);
+      }
+    }
+
+    // FIX: Clean up connection resources (event handlers, subscriptions)
+    connection.cleanup();
+
     // Connection will be automatically removed from registry via the close event
   }
 
@@ -802,6 +1108,62 @@ export class SyncWebSocketServer {
       connections: this.registry.getMetrics(),
       documents: this.coordinator.getStats(),
     };
+  }
+
+  /**
+   * Process delta batch from HTTP endpoint (bypasses WebSocket)
+   * Used when WebSocket infrastructure drops large messages
+   *
+   * @param documentId - The document to apply deltas to
+   * @param deltas - Array of {field, value, timestamp?} operations
+   * @param clientId - The client ID making the request
+   * @returns Object with success status and processed delta count
+   */
+  async processDeltaBatchFromHTTP(
+    documentId: string,
+    deltas: Array<{ field: string; value: any; timestamp?: number; clock?: Record<string, number> }>,
+    clientId: string
+  ): Promise<{ success: boolean; processed: number; error?: string }> {
+    if (!deltas || !Array.isArray(deltas) || deltas.length === 0) {
+      return { success: false, processed: 0, error: 'Invalid delta batch: missing or empty deltas array' };
+    }
+
+    try {
+      // Ensure document is loaded
+      await this.coordinator.getDocument(documentId);
+
+      const authoritativeDelta: Record<string, any> = {};
+      const timestamp = Date.now();
+
+      for (const operation of deltas) {
+        const field = operation.field;
+        const value = operation.value;
+        const opTimestamp = operation.timestamp || timestamp;
+
+        const isTombstone = value !== null && typeof value === 'object' &&
+                           '__deleted' in value && value.__deleted === true;
+
+        if (isTombstone) {
+          const authoritativeValue = await this.coordinator.deleteField(documentId, field, clientId, opTimestamp);
+          authoritativeDelta[field] = authoritativeValue === null ? { __deleted: true } : authoritativeValue;
+        } else {
+          const authoritativeValue = await this.coordinator.setField(documentId, field, value, clientId, opTimestamp);
+          authoritativeDelta[field] = authoritativeValue;
+        }
+
+        if (operation.clock) {
+          this.coordinator.mergeVectorClock(documentId, operation.clock);
+        }
+      }
+
+      // Add to batch for broadcasting to WebSocket subscribers
+      this.addToBatch(documentId, authoritativeDelta);
+
+      return { success: true, processed: deltas.length };
+    } catch (error) {
+      console.error('[HTTP_DELTA] Error processing delta batch:', error);
+      return { success: false, processed: 0, error: 'Delta batch processing failed' };
+    }
   }
 
   /**
