@@ -57,7 +57,7 @@ jobs:
           echo "Skipping test execution in build job to allow e2e validation"
       
       - name: Upload coverage to Codecov
-        uses: codecov/codecov-action@v5
+        uses: codecov/codecov-action@v6
         with:
           files: ./server/csharp/src/coverage/**/coverage.cobertura.xml
           flags: dotnet-server
