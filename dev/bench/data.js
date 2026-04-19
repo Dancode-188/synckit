@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1775962922945,
+  "lastUpdate": 1776568008981,
   "repoUrl": "https://github.com/Dancode-188/synckit",
   "entries": {
     "Rust Benchmark": [
@@ -2499,6 +2499,256 @@ window.BENCHMARK_DATA = {
             "name": "empty_delta",
             "value": 2896,
             "range": "± 5",
+            "unit": "ns/iter"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "name": "Daniel Bitengo",
+            "username": "Dancode-188",
+            "email": "danbitengo@gmail.com"
+          },
+          "committer": {
+            "name": "GitHub",
+            "username": "web-flow",
+            "email": "noreply@github.com"
+          },
+          "id": "8e6359b7cedbfcb795a85ee12cac394c4ebd40b4",
+          "message": "fix(demo): allow typing \"?\" in editable areas (#112)\n\nSkip the help panel shortcut when focus is on an input, textarea,\nor contenteditable element so the character is inserted normally.\n\nFixes #109",
+          "timestamp": "2026-02-17T00:37:42Z",
+          "url": "https://github.com/Dancode-188/synckit/commit/8e6359b7cedbfcb795a85ee12cac394c4ebd40b4"
+        },
+        "date": 1776568008516,
+        "tool": "cargo",
+        "benches": [
+          {
+            "name": "single_field_update",
+            "value": 69,
+            "range": "± 0",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "field_get",
+            "value": 25,
+            "range": "± 0",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "document_merge/10",
+            "value": 2234,
+            "range": "± 88",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "document_merge/50",
+            "value": 11216,
+            "range": "± 366",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "document_merge/100",
+            "value": 21838,
+            "range": "± 598",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "document_merge/500",
+            "value": 108486,
+            "range": "± 2926",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "batch_updates/10",
+            "value": 1500,
+            "range": "± 6",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "batch_updates/100",
+            "value": 15184,
+            "range": "± 115",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "batch_updates/1000",
+            "value": 112831,
+            "range": "± 2735",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "conflict_resolution",
+            "value": 88,
+            "range": "± 0",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "document_to_json",
+            "value": 9559,
+            "range": "± 38",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "vector_clock_tick",
+            "value": 37,
+            "range": "± 0",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "vector_clock_compare",
+            "value": 143,
+            "range": "± 2",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "vector_clock_merge/2",
+            "value": 109,
+            "range": "± 0",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "vector_clock_merge/5",
+            "value": 249,
+            "range": "± 1",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "vector_clock_merge/10",
+            "value": 552,
+            "range": "± 2",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "vector_clock_merge/50",
+            "value": 3321,
+            "range": "± 31",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "vector_clock_get",
+            "value": 19,
+            "range": "± 0",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "vector_clock_clone",
+            "value": 2042,
+            "range": "± 84",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "concurrent_ticks/10",
+            "value": 645,
+            "range": "± 3",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "concurrent_ticks/100",
+            "value": 6441,
+            "range": "± 43",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "concurrent_ticks/1000",
+            "value": 64272,
+            "range": "± 976",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "compute_delta/10",
+            "value": 1318,
+            "range": "± 9",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "compute_delta/50",
+            "value": 10721,
+            "range": "± 113",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "compute_delta/100",
+            "value": 21150,
+            "range": "± 113",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "compute_delta/500",
+            "value": 111432,
+            "range": "± 3856",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "compute_partial_delta/10",
+            "value": 1644,
+            "range": "± 23",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "compute_partial_delta/25",
+            "value": 5142,
+            "range": "± 48",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "compute_partial_delta/50",
+            "value": 10789,
+            "range": "± 61",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "compute_partial_delta/100",
+            "value": 21065,
+            "range": "± 221",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "apply_delta/10",
+            "value": 2213,
+            "range": "± 62",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "apply_delta/50",
+            "value": 10721,
+            "range": "± 230",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "apply_delta/100",
+            "value": 21459,
+            "range": "± 383",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "apply_delta/500",
+            "value": 108614,
+            "range": "± 1087",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "merge_deltas/2",
+            "value": 17405,
+            "range": "± 355",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "merge_deltas/5",
+            "value": 52689,
+            "range": "± 1167",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "merge_deltas/10",
+            "value": 111594,
+            "range": "± 1840",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "empty_delta",
+            "value": 2743,
+            "range": "± 7",
             "unit": "ns/iter"
           }
         ]
