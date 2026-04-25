@@ -37,6 +37,7 @@ variants.forEach(variant => {
   // Files to copy
   const files = [
     'synckit_core_bg.wasm',
+    'synckit_core_bg.wasm.d.ts',
     'synckit_core.js',
     'synckit_core.d.ts'
   ];

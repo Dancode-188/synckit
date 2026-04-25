@@ -69,6 +69,8 @@ echo "✅ Bindings generated"
 echo ""
 echo "Step 3: Optimizing WASM binary..."
 wasm-opt -Oz \
+    --enable-bulk-memory \
+    --enable-nontrapping-float-to-int \
     --strip-debug \
     --strip-producers \
     pkg-$VARIANT/synckit_core_bg.wasm \
