@@ -1,157 +1,4 @@
-let wasm;
-
-function addHeapObject(obj) {
-    if (heap_next === heap.length) heap.push(heap.length + 1);
-    const idx = heap_next;
-    heap_next = heap[idx];
-
-    heap[idx] = obj;
-    return idx;
-}
-
-function _assertClass(instance, klass) {
-    if (!(instance instanceof klass)) {
-        throw new Error(`expected instance of ${klass.name}`);
-    }
-}
-
-function dropObject(idx) {
-    if (idx < 132) return;
-    heap[idx] = heap_next;
-    heap_next = idx;
-}
-
-let cachedDataViewMemory0 = null;
-function getDataViewMemory0() {
-    if (cachedDataViewMemory0 === null || cachedDataViewMemory0.buffer.detached === true || (cachedDataViewMemory0.buffer.detached === undefined && cachedDataViewMemory0.buffer !== wasm.memory.buffer)) {
-        cachedDataViewMemory0 = new DataView(wasm.memory.buffer);
-    }
-    return cachedDataViewMemory0;
-}
-
-function getStringFromWasm0(ptr, len) {
-    ptr = ptr >>> 0;
-    return decodeText(ptr, len);
-}
-
-let cachedUint8ArrayMemory0 = null;
-function getUint8ArrayMemory0() {
-    if (cachedUint8ArrayMemory0 === null || cachedUint8ArrayMemory0.byteLength === 0) {
-        cachedUint8ArrayMemory0 = new Uint8Array(wasm.memory.buffer);
-    }
-    return cachedUint8ArrayMemory0;
-}
-
-function getObject(idx) { return heap[idx]; }
-
-let heap = new Array(128).fill(undefined);
-heap.push(undefined, null, true, false);
-
-let heap_next = heap.length;
-
-function isLikeNone(x) {
-    return x === undefined || x === null;
-}
-
-function passStringToWasm0(arg, malloc, realloc) {
-    if (realloc === undefined) {
-        const buf = cachedTextEncoder.encode(arg);
-        const ptr = malloc(buf.length, 1) >>> 0;
-        getUint8ArrayMemory0().subarray(ptr, ptr + buf.length).set(buf);
-        WASM_VECTOR_LEN = buf.length;
-        return ptr;
-    }
-
-    let len = arg.length;
-    let ptr = malloc(len, 1) >>> 0;
-
-    const mem = getUint8ArrayMemory0();
-
-    let offset = 0;
-
-    for (; offset < len; offset++) {
-        const code = arg.charCodeAt(offset);
-        if (code > 0x7F) break;
-        mem[ptr + offset] = code;
-    }
-    if (offset !== len) {
-        if (offset !== 0) {
-            arg = arg.slice(offset);
-        }
-        ptr = realloc(ptr, len, len = offset + arg.length * 3, 1) >>> 0;
-        const view = getUint8ArrayMemory0().subarray(ptr + offset, ptr + len);
-        const ret = cachedTextEncoder.encodeInto(arg, view);
-
-        offset += ret.written;
-        ptr = realloc(ptr, len, offset, 1) >>> 0;
-    }
-
-    WASM_VECTOR_LEN = offset;
-    return ptr;
-}
-
-function takeObject(idx) {
-    const ret = getObject(idx);
-    dropObject(idx);
-    return ret;
-}
-
-let cachedTextDecoder = new TextDecoder('utf-8', { ignoreBOM: true, fatal: true });
-cachedTextDecoder.decode();
-const MAX_SAFARI_DECODE_BYTES = 2146435072;
-let numBytesDecoded = 0;
-function decodeText(ptr, len) {
-    numBytesDecoded += len;
-    if (numBytesDecoded >= MAX_SAFARI_DECODE_BYTES) {
-        cachedTextDecoder = new TextDecoder('utf-8', { ignoreBOM: true, fatal: true });
-        cachedTextDecoder.decode();
-        numBytesDecoded = len;
-    }
-    return cachedTextDecoder.decode(getUint8ArrayMemory0().subarray(ptr, ptr + len));
-}
-
-const cachedTextEncoder = new TextEncoder();
-
-if (!('encodeInto' in cachedTextEncoder)) {
-    cachedTextEncoder.encodeInto = function (arg, view) {
-        const buf = cachedTextEncoder.encode(arg);
-        view.set(buf);
-        return {
-            read: arg.length,
-            written: buf.length
-        };
-    }
-}
-
-let WASM_VECTOR_LEN = 0;
-
-const WasmAwarenessFinalization = (typeof FinalizationRegistry === 'undefined')
-    ? { register: () => {}, unregister: () => {} }
-    : new FinalizationRegistry(ptr => wasm.__wbg_wasmawareness_free(ptr >>> 0, 1));
-
-const WasmCounterFinalization = (typeof FinalizationRegistry === 'undefined')
-    ? { register: () => {}, unregister: () => {} }
-    : new FinalizationRegistry(ptr => wasm.__wbg_wasmcounter_free(ptr >>> 0, 1));
-
-const WasmDeltaFinalization = (typeof FinalizationRegistry === 'undefined')
-    ? { register: () => {}, unregister: () => {} }
-    : new FinalizationRegistry(ptr => wasm.__wbg_wasmdelta_free(ptr >>> 0, 1));
-
-const WasmDocumentFinalization = (typeof FinalizationRegistry === 'undefined')
-    ? { register: () => {}, unregister: () => {} }
-    : new FinalizationRegistry(ptr => wasm.__wbg_wasmdocument_free(ptr >>> 0, 1));
-
-const WasmFugueTextFinalization = (typeof FinalizationRegistry === 'undefined')
-    ? { register: () => {}, unregister: () => {} }
-    : new FinalizationRegistry(ptr => wasm.__wbg_wasmfuguetext_free(ptr >>> 0, 1));
-
-const WasmSetFinalization = (typeof FinalizationRegistry === 'undefined')
-    ? { register: () => {}, unregister: () => {} }
-    : new FinalizationRegistry(ptr => wasm.__wbg_wasmset_free(ptr >>> 0, 1));
-
-const WasmVectorClockFinalization = (typeof FinalizationRegistry === 'undefined')
-    ? { register: () => {}, unregister: () => {} }
-    : new FinalizationRegistry(ptr => wasm.__wbg_wasmvectorclock_free(ptr >>> 0, 1));
+/* @ts-self-types="./synckit_core.d.ts" */
 
 /**
  * JavaScript-friendly wrapper for Awareness
@@ -166,34 +13,6 @@ export class WasmAwareness {
     free() {
         const ptr = this.__destroy_into_raw();
         wasm.__wbg_wasmawareness_free(ptr, 0);
-    }
-    /**
-     * Get all client states as JSON string
-     * @returns {string}
-     */
-    getStates() {
-        let deferred2_0;
-        let deferred2_1;
-        try {
-            const retptr = wasm.__wbindgen_add_to_stack_pointer(-16);
-            wasm.wasmawareness_getStates(retptr, this.__wbg_ptr);
-            var r0 = getDataViewMemory0().getInt32(retptr + 4 * 0, true);
-            var r1 = getDataViewMemory0().getInt32(retptr + 4 * 1, true);
-            var r2 = getDataViewMemory0().getInt32(retptr + 4 * 2, true);
-            var r3 = getDataViewMemory0().getInt32(retptr + 4 * 3, true);
-            var ptr1 = r0;
-            var len1 = r1;
-            if (r3) {
-                ptr1 = 0; len1 = 0;
-                throw takeObject(r2);
-            }
-            deferred2_0 = ptr1;
-            deferred2_1 = len1;
-            return getStringFromWasm0(ptr1, len1);
-        } finally {
-            wasm.__wbindgen_add_to_stack_pointer(16);
-            wasm.__wbindgen_export(deferred2_0, deferred2_1, 1);
-        }
     }
     /**
      * Apply remote awareness update (pass JSON string)
@@ -221,6 +40,34 @@ export class WasmAwareness {
     clientCount() {
         const ret = wasm.wasmawareness_clientCount(this.__wbg_ptr);
         return ret >>> 0;
+    }
+    /**
+     * Create update to signal leaving
+     * @returns {string}
+     */
+    createLeaveUpdate() {
+        let deferred2_0;
+        let deferred2_1;
+        try {
+            const retptr = wasm.__wbindgen_add_to_stack_pointer(-16);
+            wasm.wasmawareness_createLeaveUpdate(retptr, this.__wbg_ptr);
+            var r0 = getDataViewMemory0().getInt32(retptr + 4 * 0, true);
+            var r1 = getDataViewMemory0().getInt32(retptr + 4 * 1, true);
+            var r2 = getDataViewMemory0().getInt32(retptr + 4 * 2, true);
+            var r3 = getDataViewMemory0().getInt32(retptr + 4 * 3, true);
+            var ptr1 = r0;
+            var len1 = r1;
+            if (r3) {
+                ptr1 = 0; len1 = 0;
+                throw takeObject(r2);
+            }
+            deferred2_0 = ptr1;
+            deferred2_1 = len1;
+            return getStringFromWasm0(ptr1, len1);
+        } finally {
+            wasm.__wbindgen_add_to_stack_pointer(16);
+            wasm.__wbindgen_export(deferred2_0, deferred2_1, 1);
+        }
     }
     /**
      * Get the local client ID
@@ -268,54 +115,43 @@ export class WasmAwareness {
         }
     }
     /**
-     * Set local client state (pass JSON string)
-     * @param {string} state_json
-     * @returns {string}
+     * Get state for specific client as JSON string
+     * @param {string} client_id
+     * @returns {string | undefined}
      */
-    setLocalState(state_json) {
-        let deferred3_0;
-        let deferred3_1;
+    getState(client_id) {
         try {
             const retptr = wasm.__wbindgen_add_to_stack_pointer(-16);
-            const ptr0 = passStringToWasm0(state_json, wasm.__wbindgen_export2, wasm.__wbindgen_export3);
+            const ptr0 = passStringToWasm0(client_id, wasm.__wbindgen_export2, wasm.__wbindgen_export3);
             const len0 = WASM_VECTOR_LEN;
-            wasm.wasmawareness_setLocalState(retptr, this.__wbg_ptr, ptr0, len0);
+            wasm.wasmawareness_getState(retptr, this.__wbg_ptr, ptr0, len0);
             var r0 = getDataViewMemory0().getInt32(retptr + 4 * 0, true);
             var r1 = getDataViewMemory0().getInt32(retptr + 4 * 1, true);
             var r2 = getDataViewMemory0().getInt32(retptr + 4 * 2, true);
             var r3 = getDataViewMemory0().getInt32(retptr + 4 * 3, true);
-            var ptr2 = r0;
-            var len2 = r1;
             if (r3) {
-                ptr2 = 0; len2 = 0;
                 throw takeObject(r2);
             }
-            deferred3_0 = ptr2;
-            deferred3_1 = len2;
-            return getStringFromWasm0(ptr2, len2);
+            let v2;
+            if (r0 !== 0) {
+                v2 = getStringFromWasm0(r0, r1).slice();
+                wasm.__wbindgen_export(r0, r1 * 1, 1);
+            }
+            return v2;
         } finally {
             wasm.__wbindgen_add_to_stack_pointer(16);
-            wasm.__wbindgen_export(deferred3_0, deferred3_1, 1);
         }
     }
     /**
-     * Get number of other clients (excluding self)
-     * @returns {number}
-     */
-    otherClientCount() {
-        const ret = wasm.wasmawareness_otherClientCount(this.__wbg_ptr);
-        return ret >>> 0;
-    }
-    /**
-     * Create update to signal leaving
+     * Get all client states as JSON string
      * @returns {string}
      */
-    createLeaveUpdate() {
+    getStates() {
         let deferred2_0;
         let deferred2_1;
         try {
             const retptr = wasm.__wbindgen_add_to_stack_pointer(-16);
-            wasm.wasmawareness_createLeaveUpdate(retptr, this.__wbg_ptr);
+            wasm.wasmawareness_getStates(retptr, this.__wbg_ptr);
             var r0 = getDataViewMemory0().getInt32(retptr + 4 * 0, true);
             var r1 = getDataViewMemory0().getInt32(retptr + 4 * 1, true);
             var r2 = getDataViewMemory0().getInt32(retptr + 4 * 2, true);
@@ -333,6 +169,26 @@ export class WasmAwareness {
             wasm.__wbindgen_add_to_stack_pointer(16);
             wasm.__wbindgen_export(deferred2_0, deferred2_1, 1);
         }
+    }
+    /**
+     * Create a new awareness instance
+     * @param {string} client_id
+     */
+    constructor(client_id) {
+        const ptr0 = passStringToWasm0(client_id, wasm.__wbindgen_export2, wasm.__wbindgen_export3);
+        const len0 = WASM_VECTOR_LEN;
+        const ret = wasm.wasmawareness_new(ptr0, len0);
+        this.__wbg_ptr = ret >>> 0;
+        WasmAwarenessFinalization.register(this, this.__wbg_ptr, this);
+        return this;
+    }
+    /**
+     * Get number of other clients (excluding self)
+     * @returns {number}
+     */
+    otherClientCount() {
+        const ret = wasm.wasmawareness_otherClientCount(this.__wbg_ptr);
+        return ret >>> 0;
     }
     /**
      * Remove stale clients (timeout in milliseconds)
@@ -365,43 +221,34 @@ export class WasmAwareness {
         }
     }
     /**
-     * Create a new awareness instance
-     * @param {string} client_id
+     * Set local client state (pass JSON string)
+     * @param {string} state_json
+     * @returns {string}
      */
-    constructor(client_id) {
-        const ptr0 = passStringToWasm0(client_id, wasm.__wbindgen_export2, wasm.__wbindgen_export3);
-        const len0 = WASM_VECTOR_LEN;
-        const ret = wasm.wasmawareness_new(ptr0, len0);
-        this.__wbg_ptr = ret >>> 0;
-        WasmAwarenessFinalization.register(this, this.__wbg_ptr, this);
-        return this;
-    }
-    /**
-     * Get state for specific client as JSON string
-     * @param {string} client_id
-     * @returns {string | undefined}
-     */
-    getState(client_id) {
+    setLocalState(state_json) {
+        let deferred3_0;
+        let deferred3_1;
         try {
             const retptr = wasm.__wbindgen_add_to_stack_pointer(-16);
-            const ptr0 = passStringToWasm0(client_id, wasm.__wbindgen_export2, wasm.__wbindgen_export3);
+            const ptr0 = passStringToWasm0(state_json, wasm.__wbindgen_export2, wasm.__wbindgen_export3);
             const len0 = WASM_VECTOR_LEN;
-            wasm.wasmawareness_getState(retptr, this.__wbg_ptr, ptr0, len0);
+            wasm.wasmawareness_setLocalState(retptr, this.__wbg_ptr, ptr0, len0);
             var r0 = getDataViewMemory0().getInt32(retptr + 4 * 0, true);
             var r1 = getDataViewMemory0().getInt32(retptr + 4 * 1, true);
             var r2 = getDataViewMemory0().getInt32(retptr + 4 * 2, true);
             var r3 = getDataViewMemory0().getInt32(retptr + 4 * 3, true);
+            var ptr2 = r0;
+            var len2 = r1;
             if (r3) {
+                ptr2 = 0; len2 = 0;
                 throw takeObject(r2);
             }
-            let v2;
-            if (r0 !== 0) {
-                v2 = getStringFromWasm0(r0, r1).slice();
-                wasm.__wbindgen_export(r0, r1 * 1, 1);
-            }
-            return v2;
+            deferred3_0 = ptr2;
+            deferred3_1 = len2;
+            return getStringFromWasm0(ptr2, len2);
         } finally {
             wasm.__wbindgen_add_to_stack_pointer(16);
+            wasm.__wbindgen_export(deferred3_0, deferred3_1, 1);
         }
     }
 }
@@ -428,88 +275,6 @@ export class WasmCounter {
     free() {
         const ptr = this.__destroy_into_raw();
         wasm.__wbg_wasmcounter_free(ptr, 0);
-    }
-    /**
-     * Get the replica ID
-     * @returns {string}
-     */
-    getReplicaId() {
-        let deferred1_0;
-        let deferred1_1;
-        try {
-            const retptr = wasm.__wbindgen_add_to_stack_pointer(-16);
-            wasm.wasmcounter_getReplicaId(retptr, this.__wbg_ptr);
-            var r0 = getDataViewMemory0().getInt32(retptr + 4 * 0, true);
-            var r1 = getDataViewMemory0().getInt32(retptr + 4 * 1, true);
-            deferred1_0 = r0;
-            deferred1_1 = r1;
-            return getStringFromWasm0(r0, r1);
-        } finally {
-            wasm.__wbindgen_add_to_stack_pointer(16);
-            wasm.__wbindgen_export(deferred1_0, deferred1_1, 1);
-        }
-    }
-    /**
-     * Create a new PNCounter with the given replica ID
-     * @param {string} replica_id
-     */
-    constructor(replica_id) {
-        const ptr0 = passStringToWasm0(replica_id, wasm.__wbindgen_export2, wasm.__wbindgen_export3);
-        const len0 = WASM_VECTOR_LEN;
-        const ret = wasm.wasmcounter_new(ptr0, len0);
-        this.__wbg_ptr = ret >>> 0;
-        WasmCounterFinalization.register(this, this.__wbg_ptr, this);
-        return this;
-    }
-    /**
-     * Merge with another counter
-     * @param {WasmCounter} other
-     */
-    merge(other) {
-        _assertClass(other, WasmCounter);
-        wasm.wasmcounter_merge(this.__wbg_ptr, other.__wbg_ptr);
-    }
-    /**
-     * Reset the counter to zero (local operation)
-     */
-    reset() {
-        wasm.wasmcounter_reset(this.__wbg_ptr);
-    }
-    /**
-     * Get the current counter value
-     * @returns {number}
-     */
-    value() {
-        const ret = wasm.wasmcounter_value(this.__wbg_ptr);
-        return ret;
-    }
-    /**
-     * Export as JSON string
-     * @returns {string}
-     */
-    toJSON() {
-        let deferred2_0;
-        let deferred2_1;
-        try {
-            const retptr = wasm.__wbindgen_add_to_stack_pointer(-16);
-            wasm.wasmcounter_toJSON(retptr, this.__wbg_ptr);
-            var r0 = getDataViewMemory0().getInt32(retptr + 4 * 0, true);
-            var r1 = getDataViewMemory0().getInt32(retptr + 4 * 1, true);
-            var r2 = getDataViewMemory0().getInt32(retptr + 4 * 2, true);
-            var r3 = getDataViewMemory0().getInt32(retptr + 4 * 3, true);
-            var ptr1 = r0;
-            var len1 = r1;
-            if (r3) {
-                ptr1 = 0; len1 = 0;
-                throw takeObject(r2);
-            }
-            deferred2_0 = ptr1;
-            deferred2_1 = len1;
-            return getStringFromWasm0(ptr1, len1);
-        } finally {
-            wasm.__wbindgen_add_to_stack_pointer(16);
-            wasm.__wbindgen_export(deferred2_0, deferred2_1, 1);
-        }
     }
     /**
      * Decrement the counter
@@ -544,6 +309,26 @@ export class WasmCounter {
         }
     }
     /**
+     * Get the replica ID
+     * @returns {string}
+     */
+    getReplicaId() {
+        let deferred1_0;
+        let deferred1_1;
+        try {
+            const retptr = wasm.__wbindgen_add_to_stack_pointer(-16);
+            wasm.wasmcounter_getReplicaId(retptr, this.__wbg_ptr);
+            var r0 = getDataViewMemory0().getInt32(retptr + 4 * 0, true);
+            var r1 = getDataViewMemory0().getInt32(retptr + 4 * 1, true);
+            deferred1_0 = r0;
+            deferred1_1 = r1;
+            return getStringFromWasm0(r0, r1);
+        } finally {
+            wasm.__wbindgen_add_to_stack_pointer(16);
+            wasm.__wbindgen_export(deferred1_0, deferred1_1, 1);
+        }
+    }
+    /**
      * Increment the counter
      *
      * # Arguments
@@ -552,6 +337,68 @@ export class WasmCounter {
      */
     increment(amount) {
         wasm.wasmcounter_increment(this.__wbg_ptr, !isLikeNone(amount), isLikeNone(amount) ? 0 : amount);
+    }
+    /**
+     * Merge with another counter
+     * @param {WasmCounter} other
+     */
+    merge(other) {
+        _assertClass(other, WasmCounter);
+        wasm.wasmcounter_merge(this.__wbg_ptr, other.__wbg_ptr);
+    }
+    /**
+     * Create a new PNCounter with the given replica ID
+     * @param {string} replica_id
+     */
+    constructor(replica_id) {
+        const ptr0 = passStringToWasm0(replica_id, wasm.__wbindgen_export2, wasm.__wbindgen_export3);
+        const len0 = WASM_VECTOR_LEN;
+        const ret = wasm.wasmcounter_new(ptr0, len0);
+        this.__wbg_ptr = ret >>> 0;
+        WasmCounterFinalization.register(this, this.__wbg_ptr, this);
+        return this;
+    }
+    /**
+     * Reset the counter to zero (local operation)
+     */
+    reset() {
+        wasm.wasmcounter_reset(this.__wbg_ptr);
+    }
+    /**
+     * Export as JSON string
+     * @returns {string}
+     */
+    toJSON() {
+        let deferred2_0;
+        let deferred2_1;
+        try {
+            const retptr = wasm.__wbindgen_add_to_stack_pointer(-16);
+            wasm.wasmcounter_toJSON(retptr, this.__wbg_ptr);
+            var r0 = getDataViewMemory0().getInt32(retptr + 4 * 0, true);
+            var r1 = getDataViewMemory0().getInt32(retptr + 4 * 1, true);
+            var r2 = getDataViewMemory0().getInt32(retptr + 4 * 2, true);
+            var r3 = getDataViewMemory0().getInt32(retptr + 4 * 3, true);
+            var ptr1 = r0;
+            var len1 = r1;
+            if (r3) {
+                ptr1 = 0; len1 = 0;
+                throw takeObject(r2);
+            }
+            deferred2_0 = ptr1;
+            deferred2_1 = len1;
+            return getStringFromWasm0(ptr1, len1);
+        } finally {
+            wasm.__wbindgen_add_to_stack_pointer(16);
+            wasm.__wbindgen_export(deferred2_0, deferred2_1, 1);
+        }
+    }
+    /**
+     * Get the current counter value
+     * @returns {number}
+     */
+    value() {
+        const ret = wasm.wasmcounter_value(this.__wbg_ptr);
+        return ret;
     }
 }
 if (Symbol.dispose) WasmCounter.prototype[Symbol.dispose] = WasmCounter.prototype.free;
@@ -579,32 +426,33 @@ export class WasmDelta {
         wasm.__wbg_wasmdelta_free(ptr, 0);
     }
     /**
+     * Apply delta to a document
+     * @param {WasmDocument} document
+     * @param {string} client_id
+     */
+    applyTo(document, client_id) {
+        try {
+            const retptr = wasm.__wbindgen_add_to_stack_pointer(-16);
+            _assertClass(document, WasmDocument);
+            const ptr0 = passStringToWasm0(client_id, wasm.__wbindgen_export2, wasm.__wbindgen_export3);
+            const len0 = WASM_VECTOR_LEN;
+            wasm.wasmdelta_applyTo(retptr, this.__wbg_ptr, document.__wbg_ptr, ptr0, len0);
+            var r0 = getDataViewMemory0().getInt32(retptr + 4 * 0, true);
+            var r1 = getDataViewMemory0().getInt32(retptr + 4 * 1, true);
+            if (r1) {
+                throw takeObject(r0);
+            }
+        } finally {
+            wasm.__wbindgen_add_to_stack_pointer(16);
+        }
+    }
+    /**
      * Get number of changes in this delta
      * @returns {number}
      */
     changeCount() {
         const ret = wasm.wasmdelta_changeCount(this.__wbg_ptr);
         return ret >>> 0;
-    }
-    /**
-     * Get document ID this delta applies to
-     * @returns {string}
-     */
-    getDocumentId() {
-        let deferred1_0;
-        let deferred1_1;
-        try {
-            const retptr = wasm.__wbindgen_add_to_stack_pointer(-16);
-            wasm.wasmdelta_getDocumentId(retptr, this.__wbg_ptr);
-            var r0 = getDataViewMemory0().getInt32(retptr + 4 * 0, true);
-            var r1 = getDataViewMemory0().getInt32(retptr + 4 * 1, true);
-            deferred1_0 = r0;
-            deferred1_1 = r1;
-            return getStringFromWasm0(r0, r1);
-        } finally {
-            wasm.__wbindgen_add_to_stack_pointer(16);
-            wasm.__wbindgen_export(deferred1_0, deferred1_1, 1);
-        }
     }
     /**
      * Compute delta between two documents
@@ -627,6 +475,26 @@ export class WasmDelta {
             return WasmDelta.__wrap(r0);
         } finally {
             wasm.__wbindgen_add_to_stack_pointer(16);
+        }
+    }
+    /**
+     * Get document ID this delta applies to
+     * @returns {string}
+     */
+    getDocumentId() {
+        let deferred1_0;
+        let deferred1_1;
+        try {
+            const retptr = wasm.__wbindgen_add_to_stack_pointer(-16);
+            wasm.wasmdelta_getDocumentId(retptr, this.__wbg_ptr);
+            var r0 = getDataViewMemory0().getInt32(retptr + 4 * 0, true);
+            var r1 = getDataViewMemory0().getInt32(retptr + 4 * 1, true);
+            deferred1_0 = r0;
+            deferred1_1 = r1;
+            return getStringFromWasm0(r0, r1);
+        } finally {
+            wasm.__wbindgen_add_to_stack_pointer(16);
+            wasm.__wbindgen_export(deferred1_0, deferred1_1, 1);
         }
     }
     /**
@@ -657,27 +525,6 @@ export class WasmDelta {
             wasm.__wbindgen_export(deferred2_0, deferred2_1, 1);
         }
     }
-    /**
-     * Apply delta to a document
-     * @param {WasmDocument} document
-     * @param {string} client_id
-     */
-    applyTo(document, client_id) {
-        try {
-            const retptr = wasm.__wbindgen_add_to_stack_pointer(-16);
-            _assertClass(document, WasmDocument);
-            const ptr0 = passStringToWasm0(client_id, wasm.__wbindgen_export2, wasm.__wbindgen_export3);
-            const len0 = WASM_VECTOR_LEN;
-            wasm.wasmdelta_applyTo(retptr, this.__wbg_ptr, document.__wbg_ptr, ptr0, len0);
-            var r0 = getDataViewMemory0().getInt32(retptr + 4 * 0, true);
-            var r1 = getDataViewMemory0().getInt32(retptr + 4 * 1, true);
-            if (r1) {
-                throw takeObject(r0);
-            }
-        } finally {
-            wasm.__wbindgen_add_to_stack_pointer(16);
-        }
-    }
 }
 if (Symbol.dispose) WasmDelta.prototype[Symbol.dispose] = WasmDelta.prototype.free;
 
@@ -696,14 +543,6 @@ export class WasmDocument {
         wasm.__wbg_wasmdocument_free(ptr, 0);
     }
     /**
-     * Get field count
-     * @returns {number}
-     */
-    fieldCount() {
-        const ret = wasm.wasmdocument_fieldCount(this.__wbg_ptr);
-        return ret >>> 0;
-    }
-    /**
      * Delete a field
      * @param {string} path
      */
@@ -713,64 +552,12 @@ export class WasmDocument {
         wasm.wasmdocument_deleteField(this.__wbg_ptr, ptr0, len0);
     }
     /**
-     * Create a new document with the given ID
-     * @param {string} id
+     * Get field count
+     * @returns {number}
      */
-    constructor(id) {
-        const ptr0 = passStringToWasm0(id, wasm.__wbindgen_export2, wasm.__wbindgen_export3);
-        const len0 = WASM_VECTOR_LEN;
-        const ret = wasm.wasmdocument_new(ptr0, len0);
-        this.__wbg_ptr = ret >>> 0;
-        WasmDocumentFinalization.register(this, this.__wbg_ptr, this);
-        return this;
-    }
-    /**
-     * Merge with another document
-     * @param {WasmDocument} other
-     */
-    merge(other) {
-        _assertClass(other, WasmDocument);
-        wasm.wasmdocument_merge(this.__wbg_ptr, other.__wbg_ptr);
-    }
-    /**
-     * Get document ID
-     * @returns {string}
-     */
-    getId() {
-        let deferred1_0;
-        let deferred1_1;
-        try {
-            const retptr = wasm.__wbindgen_add_to_stack_pointer(-16);
-            wasm.wasmdocument_getId(retptr, this.__wbg_ptr);
-            var r0 = getDataViewMemory0().getInt32(retptr + 4 * 0, true);
-            var r1 = getDataViewMemory0().getInt32(retptr + 4 * 1, true);
-            deferred1_0 = r0;
-            deferred1_1 = r1;
-            return getStringFromWasm0(r0, r1);
-        } finally {
-            wasm.__wbindgen_add_to_stack_pointer(16);
-            wasm.__wbindgen_export(deferred1_0, deferred1_1, 1);
-        }
-    }
-    /**
-     * Export document as JSON string
-     * @returns {string}
-     */
-    toJSON() {
-        let deferred1_0;
-        let deferred1_1;
-        try {
-            const retptr = wasm.__wbindgen_add_to_stack_pointer(-16);
-            wasm.wasmdocument_toJSON(retptr, this.__wbg_ptr);
-            var r0 = getDataViewMemory0().getInt32(retptr + 4 * 0, true);
-            var r1 = getDataViewMemory0().getInt32(retptr + 4 * 1, true);
-            deferred1_0 = r0;
-            deferred1_1 = r1;
-            return getStringFromWasm0(r0, r1);
-        } finally {
-            wasm.__wbindgen_add_to_stack_pointer(16);
-            wasm.__wbindgen_export(deferred1_0, deferred1_1, 1);
-        }
+    fieldCount() {
+        const ret = wasm.wasmdocument_fieldCount(this.__wbg_ptr);
+        return ret >>> 0;
     }
     /**
      * Get a field value (returns JSON string)
@@ -796,6 +583,46 @@ export class WasmDocument {
         }
     }
     /**
+     * Get document ID
+     * @returns {string}
+     */
+    getId() {
+        let deferred1_0;
+        let deferred1_1;
+        try {
+            const retptr = wasm.__wbindgen_add_to_stack_pointer(-16);
+            wasm.wasmdocument_getId(retptr, this.__wbg_ptr);
+            var r0 = getDataViewMemory0().getInt32(retptr + 4 * 0, true);
+            var r1 = getDataViewMemory0().getInt32(retptr + 4 * 1, true);
+            deferred1_0 = r0;
+            deferred1_1 = r1;
+            return getStringFromWasm0(r0, r1);
+        } finally {
+            wasm.__wbindgen_add_to_stack_pointer(16);
+            wasm.__wbindgen_export(deferred1_0, deferred1_1, 1);
+        }
+    }
+    /**
+     * Merge with another document
+     * @param {WasmDocument} other
+     */
+    merge(other) {
+        _assertClass(other, WasmDocument);
+        wasm.wasmdocument_merge(this.__wbg_ptr, other.__wbg_ptr);
+    }
+    /**
+     * Create a new document with the given ID
+     * @param {string} id
+     */
+    constructor(id) {
+        const ptr0 = passStringToWasm0(id, wasm.__wbindgen_export2, wasm.__wbindgen_export3);
+        const len0 = WASM_VECTOR_LEN;
+        const ret = wasm.wasmdocument_new(ptr0, len0);
+        this.__wbg_ptr = ret >>> 0;
+        WasmDocumentFinalization.register(this, this.__wbg_ptr, this);
+        return this;
+    }
+    /**
      * Set a field value (pass JSON string for value)
      * @param {string} path
      * @param {string} value_json
@@ -819,6 +646,26 @@ export class WasmDocument {
             }
         } finally {
             wasm.__wbindgen_add_to_stack_pointer(16);
+        }
+    }
+    /**
+     * Export document as JSON string
+     * @returns {string}
+     */
+    toJSON() {
+        let deferred1_0;
+        let deferred1_1;
+        try {
+            const retptr = wasm.__wbindgen_add_to_stack_pointer(-16);
+            wasm.wasmdocument_toJSON(retptr, this.__wbg_ptr);
+            var r0 = getDataViewMemory0().getInt32(retptr + 4 * 0, true);
+            var r1 = getDataViewMemory0().getInt32(retptr + 4 * 1, true);
+            deferred1_0 = r0;
+            deferred1_1 = r1;
+            return getStringFromWasm0(r0, r1);
+        } finally {
+            wasm.__wbindgen_add_to_stack_pointer(16);
+            wasm.__wbindgen_export(deferred1_0, deferred1_1, 1);
         }
     }
 }
@@ -847,6 +694,65 @@ export class WasmFugueText {
         wasm.__wbg_wasmfuguetext_free(ptr, 0);
     }
     /**
+     * Delete text at the given position
+     *
+     * # Arguments
+     * * `position` - Starting grapheme index
+     * * `length` - Number of graphemes to delete
+     *
+     * # Returns
+     * JSON string of array of deleted NodeIds
+     * @param {number} position
+     * @param {number} length
+     * @returns {string}
+     */
+    delete(position, length) {
+        let deferred2_0;
+        let deferred2_1;
+        try {
+            const retptr = wasm.__wbindgen_add_to_stack_pointer(-16);
+            wasm.wasmfuguetext_delete(retptr, this.__wbg_ptr, position, length);
+            var r0 = getDataViewMemory0().getInt32(retptr + 4 * 0, true);
+            var r1 = getDataViewMemory0().getInt32(retptr + 4 * 1, true);
+            var r2 = getDataViewMemory0().getInt32(retptr + 4 * 2, true);
+            var r3 = getDataViewMemory0().getInt32(retptr + 4 * 3, true);
+            var ptr1 = r0;
+            var len1 = r1;
+            if (r3) {
+                ptr1 = 0; len1 = 0;
+                throw takeObject(r2);
+            }
+            deferred2_0 = ptr1;
+            deferred2_1 = len1;
+            return getStringFromWasm0(ptr1, len1);
+        } finally {
+            wasm.__wbindgen_add_to_stack_pointer(16);
+            wasm.__wbindgen_export(deferred2_0, deferred2_1, 1);
+        }
+    }
+    /**
+     * Import from JSON string (for loading from persistence/network)
+     * @param {string} json
+     * @returns {WasmFugueText}
+     */
+    static fromJSON(json) {
+        try {
+            const retptr = wasm.__wbindgen_add_to_stack_pointer(-16);
+            const ptr0 = passStringToWasm0(json, wasm.__wbindgen_export2, wasm.__wbindgen_export3);
+            const len0 = WASM_VECTOR_LEN;
+            wasm.wasmfuguetext_fromJSON(retptr, ptr0, len0);
+            var r0 = getDataViewMemory0().getInt32(retptr + 4 * 0, true);
+            var r1 = getDataViewMemory0().getInt32(retptr + 4 * 1, true);
+            var r2 = getDataViewMemory0().getInt32(retptr + 4 * 2, true);
+            if (r2) {
+                throw takeObject(r1);
+            }
+            return WasmFugueText.__wrap(r0);
+        } finally {
+            wasm.__wbindgen_add_to_stack_pointer(16);
+        }
+    }
+    /**
      * Get the client ID
      * @returns {string}
      */
@@ -865,6 +771,14 @@ export class WasmFugueText {
             wasm.__wbindgen_add_to_stack_pointer(16);
             wasm.__wbindgen_export(deferred1_0, deferred1_1, 1);
         }
+    }
+    /**
+     * Get the current Lamport clock value
+     * @returns {bigint}
+     */
+    getClock() {
+        const ret = wasm.wasmfuguetext_getClock(this.__wbg_ptr);
+        return BigInt.asUintN(64, ret);
     }
     /**
      * Get the NodeId of the character at the given position
@@ -953,73 +867,6 @@ export class WasmFugueText {
         }
     }
     /**
-     * Create a new FugueText with the given client ID
-     * @param {string} client_id
-     */
-    constructor(client_id) {
-        const ptr0 = passStringToWasm0(client_id, wasm.__wbindgen_export2, wasm.__wbindgen_export3);
-        const len0 = WASM_VECTOR_LEN;
-        const ret = wasm.wasmfuguetext_new(ptr0, len0);
-        this.__wbg_ptr = ret >>> 0;
-        WasmFugueTextFinalization.register(this, this.__wbg_ptr, this);
-        return this;
-    }
-    /**
-     * Merge with another FugueText
-     * @param {WasmFugueText} other
-     */
-    merge(other) {
-        try {
-            const retptr = wasm.__wbindgen_add_to_stack_pointer(-16);
-            _assertClass(other, WasmFugueText);
-            wasm.wasmfuguetext_merge(retptr, this.__wbg_ptr, other.__wbg_ptr);
-            var r0 = getDataViewMemory0().getInt32(retptr + 4 * 0, true);
-            var r1 = getDataViewMemory0().getInt32(retptr + 4 * 1, true);
-            if (r1) {
-                throw takeObject(r0);
-            }
-        } finally {
-            wasm.__wbindgen_add_to_stack_pointer(16);
-        }
-    }
-    /**
-     * Delete text at the given position
-     *
-     * # Arguments
-     * * `position` - Starting grapheme index
-     * * `length` - Number of graphemes to delete
-     *
-     * # Returns
-     * JSON string of array of deleted NodeIds
-     * @param {number} position
-     * @param {number} length
-     * @returns {string}
-     */
-    delete(position, length) {
-        let deferred2_0;
-        let deferred2_1;
-        try {
-            const retptr = wasm.__wbindgen_add_to_stack_pointer(-16);
-            wasm.wasmfuguetext_delete(retptr, this.__wbg_ptr, position, length);
-            var r0 = getDataViewMemory0().getInt32(retptr + 4 * 0, true);
-            var r1 = getDataViewMemory0().getInt32(retptr + 4 * 1, true);
-            var r2 = getDataViewMemory0().getInt32(retptr + 4 * 2, true);
-            var r3 = getDataViewMemory0().getInt32(retptr + 4 * 3, true);
-            var ptr1 = r0;
-            var len1 = r1;
-            if (r3) {
-                ptr1 = 0; len1 = 0;
-                throw takeObject(r2);
-            }
-            deferred2_0 = ptr1;
-            deferred2_1 = len1;
-            return getStringFromWasm0(ptr1, len1);
-        } finally {
-            wasm.__wbindgen_add_to_stack_pointer(16);
-            wasm.__wbindgen_export(deferred2_0, deferred2_1, 1);
-        }
-    }
-    /**
      * Insert text at the given position
      *
      * # Arguments
@@ -1059,12 +906,50 @@ export class WasmFugueText {
         }
     }
     /**
+     * Check if the text is empty
+     * @returns {boolean}
+     */
+    isEmpty() {
+        const ret = wasm.wasmfuguetext_isEmpty(this.__wbg_ptr);
+        return ret !== 0;
+    }
+    /**
      * Get the length in graphemes (user-perceived characters)
      * @returns {number}
      */
     length() {
         const ret = wasm.wasmfuguetext_length(this.__wbg_ptr);
         return ret >>> 0;
+    }
+    /**
+     * Merge with another FugueText
+     * @param {WasmFugueText} other
+     */
+    merge(other) {
+        try {
+            const retptr = wasm.__wbindgen_add_to_stack_pointer(-16);
+            _assertClass(other, WasmFugueText);
+            wasm.wasmfuguetext_merge(retptr, this.__wbg_ptr, other.__wbg_ptr);
+            var r0 = getDataViewMemory0().getInt32(retptr + 4 * 0, true);
+            var r1 = getDataViewMemory0().getInt32(retptr + 4 * 1, true);
+            if (r1) {
+                throw takeObject(r0);
+            }
+        } finally {
+            wasm.__wbindgen_add_to_stack_pointer(16);
+        }
+    }
+    /**
+     * Create a new FugueText with the given client ID
+     * @param {string} client_id
+     */
+    constructor(client_id) {
+        const ptr0 = passStringToWasm0(client_id, wasm.__wbindgen_export2, wasm.__wbindgen_export3);
+        const len0 = WASM_VECTOR_LEN;
+        const ret = wasm.wasmfuguetext_new(ptr0, len0);
+        this.__wbg_ptr = ret >>> 0;
+        WasmFugueTextFinalization.register(this, this.__wbg_ptr, this);
+        return this;
     }
     /**
      * Export as JSON string (for persistence/network)
@@ -1093,44 +978,6 @@ export class WasmFugueText {
             wasm.__wbindgen_add_to_stack_pointer(16);
             wasm.__wbindgen_export(deferred2_0, deferred2_1, 1);
         }
-    }
-    /**
-     * Check if the text is empty
-     * @returns {boolean}
-     */
-    isEmpty() {
-        const ret = wasm.wasmfuguetext_isEmpty(this.__wbg_ptr);
-        return ret !== 0;
-    }
-    /**
-     * Import from JSON string (for loading from persistence/network)
-     * @param {string} json
-     * @returns {WasmFugueText}
-     */
-    static fromJSON(json) {
-        try {
-            const retptr = wasm.__wbindgen_add_to_stack_pointer(-16);
-            const ptr0 = passStringToWasm0(json, wasm.__wbindgen_export2, wasm.__wbindgen_export3);
-            const len0 = WASM_VECTOR_LEN;
-            wasm.wasmfuguetext_fromJSON(retptr, ptr0, len0);
-            var r0 = getDataViewMemory0().getInt32(retptr + 4 * 0, true);
-            var r1 = getDataViewMemory0().getInt32(retptr + 4 * 1, true);
-            var r2 = getDataViewMemory0().getInt32(retptr + 4 * 2, true);
-            if (r2) {
-                throw takeObject(r1);
-            }
-            return WasmFugueText.__wrap(r0);
-        } finally {
-            wasm.__wbindgen_add_to_stack_pointer(16);
-        }
-    }
-    /**
-     * Get the current Lamport clock value
-     * @returns {bigint}
-     */
-    getClock() {
-        const ret = wasm.wasmfuguetext_getClock(this.__wbg_ptr);
-        return BigInt.asUintN(64, ret);
     }
     /**
      * Get the text content as a string
@@ -1190,6 +1037,34 @@ export class WasmSet {
         wasm.wasmset_add(this.__wbg_ptr, ptr0, len0);
     }
     /**
+     * Clear all elements from the set
+     */
+    clear() {
+        wasm.wasmset_clear(this.__wbg_ptr);
+    }
+    /**
+     * Import from JSON string
+     * @param {string} json
+     * @returns {WasmSet}
+     */
+    static fromJSON(json) {
+        try {
+            const retptr = wasm.__wbindgen_add_to_stack_pointer(-16);
+            const ptr0 = passStringToWasm0(json, wasm.__wbindgen_export2, wasm.__wbindgen_export3);
+            const len0 = WASM_VECTOR_LEN;
+            wasm.wasmset_fromJSON(retptr, ptr0, len0);
+            var r0 = getDataViewMemory0().getInt32(retptr + 4 * 0, true);
+            var r1 = getDataViewMemory0().getInt32(retptr + 4 * 1, true);
+            var r2 = getDataViewMemory0().getInt32(retptr + 4 * 2, true);
+            if (r2) {
+                throw takeObject(r1);
+            }
+            return WasmSet.__wrap(r0);
+        } finally {
+            wasm.__wbindgen_add_to_stack_pointer(16);
+        }
+    }
+    /**
      * Check if the set contains an element
      *
      * # Arguments
@@ -1204,6 +1079,22 @@ export class WasmSet {
         return ret !== 0;
     }
     /**
+     * Check if the set is empty
+     * @returns {boolean}
+     */
+    isEmpty() {
+        const ret = wasm.wasmset_isEmpty(this.__wbg_ptr);
+        return ret !== 0;
+    }
+    /**
+     * Merge with another set
+     * @param {WasmSet} other
+     */
+    merge(other) {
+        _assertClass(other, WasmSet);
+        wasm.wasmset_merge(this.__wbg_ptr, other.__wbg_ptr);
+    }
+    /**
      * Create a new ORSet with the given replica ID
      * @param {string} replica_id
      */
@@ -1214,28 +1105,6 @@ export class WasmSet {
         this.__wbg_ptr = ret >>> 0;
         WasmSetFinalization.register(this, this.__wbg_ptr, this);
         return this;
-    }
-    /**
-     * Get the number of elements in the set
-     * @returns {number}
-     */
-    size() {
-        const ret = wasm.wasmset_size(this.__wbg_ptr);
-        return ret >>> 0;
-    }
-    /**
-     * Clear all elements from the set
-     */
-    clear() {
-        wasm.wasmset_clear(this.__wbg_ptr);
-    }
-    /**
-     * Merge with another set
-     * @param {WasmSet} other
-     */
-    merge(other) {
-        _assertClass(other, WasmSet);
-        wasm.wasmset_merge(this.__wbg_ptr, other.__wbg_ptr);
     }
     /**
      * Remove an element from the set
@@ -1250,32 +1119,12 @@ export class WasmSet {
         wasm.wasmset_remove(this.__wbg_ptr, ptr0, len0);
     }
     /**
-     * Get all values in the set as a JSON array string
-     * @returns {string}
+     * Get the number of elements in the set
+     * @returns {number}
      */
-    values() {
-        let deferred2_0;
-        let deferred2_1;
-        try {
-            const retptr = wasm.__wbindgen_add_to_stack_pointer(-16);
-            wasm.wasmset_values(retptr, this.__wbg_ptr);
-            var r0 = getDataViewMemory0().getInt32(retptr + 4 * 0, true);
-            var r1 = getDataViewMemory0().getInt32(retptr + 4 * 1, true);
-            var r2 = getDataViewMemory0().getInt32(retptr + 4 * 2, true);
-            var r3 = getDataViewMemory0().getInt32(retptr + 4 * 3, true);
-            var ptr1 = r0;
-            var len1 = r1;
-            if (r3) {
-                ptr1 = 0; len1 = 0;
-                throw takeObject(r2);
-            }
-            deferred2_0 = ptr1;
-            deferred2_1 = len1;
-            return getStringFromWasm0(ptr1, len1);
-        } finally {
-            wasm.__wbindgen_add_to_stack_pointer(16);
-            wasm.__wbindgen_export(deferred2_0, deferred2_1, 1);
-        }
+    size() {
+        const ret = wasm.wasmset_size(this.__wbg_ptr);
+        return ret >>> 0;
     }
     /**
      * Export as JSON string
@@ -1306,33 +1155,31 @@ export class WasmSet {
         }
     }
     /**
-     * Check if the set is empty
-     * @returns {boolean}
+     * Get all values in the set as a JSON array string
+     * @returns {string}
      */
-    isEmpty() {
-        const ret = wasm.wasmset_isEmpty(this.__wbg_ptr);
-        return ret !== 0;
-    }
-    /**
-     * Import from JSON string
-     * @param {string} json
-     * @returns {WasmSet}
-     */
-    static fromJSON(json) {
+    values() {
+        let deferred2_0;
+        let deferred2_1;
         try {
             const retptr = wasm.__wbindgen_add_to_stack_pointer(-16);
-            const ptr0 = passStringToWasm0(json, wasm.__wbindgen_export2, wasm.__wbindgen_export3);
-            const len0 = WASM_VECTOR_LEN;
-            wasm.wasmset_fromJSON(retptr, ptr0, len0);
+            wasm.wasmset_values(retptr, this.__wbg_ptr);
             var r0 = getDataViewMemory0().getInt32(retptr + 4 * 0, true);
             var r1 = getDataViewMemory0().getInt32(retptr + 4 * 1, true);
             var r2 = getDataViewMemory0().getInt32(retptr + 4 * 2, true);
-            if (r2) {
-                throw takeObject(r1);
+            var r3 = getDataViewMemory0().getInt32(retptr + 4 * 3, true);
+            var ptr1 = r0;
+            var len1 = r1;
+            if (r3) {
+                ptr1 = 0; len1 = 0;
+                throw takeObject(r2);
             }
-            return WasmSet.__wrap(r0);
+            deferred2_0 = ptr1;
+            deferred2_1 = len1;
+            return getStringFromWasm0(ptr1, len1);
         } finally {
             wasm.__wbindgen_add_to_stack_pointer(16);
+            wasm.__wbindgen_export(deferred2_0, deferred2_1, 1);
         }
     }
 }
@@ -1364,6 +1211,14 @@ export class WasmVectorClock {
         return BigInt.asUintN(64, ret);
     }
     /**
+     * Merge with another vector clock
+     * @param {WasmVectorClock} other
+     */
+    merge(other) {
+        _assertClass(other, WasmVectorClock);
+        wasm.wasmvectorclock_merge(this.__wbg_ptr, other.__wbg_ptr);
+    }
+    /**
      * Create a new empty vector clock
      */
     constructor() {
@@ -1380,24 +1235,6 @@ export class WasmVectorClock {
         const ptr0 = passStringToWasm0(client_id, wasm.__wbindgen_export2, wasm.__wbindgen_export3);
         const len0 = WASM_VECTOR_LEN;
         wasm.wasmvectorclock_tick(this.__wbg_ptr, ptr0, len0);
-    }
-    /**
-     * Merge with another vector clock
-     * @param {WasmVectorClock} other
-     */
-    merge(other) {
-        _assertClass(other, WasmVectorClock);
-        wasm.wasmvectorclock_merge(this.__wbg_ptr, other.__wbg_ptr);
-    }
-    /**
-     * Update clock for a client
-     * @param {string} client_id
-     * @param {bigint} clock
-     */
-    update(client_id, clock) {
-        const ptr0 = passStringToWasm0(client_id, wasm.__wbindgen_export2, wasm.__wbindgen_export3);
-        const len0 = WASM_VECTOR_LEN;
-        wasm.wasmvectorclock_update(this.__wbg_ptr, ptr0, len0, clock);
     }
     /**
      * Export as JSON string
@@ -1419,6 +1256,16 @@ export class WasmVectorClock {
             wasm.__wbindgen_export(deferred1_0, deferred1_1, 1);
         }
     }
+    /**
+     * Update clock for a client
+     * @param {string} client_id
+     * @param {bigint} clock
+     */
+    update(client_id, clock) {
+        const ptr0 = passStringToWasm0(client_id, wasm.__wbindgen_export2, wasm.__wbindgen_export3);
+        const len0 = WASM_VECTOR_LEN;
+        wasm.wasmvectorclock_update(this.__wbg_ptr, ptr0, len0, clock);
+    }
 }
 if (Symbol.dispose) WasmVectorClock.prototype[Symbol.dispose] = WasmVectorClock.prototype.free;
 
@@ -1428,8 +1275,208 @@ if (Symbol.dispose) WasmVectorClock.prototype[Symbol.dispose] = WasmVectorClock.
 export function init_panic_hook() {
     wasm.init_panic_hook();
 }
+function __wbg_get_imports() {
+    const import0 = {
+        __proto__: null,
+        __wbg___wbindgen_throw_6b64449b9b9ed33c: function(arg0, arg1) {
+            throw new Error(getStringFromWasm0(arg0, arg1));
+        },
+        __wbg_error_a6fa202b58aa1cd3: function(arg0, arg1) {
+            let deferred0_0;
+            let deferred0_1;
+            try {
+                deferred0_0 = arg0;
+                deferred0_1 = arg1;
+                console.error(getStringFromWasm0(arg0, arg1));
+            } finally {
+                wasm.__wbindgen_export(deferred0_0, deferred0_1, 1);
+            }
+        },
+        __wbg_new_227d7c05414eb861: function() {
+            const ret = new Error();
+            return addHeapObject(ret);
+        },
+        __wbg_now_63dbc0a6919f29ad: function() {
+            const ret = Date.now();
+            return ret;
+        },
+        __wbg_stack_3b0d974bbf31e44f: function(arg0, arg1) {
+            const ret = getObject(arg1).stack;
+            const ptr1 = passStringToWasm0(ret, wasm.__wbindgen_export2, wasm.__wbindgen_export3);
+            const len1 = WASM_VECTOR_LEN;
+            getDataViewMemory0().setInt32(arg0 + 4 * 1, len1, true);
+            getDataViewMemory0().setInt32(arg0 + 4 * 0, ptr1, true);
+        },
+        __wbindgen_cast_0000000000000001: function(arg0, arg1) {
+            // Cast intrinsic for `Ref(String) -> Externref`.
+            const ret = getStringFromWasm0(arg0, arg1);
+            return addHeapObject(ret);
+        },
+        __wbindgen_object_drop_ref: function(arg0) {
+            takeObject(arg0);
+        },
+    };
+    return {
+        __proto__: null,
+        "./synckit_core_bg.js": import0,
+    };
+}
 
-const EXPECTED_RESPONSE_TYPES = new Set(['basic', 'cors', 'default']);
+const WasmAwarenessFinalization = (typeof FinalizationRegistry === 'undefined')
+    ? { register: () => {}, unregister: () => {} }
+    : new FinalizationRegistry(ptr => wasm.__wbg_wasmawareness_free(ptr >>> 0, 1));
+const WasmCounterFinalization = (typeof FinalizationRegistry === 'undefined')
+    ? { register: () => {}, unregister: () => {} }
+    : new FinalizationRegistry(ptr => wasm.__wbg_wasmcounter_free(ptr >>> 0, 1));
+const WasmDeltaFinalization = (typeof FinalizationRegistry === 'undefined')
+    ? { register: () => {}, unregister: () => {} }
+    : new FinalizationRegistry(ptr => wasm.__wbg_wasmdelta_free(ptr >>> 0, 1));
+const WasmDocumentFinalization = (typeof FinalizationRegistry === 'undefined')
+    ? { register: () => {}, unregister: () => {} }
+    : new FinalizationRegistry(ptr => wasm.__wbg_wasmdocument_free(ptr >>> 0, 1));
+const WasmFugueTextFinalization = (typeof FinalizationRegistry === 'undefined')
+    ? { register: () => {}, unregister: () => {} }
+    : new FinalizationRegistry(ptr => wasm.__wbg_wasmfuguetext_free(ptr >>> 0, 1));
+const WasmSetFinalization = (typeof FinalizationRegistry === 'undefined')
+    ? { register: () => {}, unregister: () => {} }
+    : new FinalizationRegistry(ptr => wasm.__wbg_wasmset_free(ptr >>> 0, 1));
+const WasmVectorClockFinalization = (typeof FinalizationRegistry === 'undefined')
+    ? { register: () => {}, unregister: () => {} }
+    : new FinalizationRegistry(ptr => wasm.__wbg_wasmvectorclock_free(ptr >>> 0, 1));
+
+function addHeapObject(obj) {
+    if (heap_next === heap.length) heap.push(heap.length + 1);
+    const idx = heap_next;
+    heap_next = heap[idx];
+
+    heap[idx] = obj;
+    return idx;
+}
+
+function _assertClass(instance, klass) {
+    if (!(instance instanceof klass)) {
+        throw new Error(`expected instance of ${klass.name}`);
+    }
+}
+
+function dropObject(idx) {
+    if (idx < 1028) return;
+    heap[idx] = heap_next;
+    heap_next = idx;
+}
+
+let cachedDataViewMemory0 = null;
+function getDataViewMemory0() {
+    if (cachedDataViewMemory0 === null || cachedDataViewMemory0.buffer.detached === true || (cachedDataViewMemory0.buffer.detached === undefined && cachedDataViewMemory0.buffer !== wasm.memory.buffer)) {
+        cachedDataViewMemory0 = new DataView(wasm.memory.buffer);
+    }
+    return cachedDataViewMemory0;
+}
+
+function getStringFromWasm0(ptr, len) {
+    ptr = ptr >>> 0;
+    return decodeText(ptr, len);
+}
+
+let cachedUint8ArrayMemory0 = null;
+function getUint8ArrayMemory0() {
+    if (cachedUint8ArrayMemory0 === null || cachedUint8ArrayMemory0.byteLength === 0) {
+        cachedUint8ArrayMemory0 = new Uint8Array(wasm.memory.buffer);
+    }
+    return cachedUint8ArrayMemory0;
+}
+
+function getObject(idx) { return heap[idx]; }
+
+let heap = new Array(1024).fill(undefined);
+heap.push(undefined, null, true, false);
+
+let heap_next = heap.length;
+
+function isLikeNone(x) {
+    return x === undefined || x === null;
+}
+
+function passStringToWasm0(arg, malloc, realloc) {
+    if (realloc === undefined) {
+        const buf = cachedTextEncoder.encode(arg);
+        const ptr = malloc(buf.length, 1) >>> 0;
+        getUint8ArrayMemory0().subarray(ptr, ptr + buf.length).set(buf);
+        WASM_VECTOR_LEN = buf.length;
+        return ptr;
+    }
+
+    let len = arg.length;
+    let ptr = malloc(len, 1) >>> 0;
+
+    const mem = getUint8ArrayMemory0();
+
+    let offset = 0;
+
+    for (; offset < len; offset++) {
+        const code = arg.charCodeAt(offset);
+        if (code > 0x7F) break;
+        mem[ptr + offset] = code;
+    }
+    if (offset !== len) {
+        if (offset !== 0) {
+            arg = arg.slice(offset);
+        }
+        ptr = realloc(ptr, len, len = offset + arg.length * 3, 1) >>> 0;
+        const view = getUint8ArrayMemory0().subarray(ptr + offset, ptr + len);
+        const ret = cachedTextEncoder.encodeInto(arg, view);
+
+        offset += ret.written;
+        ptr = realloc(ptr, len, offset, 1) >>> 0;
+    }
+
+    WASM_VECTOR_LEN = offset;
+    return ptr;
+}
+
+function takeObject(idx) {
+    const ret = getObject(idx);
+    dropObject(idx);
+    return ret;
+}
+
+let cachedTextDecoder = new TextDecoder('utf-8', { ignoreBOM: true, fatal: true });
+cachedTextDecoder.decode();
+const MAX_SAFARI_DECODE_BYTES = 2146435072;
+let numBytesDecoded = 0;
+function decodeText(ptr, len) {
+    numBytesDecoded += len;
+    if (numBytesDecoded >= MAX_SAFARI_DECODE_BYTES) {
+        cachedTextDecoder = new TextDecoder('utf-8', { ignoreBOM: true, fatal: true });
+        cachedTextDecoder.decode();
+        numBytesDecoded = len;
+    }
+    return cachedTextDecoder.decode(getUint8ArrayMemory0().subarray(ptr, ptr + len));
+}
+
+const cachedTextEncoder = new TextEncoder();
+
+if (!('encodeInto' in cachedTextEncoder)) {
+    cachedTextEncoder.encodeInto = function (arg, view) {
+        const buf = cachedTextEncoder.encode(arg);
+        view.set(buf);
+        return {
+            read: arg.length,
+            written: buf.length
+        };
+    };
+}
+
+let WASM_VECTOR_LEN = 0;
+
+let wasmModule, wasm;
+function __wbg_finalize_init(instance, module) {
+    wasm = instance.exports;
+    wasmModule = module;
+    cachedDataViewMemory0 = null;
+    cachedUint8ArrayMemory0 = null;
+    return wasm;
+}
 
 async function __wbg_load(module, imports) {
     if (typeof Response === 'function' && module instanceof Response) {
@@ -1437,14 +1484,12 @@ async function __wbg_load(module, imports) {
             try {
                 return await WebAssembly.instantiateStreaming(module, imports);
             } catch (e) {
-                const validResponse = module.ok && EXPECTED_RESPONSE_TYPES.has(module.type);
+                const validResponse = module.ok && expectedResponseType(module.type);
 
                 if (validResponse && module.headers.get('Content-Type') !== 'application/wasm') {
                     console.warn("`WebAssembly.instantiateStreaming` failed because your server does not serve Wasm with `application/wasm` MIME type. Falling back to `WebAssembly.instantiate` which is slower. Original error:\n", e);
 
-                } else {
-                    throw e;
-                }
+                } else { throw e; }
             }
         }
 
@@ -1459,68 +1504,20 @@ async function __wbg_load(module, imports) {
             return instance;
         }
     }
-}
 
-function __wbg_get_imports() {
-    const imports = {};
-    imports.wbg = {};
-    imports.wbg.__wbg___wbindgen_throw_dd24417ed36fc46e = function(arg0, arg1) {
-        throw new Error(getStringFromWasm0(arg0, arg1));
-    };
-    imports.wbg.__wbg_error_7534b8e9a36f1ab4 = function(arg0, arg1) {
-        let deferred0_0;
-        let deferred0_1;
-        try {
-            deferred0_0 = arg0;
-            deferred0_1 = arg1;
-            console.error(getStringFromWasm0(arg0, arg1));
-        } finally {
-            wasm.__wbindgen_export(deferred0_0, deferred0_1, 1);
+    function expectedResponseType(type) {
+        switch (type) {
+            case 'basic': case 'cors': case 'default': return true;
         }
-    };
-    imports.wbg.__wbg_new_8a6f238a6ece86ea = function() {
-        const ret = new Error();
-        return addHeapObject(ret);
-    };
-    imports.wbg.__wbg_now_b0938c2b128e32c8 = function() {
-        const ret = Date.now();
-        return ret;
-    };
-    imports.wbg.__wbg_stack_0ed75d68575b0f3c = function(arg0, arg1) {
-        const ret = getObject(arg1).stack;
-        const ptr1 = passStringToWasm0(ret, wasm.__wbindgen_export2, wasm.__wbindgen_export3);
-        const len1 = WASM_VECTOR_LEN;
-        getDataViewMemory0().setInt32(arg0 + 4 * 1, len1, true);
-        getDataViewMemory0().setInt32(arg0 + 4 * 0, ptr1, true);
-    };
-    imports.wbg.__wbindgen_cast_2241b6af4c4b2941 = function(arg0, arg1) {
-        // Cast intrinsic for `Ref(String) -> Externref`.
-        const ret = getStringFromWasm0(arg0, arg1);
-        return addHeapObject(ret);
-    };
-    imports.wbg.__wbindgen_object_drop_ref = function(arg0) {
-        takeObject(arg0);
-    };
-
-    return imports;
-}
-
-function __wbg_finalize_init(instance, module) {
-    wasm = instance.exports;
-    __wbg_init.__wbindgen_wasm_module = module;
-    cachedDataViewMemory0 = null;
-    cachedUint8ArrayMemory0 = null;
-
-
-
-    return wasm;
+        return false;
+    }
 }
 
 function initSync(module) {
     if (wasm !== undefined) return wasm;
 
 
-    if (typeof module !== 'undefined') {
+    if (module !== undefined) {
         if (Object.getPrototypeOf(module) === Object.prototype) {
             ({module} = module)
         } else {
@@ -1540,7 +1537,7 @@ async function __wbg_init(module_or_path) {
     if (wasm !== undefined) return wasm;
 
 
-    if (typeof module_or_path !== 'undefined') {
+    if (module_or_path !== undefined) {
         if (Object.getPrototypeOf(module_or_path) === Object.prototype) {
             ({module_or_path} = module_or_path)
         } else {
@@ -1548,7 +1545,7 @@ async function __wbg_init(module_or_path) {
         }
     }
 
-    if (typeof module_or_path === 'undefined') {
+    if (module_or_path === undefined) {
         module_or_path = new URL('synckit_core_bg.wasm', import.meta.url);
     }
     const imports = __wbg_get_imports();
@@ -1562,5 +1559,4 @@ async function __wbg_init(module_or_path) {
     return __wbg_finalize_init(instance, module);
 }
 
-export { initSync };
-export default __wbg_init;
+export { initSync, __wbg_init as default };
