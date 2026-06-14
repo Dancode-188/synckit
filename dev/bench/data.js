@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1780806147921,
+  "lastUpdate": 1781411466560,
   "repoUrl": "https://github.com/Dancode-188/synckit",
   "entries": {
     "Rust Benchmark": [
@@ -4499,6 +4499,256 @@ window.BENCHMARK_DATA = {
             "name": "empty_delta",
             "value": 2799,
             "range": "± 6",
+            "unit": "ns/iter"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "name": "dancode-188",
+            "username": "Dancode-188",
+            "email": "danbitengo@gmail.com"
+          },
+          "committer": {
+            "name": "dancode-188",
+            "username": "Dancode-188",
+            "email": "danbitengo@gmail.com"
+          },
+          "id": "82bff97d453ce0552fee5afb5490d52646b058ef",
+          "message": "chore(wasm): rebuild artifacts for wasm-bindgen 0.2.118\n\nRegenerate JS bindings, TypeScript declarations, and gzipped binary\nfor both default and lite variants using wasm-bindgen 0.2.118.\n\nThe default variant .wasm.gz shrinks from 162KB to 145KB because\nwasm-opt now runs correctly with the fixed feature flags.",
+          "timestamp": "2026-04-25T22:38:57Z",
+          "url": "https://github.com/Dancode-188/synckit/commit/82bff97d453ce0552fee5afb5490d52646b058ef"
+        },
+        "date": 1781411466148,
+        "tool": "cargo",
+        "benches": [
+          {
+            "name": "single_field_update",
+            "value": 79,
+            "range": "± 1",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "field_get",
+            "value": 27,
+            "range": "± 0",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "document_merge/10",
+            "value": 2099,
+            "range": "± 48",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "document_merge/50",
+            "value": 10409,
+            "range": "± 280",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "document_merge/100",
+            "value": 20643,
+            "range": "± 323",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "document_merge/500",
+            "value": 102048,
+            "range": "± 2213",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "batch_updates/10",
+            "value": 2578,
+            "range": "± 135",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "batch_updates/100",
+            "value": 25820,
+            "range": "± 1055",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "batch_updates/1000",
+            "value": 141434,
+            "range": "± 3030",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "conflict_resolution",
+            "value": 188,
+            "range": "± 16",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "document_to_json",
+            "value": 10391,
+            "range": "± 126",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "vector_clock_tick",
+            "value": 38,
+            "range": "± 1",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "vector_clock_compare",
+            "value": 150,
+            "range": "± 1",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "vector_clock_merge/2",
+            "value": 107,
+            "range": "± 1",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "vector_clock_merge/5",
+            "value": 231,
+            "range": "± 6",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "vector_clock_merge/10",
+            "value": 516,
+            "range": "± 11",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "vector_clock_merge/50",
+            "value": 3263,
+            "range": "± 44",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "vector_clock_get",
+            "value": 20,
+            "range": "± 0",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "vector_clock_clone",
+            "value": 1918,
+            "range": "± 17",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "concurrent_ticks/10",
+            "value": 689,
+            "range": "± 5",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "concurrent_ticks/100",
+            "value": 6888,
+            "range": "± 42",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "concurrent_ticks/1000",
+            "value": 68894,
+            "range": "± 517",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "compute_delta/10",
+            "value": 1466,
+            "range": "± 16",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "compute_delta/50",
+            "value": 10729,
+            "range": "± 109",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "compute_delta/100",
+            "value": 21140,
+            "range": "± 503",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "compute_delta/500",
+            "value": 112013,
+            "range": "± 1760",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "compute_partial_delta/10",
+            "value": 1509,
+            "range": "± 23",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "compute_partial_delta/25",
+            "value": 5013,
+            "range": "± 36",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "compute_partial_delta/50",
+            "value": 10618,
+            "range": "± 101",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "compute_partial_delta/100",
+            "value": 20829,
+            "range": "± 286",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "apply_delta/10",
+            "value": 2133,
+            "range": "± 59",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "apply_delta/50",
+            "value": 10286,
+            "range": "± 178",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "apply_delta/100",
+            "value": 21469,
+            "range": "± 749",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "apply_delta/500",
+            "value": 103377,
+            "range": "± 1165",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "merge_deltas/2",
+            "value": 16720,
+            "range": "± 179",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "merge_deltas/5",
+            "value": 51032,
+            "range": "± 1143",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "merge_deltas/10",
+            "value": 110020,
+            "range": "± 2382",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "empty_delta",
+            "value": 2910,
+            "range": "± 5",
             "unit": "ns/iter"
           }
         ]
