@@ -21,7 +21,7 @@
 
 **Build collaborative apps in hours, not months.**
 
-SyncKit is a **production-ready sync engine** that gives you everything for local-first collaboration:
+SyncKit is a **sync engine** that gives you everything for local-first collaboration:
 - Rich text editing with conflict resolution (Peritext + Fugue CRDTs)
 - Undo/redo that syncs across tabs and sessions
 - Live presence and cursor sharing
@@ -29,7 +29,7 @@ SyncKit is a **production-ready sync engine** that gives you everything for loca
 
 > "Add `sync.document()` to your app, get real-time sync automatically."
 
-**The reality:** Building sync from scratch takes months. SyncKit gives you production-ready collaboration in 3 lines of code.
+**The reality:** Building sync from scratch takes months. SyncKit gives you working collaboration in 3 lines of code.
 
 ```typescript
 const sync = new SyncKit()
@@ -88,7 +88,7 @@ function TaskList() {
 ### 🚀 **Works When Internet Doesn't**
 True offline-first architecture—not just caching. Your app works perfectly on planes, trains, tunnels, and coffee shops with spotty WiFi.
 
-### 📦 **Production-Ready, Feature-Complete**
+### 📦 **Feature-Complete**
 
 **154KB gzipped** - Complete local-first sync solution with everything you need.
 
@@ -117,9 +117,10 @@ Open source and self-hostable. No vendor lock-in, no surprise $2,000/month bills
 - ~310KB total with React (comparable to React alone)
 
 ### 🛡️ **Data Integrity Guaranteed**
-- Zero data loss with automatic conflict resolution (Last-Write-Wins)
-- Formal verification with TLA+ (3 bugs found and fixed)
-- 2,100+ comprehensive tests across TypeScript, Rust, Python, Go, and C# (unit, integration, chaos, load)
+- Zero data loss at the system level: every operation is persisted and delivered
+- Concurrent text edits merge via Fugue and Peritext; concurrent writes to the same document field resolve by Last-Write-Wins, so one write is chosen
+- Formally modeled with TLA+; the specs are in the repo
+- 2,100+ tests across TypeScript, Rust, Python, Go, and C# (unit, integration, chaos, load)
 
 ---
 
@@ -268,7 +269,7 @@ graph TD
 - **[Vanilla Counter](examples/vanilla-counter/)** - Minimal example with no build tools (just open in browser!)
 - **[Todo App](examples/todo-app/)** - Simple CRUD with filters
 - **[Collaborative Editor](examples/collaborative-editor/)** - Real-time text editing with CodeMirror 6
-- **[Project Management](examples/project-management/)** - Production-grade kanban app with drag-and-drop
+- **[Project Management](examples/project-management/)** - Full kanban app with drag-and-drop
 
 **[Browse all docs →](docs/README.md)**
 
@@ -364,10 +365,10 @@ Different libraries make different trade-offs. Here's how SyncKit compares:
 - **`@synckit-js/sdk/lite`** - Lightweight version (local-only, 46KB gzipped)
 
 ### Servers
-- **`@synckit-js/server`** - Bun + Hono TypeScript server (production-ready)
-- **Python Server** - FastAPI implementation (production-ready, v0.3.0)
-- **Go Server** - High-performance goroutine-based server (production-ready, v0.3.0)
-- **C# Server** - ASP.NET Core implementation (production-ready, community-contributed)
+- **`@synckit-js/server`** - Bun + Hono TypeScript server (stable)
+- **Python Server** - FastAPI implementation (stable, v0.3.0)
+- **Go Server** - High-performance goroutine-based server (stable, v0.3.0)
+- **C# Server** - ASP.NET Core implementation (stable, community-contributed)
 
 ---
 
@@ -377,7 +378,7 @@ Different libraries make different trade-offs. Here's how SyncKit compares:
 
 ### Production Ready ✅
 
-The core sync engine is battle-tested and ready for production:
+What the core sync engine ships today:
 
 - ✅ **Document Sync** - LWW conflict resolution with vector clocks
 - ✅ **Text CRDT (Fugue)** - Collaborative text editing with conflict-free convergence
@@ -389,7 +390,7 @@ The core sync engine is battle-tested and ready for production:
 - ✅ **WASM Compilation** - 154KB gzipped (46KB lite), optimized performance
 - ✅ **TypeScript SDK** - Document, Text, RichText, Counter, Set APIs
 - ✅ **Storage Adapters** - IndexedDB, Memory, and OPFS
-- ✅ **Multi-Language Servers** - TypeScript, Python, Go, and C# (all production-ready)
+- ✅ **Multi-Language Servers** - TypeScript, Python, Go, and C# (all stable)
 - ✅ **Undo/Redo** - Cross-tab undo with persistent history
 - ✅ **Awareness & Presence** - Real-time user tracking with cursor sharing
 - ✅ **Cross-Tab Sync** - BroadcastChannel-based synchronization
@@ -410,6 +411,12 @@ The core sync engine is battle-tested and ready for production:
 **[Full roadmap →](ROADMAP.md)**
 
 ---
+
+## How this was built
+
+An LLM wrote much of the code. The decisions were mine: Fugue and Peritext over the alternatives, the TLA+ models, the API surface, the wire protocol.
+
+Design first, generation under direction, review before ship. None of it asks for trust: the TLA+ specs are in the repo, and the test suites run in CI across five languages.
 
 ## 🤝 Contributing
 
