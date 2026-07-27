@@ -21,7 +21,7 @@ thiserror = "2.0"
 # Optional: Protocol Buffers (only for full core with network support)
 prost = { version = "0.14", optional = true }
 bytes = { version = "1.5", optional = true }
-base64 = { version = "0.22", optional = true }
+base64 = { version = "0.23", optional = true }
 
 # WASM support
 wasm-bindgen = { version = "=0.2.118", optional = true }
