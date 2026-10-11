@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1791090294166,
+  "lastUpdate": 1791694466212,
   "repoUrl": "https://github.com/Dancode-188/synckit",
   "entries": {
     "Rust Benchmark": [
@@ -8749,6 +8749,256 @@ window.BENCHMARK_DATA = {
             "name": "empty_delta",
             "value": 2904,
             "range": "± 36",
+            "unit": "ns/iter"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "name": "Daniel Bitengo",
+            "username": "Dancode-188",
+            "email": "danbitengo@gmail.com"
+          },
+          "committer": {
+            "name": "Daniel Bitengo",
+            "username": "Dancode-188",
+            "email": "danbitengo@gmail.com"
+          },
+          "id": "6516a70ceb2b522248e97db34b1ad3652bf386c8",
+          "message": "docs: say how this was built, and drop the adjectives\n\nA \"How this was built\" section states the LLM's share and mine.\nThe production-ready and battle-tested labels are gone; the\nfeature lists and the test suites already say what works. The\ndata-integrity bullets now say what actually happens on conflict:\ntext merges through Fugue and Peritext, document fields resolve\nby LWW, and the TLA+ line points at the specs instead of an\nanecdote.",
+          "timestamp": "2026-07-20T00:04:08Z",
+          "url": "https://github.com/Dancode-188/synckit/commit/6516a70ceb2b522248e97db34b1ad3652bf386c8"
+        },
+        "date": 1791694465286,
+        "tool": "cargo",
+        "benches": [
+          {
+            "name": "single_field_update",
+            "value": 76,
+            "range": "± 9",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "field_get",
+            "value": 31,
+            "range": "± 0",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "document_merge/10",
+            "value": 2180,
+            "range": "± 64",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "document_merge/50",
+            "value": 10609,
+            "range": "± 400",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "document_merge/100",
+            "value": 20733,
+            "range": "± 183",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "document_merge/500",
+            "value": 105411,
+            "range": "± 1282",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "batch_updates/10",
+            "value": 1790,
+            "range": "± 32",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "batch_updates/100",
+            "value": 18400,
+            "range": "± 439",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "batch_updates/1000",
+            "value": 134472,
+            "range": "± 1630",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "conflict_resolution",
+            "value": 107,
+            "range": "± 2",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "document_to_json",
+            "value": 11686,
+            "range": "± 295",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "vector_clock_tick",
+            "value": 37,
+            "range": "± 0",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "vector_clock_compare",
+            "value": 146,
+            "range": "± 1",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "vector_clock_merge/2",
+            "value": 106,
+            "range": "± 0",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "vector_clock_merge/5",
+            "value": 225,
+            "range": "± 3",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "vector_clock_merge/10",
+            "value": 524,
+            "range": "± 14",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "vector_clock_merge/50",
+            "value": 3270,
+            "range": "± 30",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "vector_clock_get",
+            "value": 20,
+            "range": "± 0",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "vector_clock_clone",
+            "value": 1896,
+            "range": "± 10",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "concurrent_ticks/10",
+            "value": 674,
+            "range": "± 19",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "concurrent_ticks/100",
+            "value": 6800,
+            "range": "± 42",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "concurrent_ticks/1000",
+            "value": 67898,
+            "range": "± 599",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "compute_delta/10",
+            "value": 1434,
+            "range": "± 12",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "compute_delta/50",
+            "value": 10561,
+            "range": "± 68",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "compute_delta/100",
+            "value": 20896,
+            "range": "± 151",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "compute_delta/500",
+            "value": 114372,
+            "range": "± 968",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "compute_partial_delta/10",
+            "value": 1459,
+            "range": "± 14",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "compute_partial_delta/25",
+            "value": 4913,
+            "range": "± 38",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "compute_partial_delta/50",
+            "value": 10619,
+            "range": "± 86",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "compute_partial_delta/100",
+            "value": 20757,
+            "range": "± 164",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "apply_delta/10",
+            "value": 2242,
+            "range": "± 68",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "apply_delta/50",
+            "value": 10272,
+            "range": "± 154",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "apply_delta/100",
+            "value": 20438,
+            "range": "± 263",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "apply_delta/500",
+            "value": 104430,
+            "range": "± 1499",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "merge_deltas/2",
+            "value": 16723,
+            "range": "± 111",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "merge_deltas/5",
+            "value": 50343,
+            "range": "± 819",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "merge_deltas/10",
+            "value": 107574,
+            "range": "± 1491",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "empty_delta",
+            "value": 2909,
+            "range": "± 8",
             "unit": "ns/iter"
           }
         ]
