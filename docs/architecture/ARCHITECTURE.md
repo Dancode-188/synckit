@@ -541,7 +541,7 @@ NOT: "hweolrllod" (no interleaving)
 
 **Characteristics:**
 - Automatic merge (no manual conflict resolution)
-- Convergence guaranteed
+- Designed to converge (model-checked design, tested implementation)
 - Higher memory overhead (CRDT metadata)
 - Perfect for: collaborative editors, note apps
 
