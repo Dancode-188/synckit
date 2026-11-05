@@ -116,10 +116,10 @@ Open source and self-hostable. No vendor lock-in, no surprise $2,000/month bills
 - 154KB bundle (complete solution), 46KB lite option
 - ~310KB total with React (comparable to React alone)
 
-### 🛡️ **Data Integrity Guaranteed**
-- Zero data loss at the system level: every operation is persisted and delivered
+### 🛡️ **Designed for Data Integrity**
+- Operations are applied and stored on the device first, then synced when a connection is available
 - Concurrent text edits merge via Fugue and Peritext; concurrent writes to the same document field resolve by Last-Write-Wins, so one write is chosen
-- Formally modeled with TLA+; the specs are in the repo
+- Algorithm designs are model-checked with TLA+; see [protocol/tla](protocol/tla/) for what is and is not covered
 - 2,100+ tests across TypeScript, Rust, Python, Go, and C# (unit, integration, chaos, load)
 
 ---
