@@ -159,7 +159,7 @@ Learn from working examples:
 - Network sync: 10-50ms p95 (faster than most REST APIs)
 - Multi-client convergence: <100ms (real-time collaboration)
 
-**Stress-tested:** 14-day continuous operation (1.2M+ operations), 2,100+ tests.
+**Stress-tested:** one client at 1 operation/second for 284 days (24.5 million operations, 99.99% acknowledged, Jan–Oct 2026) against a single Fly.io server, plus 2,100+ tests.
 
 **[Learn more about performance →](guides/performance.md)** | **[Bundle size optimization →](guides/bundle-size-optimization.md)**
 
@@ -269,7 +269,7 @@ We welcome contributions!
 - ✅ Cross-tab sync (BroadcastChannel + server-mediated)
 - ✅ Example applications (todo app, collaborative editor, project management)
 - ✅ **2,100+ tests** across TypeScript, Rust, Python, Go, and C#
-- ✅ Formal verification (TLA+, 118K states explored)
+- ✅ Model-checked designs (TLA+/TLC: LWW merge, vector clocks, convergence; ~118K states, plus bounded Fugue checks)
 
 ### What's Next 🚧
 

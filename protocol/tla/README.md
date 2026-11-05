@@ -1,14 +1,22 @@
 # Fugue Text CRDT - Formal Verification
 
-This directory contains TLA+ formal specifications for the Fugue text CRDT, proving its correctness and key properties.
+This directory contains TLA+ specifications of the Fugue text CRDT, model-checked with TLC for convergence and non-interleaving within stated bounds.
 
 ## Verification Results
 
-✅ **Fugue convergence**: FULLY VERIFIED (983,661 states, 0 violations)
-✅ **Non-interleaving property**: EXTENSIVELY VERIFIED (5.6M+ states, 0 violations)
-✅ **Determinism & Deletion**: Specifications verified to parse and initialize correctly
+✅ **Fugue convergence**: complete TLC run (983,661 states, 0 violations; 3 replicas, bounded clocks)
+✅ **Non-interleaving property**: partial TLC run (5.6M+ states explored, run stopped with 276K states still queued, 0 violations)
+✅ **Determinism & Deletion**: Specifications parse and initialize correctly (not model-checked)
 
 See [FUGUE_VERIFICATION_COMPLETE.md](FUGUE_VERIFICATION_COMPLETE.md) for full results.
+
+## What verification covers
+
+**Covered:** LWW merge, vector clock and convergence models (118,711 states, no violations), and the bounded Fugue checks above. These check the *designs*.
+
+**Not covered:** the Rust and TypeScript implementations, the position cache, block splitting, merging of split blocks, and the network and storage layers. Bugs in those areas were found by tests, not by TLA+. For example, concurrent deletes in the same block duplicated text until the fix on 2026-02-01 (commit b17db36).
+
+**Known gap:** there is no strict randomized two-replica convergence test for the text CRDT. The browser chaos test tolerates up to 2 distinct final texts.
 
 ## Specifications
 
@@ -66,21 +74,21 @@ This will explore millions of states. You can stop it after a few minutes - if n
 
 ## What's Being Verified
 
-### fugue_convergence.tla ✅ PROVEN
+### fugue_convergence.tla ✅ MODEL-CHECKED (complete run, bounded)
 - **Strong Eventual Consistency** - All replicas converge to identical state
 - **Conflict-Free Operations** - Concurrent operations commute correctly
 - **Type Safety** - All operations maintain type invariants
 - **Causal Delivery** - Operations respect causal ordering
 - **Replica Consistency** - Internal state remains consistent
 
-**Significance:** Proves Fugue is a correct CRDT.
+**Significance:** No violations found for this model's configuration (3 replicas, bounded clocks).
 
-### fugue_non_interleaving.tla ✅ EXTENSIVELY VERIFIED
+### fugue_non_interleaving.tla ✅ PARTIALLY MODEL-CHECKED
 - **Maximal Non-Interleaving** - Concurrent character insertions don't interleave
 - **Type Safety** - Invariants hold under concurrent edits
 - **Eventual Consistency** - Convergence with non-interleaving property
 
-**Significance:** Proves Fugue's key innovation - better merge behavior than Yjs, Automerge, RGA, etc.
+**Significance:** No violations in the explored states; the run was stopped before the state space was exhausted.
 
 ### fugue_determinism.tla ✓ Syntactically Correct
 - **NodeId Total Ordering** - Deterministic ordering of all nodes
@@ -94,7 +102,7 @@ This will explore millions of states. You can stop it after a few minutes - if n
 - **Deletion Correctness** - Deleted text doesn't appear in output
 - **Origin Validity** - References remain valid after deletions
 
-**Significance:** Proves deletion maintains CRDT properties.
+**Significance:** Specification only; not yet model-checked.
 
 ## Understanding the Results
 
@@ -108,8 +116,8 @@ This will explore millions of states. You can stop it after a few minutes - if n
 - **fugue_convergence**: 983K states (full verification)
 - **fugue_non_interleaving**: 5.6M+ states (extensive verification)
 
-### Zero Violations = Proof
-If TLC explores the entire state space (or a large portion) with zero violations, this is **mathematical proof** that the properties hold for the specified configuration.
+### What zero violations means
+If TLC explores the entire state space with zero violations, the properties hold for that specific configuration (number of replicas, clock bound, operation bound). A partial run with zero violations is evidence, not proof. Neither says anything about the Rust or TypeScript code.
 
 ## Modifying Verification Scope
 
@@ -148,16 +156,7 @@ Fix the algorithm and re-run verification.
 
 ## Why This Matters
 
-Formal verification provides **mathematical proof** of correctness - something most text CRDTs don't have:
-
-| CRDT | Formal Verification |
-|------|---------------------|
-| **Fugue** | ✅ TLA+ (6.5M+ states) |
-| Yjs | ❌ None |
-| Automerge | Partial (~1K states) |
-| RGA/WOOT | ❌ None |
-
-This gives you confidence that Fugue works correctly under all tested scenarios, not just the ones you thought to test manually.
+Model checking explores every interleaving of a small model, which finds design-level bugs that hand-written examples miss. It does not replace testing the real implementation (see "What verification covers" above).
 
 ## Next Steps
 

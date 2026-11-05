@@ -32,7 +32,7 @@ SyncKit is a **local-first sync engine** designed for modern web and mobile appl
 - 🔄 **Complete CRDT Suite**: Text (Fugue), Rich Text (Peritext), Counter (PN-Counter), Set (OR-Set), LWW Documents
 - 📦 **Production Bundle**: 154KB gzipped (46KB lite) - Complete solution with all collaboration features
 - 🌐 **Universal**: Works everywhere (browser, Node.js, mobile, desktop)
-- 🔒 **Data Integrity**: Formally verified with TLA+ (zero data loss guarantee)
+- 🔒 **Data Integrity**: Core algorithms model-checked with TLA+ within stated bounds; implementation tested
 - 🧪 **Battle-Tested**: 2,100+ passing tests across TypeScript, Rust, Python, Go, and C#
 
 **Target Use Cases:**
@@ -122,7 +122,7 @@ SyncKit is a **local-first sync engine** designed for modern web and mobile appl
 1. **Local-First**: All operations work offline, sync happens in background
 2. **Performance as a Feature**: Sub-1ms local ops, sub-100ms sync target
 3. **Three-Tier Complexity**: Simple for 80%, powerful for 20%
-4. **Zero Data Loss**: Formally verified algorithms (TLA+ proof)
+4. **Convergence by Design**: Model-checked core algorithms, tested implementation
 5. **Developer Experience**: 5-minute quick start, intuitive API
 
 ---
@@ -233,7 +233,7 @@ impl VectorClock {
 }
 ```
 
-**Properties (Verified by TLA+):**
+**Properties (checked in the TLA+ models and Rust property tests):**
 - Monotonic: Clock values only increase
 - Causal: If A → B, then clock(A) < clock(B)
 - Transitive: If A → B and B → C, then A → C
@@ -258,7 +258,7 @@ fn lww_merge(local: &Field, remote: &Field) -> Field {
 }
 ```
 
-**Properties (Verified by TLA+):**
+**Properties (checked in the TLA+ models and Rust property tests):**
 - Convergence: All replicas reach identical state
 - Determinism: Same inputs always produce same output
 - Idempotence: Applying operation twice has no additional effect
@@ -789,7 +789,7 @@ If no permission: reject with 403
 SyncKit's architecture is designed for **performance**, **correctness**, and **simplicity**:
 
 ✅ **Performance:** Rust core + WASM = sub-1ms local operations
-✅ **Correctness:** TLA+ verification = zero data loss guarantee
+✅ **Correctness:** Model-checked algorithms plus unit, property and integration tests
 ✅ **Simplicity:** Three-tier approach = right tool for each job
 ✅ **Scalability:** Horizontal scaling + partial sync = millions of users
 ✅ **Security:** JWT + RBAC + TLS = production-ready security

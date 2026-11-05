@@ -116,9 +116,9 @@ Open source and self-hostable. No vendor lock-in, no surprise $2,000/month bills
 - 154KB bundle (complete solution), 46KB lite option
 - ~310KB total with React (comparable to React alone)
 
-### 🛡️ **Data Integrity Guaranteed**
-- Zero data loss with automatic conflict resolution (Last-Write-Wins)
-- Formal verification with TLA+ (3 bugs found and fixed)
+### 🛡️ **Designed for Data Integrity**
+- Deterministic conflict resolution: Last-Write-Wins for fields, Fugue for text
+- Core algorithm designs are model-checked with TLA+ (see [protocol/tla](protocol/tla/)); the implementation is covered by unit, integration and property-based tests
 - 2,100+ comprehensive tests across TypeScript, Rust, Python, Go, and C# (unit, integration, chaos, load)
 
 ---
